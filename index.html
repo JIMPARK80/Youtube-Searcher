@@ -122,12 +122,51 @@
             color: #333;
         }
 
+        .api-key-input-wrapper {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
         .api-key-section input {
-            width: 100%;
+            flex: 1;
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 5px;
             font-family: monospace;
+        }
+
+        .api-key-btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .toggle-visibility-btn {
+            background: #e9ecef;
+            color: #495057;
+        }
+
+        .toggle-visibility-btn:hover {
+            background: #dee2e6;
+        }
+
+        .save-btn {
+            background: #28a745;
+            color: white;
+        }
+
+        .save-btn:hover {
+            background: #218838;
+        }
+
+        .save-btn.saved {
+            background: #6c757d;
+            cursor: not-allowed;
         }
 
         .api-key-section small {
@@ -326,7 +365,11 @@
 
             <div class="api-key-section" id="apiKeySection">
                 <label for="apiKey">YouTube Data API v3 키:</label>
-                <input type="password" id="apiKey" placeholder="API 키를 입력하세요" />
+                <div class="api-key-input-wrapper">
+                    <input type="password" id="apiKey" placeholder="API 키를 입력하세요" />
+                    <button class="api-key-btn toggle-visibility-btn" id="toggleVisibilityBtn">👁️ 보기</button>
+                    <button class="api-key-btn save-btn" id="saveBtn">💾 저장</button>
+                </div>
                 <small>💡 API 키는 <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>에서 발급받으세요</small>
             </div>
         </div>
@@ -335,9 +378,14 @@
     </div>
 
     <script>
+        // API 키 초기화
         const apiKey = localStorage.getItem('youtubeApiKey');
+        const apiKeyInput = document.getElementById('apiKey');
         if (apiKey) {
-            document.getElementById('apiKey').value = apiKey;
+            apiKeyInput.value = apiKey;
+            // localStorage에 값이 있으면 처음부터 text 타입으로 설정
+            apiKeyInput.type = 'text';
+            document.getElementById('toggleVisibilityBtn').textContent = '🙈 숨기기';
         }
 
         // API 키 토글 버튼
@@ -357,13 +405,41 @@
             }
         });
 
-        // API 키 자동 저장 (입력 시마다 저장)
-        document.getElementById('apiKey').addEventListener('input', function() {
-            localStorage.setItem('youtubeApiKey', this.value);
+        // API 키 표시/숨김 토글
+        let isVisible = apiKey ? true : false; // localStorage에 값이 있으면 처음부터 visible
+        document.getElementById('toggleVisibilityBtn').addEventListener('click', function() {
+            isVisible = !isVisible;
+            const input = document.getElementById('apiKey');
+            
+            if (isVisible) {
+                input.type = 'text';
+                this.textContent = '🙈 숨기기';
+            } else {
+                input.type = 'password';
+                this.textContent = '👁️ 보기';
+            }
         });
 
-        document.getElementById('apiKey').addEventListener('change', function() {
-            localStorage.setItem('youtubeApiKey', this.value);
+        // 저장 버튼 기능
+        document.getElementById('saveBtn').addEventListener('click', function() {
+            const apiKeyValue = document.getElementById('apiKey').value.trim();
+            
+            if (!apiKeyValue) {
+                alert('API 키를 입력해주세요!');
+                return;
+            }
+            
+            localStorage.setItem('youtubeApiKey', apiKeyValue);
+            
+            // 저장 성공 피드백
+            const originalText = this.textContent;
+            this.textContent = '✅ 저장됨';
+            this.classList.add('saved');
+            
+            setTimeout(() => {
+                this.textContent = originalText;
+                this.classList.remove('saved');
+            }, 2000);
         });
 
         document.getElementById('searchBtn').addEventListener('click', search);
