@@ -449,6 +449,58 @@
             font-weight: 500;
         }
 
+        .velocity-badge {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            background: rgba(255, 0, 0, 0.9);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            z-index: 2;
+        }
+
+        .channel-size-badge {
+            font-size: 12px;
+            margin-left: 4px;
+        }
+
+        .api-usage {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .api-usage .usage-bar {
+            width: 100px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            margin: 5px 0;
+            overflow: hidden;
+        }
+
+        .api-usage .usage-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #FFC107, #F44336);
+            transition: width 0.3s ease;
+        }
+
+        .api-usage .usage-text {
+            font-size: 10px;
+            opacity: 0.8;
+        }
+
+
         @media (max-width: 1200px) {
             .card-grid {
                 grid-template-columns: repeat(3, 1fr);
@@ -524,6 +576,7 @@
             </div>
         </div>
 
+
         <div class="filters-section">
             <div class="filters-grid">
                 <div class="filter-group">
@@ -573,10 +626,39 @@
                 </div>
 
                 <div class="filter-group">
+                    <div class="filter-label">성장속도 필터</div>
+                    <div class="filter-options">
+                        <input type="radio" name="velocityFilter" id="allVelocity" class="filter-radio" value="" checked>
+                        <label for="allVelocity" class="filter-radio-label">전체</label>
+                        <input type="radio" name="velocityFilter" id="recentSurge" class="filter-radio" value="recent-surge">
+                        <label for="recentSurge" class="filter-radio-label">급상승</label>
+                        <input type="radio" name="velocityFilter" id="normalVelocity" class="filter-radio" value="normal">
+                        <label for="normalVelocity" class="filter-radio-label">보통</label>
+                        <input type="radio" name="velocityFilter" id="slowVelocity" class="filter-radio" value="slow">
+                        <label for="slowVelocity" class="filter-radio-label">느린 성장</label>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <div class="filter-label">채널 규모</div>
+                    <div class="filter-options">
+                        <input type="radio" name="channelSize" id="allChannel" class="filter-radio" value="" checked>
+                        <label for="allChannel" class="filter-radio-label">전체</label>
+                        <input type="radio" name="channelSize" id="smallChannel" class="filter-radio" value="small">
+                        <label for="smallChannel" class="filter-radio-label">🌱 소형(&lt;10K)</label>
+                        <input type="radio" name="channelSize" id="midChannel" class="filter-radio" value="mid">
+                        <label for="midChannel" class="filter-radio-label">🌿 중형(10K-100K)</label>
+                        <input type="radio" name="channelSize" id="largeChannel" class="filter-radio" value="large">
+                        <label for="largeChannel" class="filter-radio-label">🌳 대형(100K+)</label>
+                    </div>
+                </div>
+
+                <div class="filter-group">
                     <div class="filter-label">정렬</div>
                     <select id="sortBy" class="sort-select">
                         <option value="relevance">관련도순</option>
-                        <option value="viewCount" selected>조회수 내림차순</option>
+                        <option value="viewCount">조회수 내림차순</option>
+                        <option value="velocity" selected>🔥 성장속도 높은 순</option>
                         <option value="rating">평점순</option>
                         <option value="date">업로드 날짜순</option>
                     </select>
@@ -596,6 +678,15 @@
         </div>
 
         <div id="results"></div>
+    </div>
+
+    <!-- API Usage Tracker -->
+    <div class="api-usage" id="apiUsage">
+        <div>📊 API 사용량</div>
+        <div class="usage-bar">
+            <div class="usage-fill" id="usageFill"></div>
+        </div>
+        <div class="usage-text" id="usageText">0 / 10,000 units</div>
     </div>
 
     <script>
@@ -670,6 +761,7 @@
             }
         });
 
+
         function formatNumber(num) {
             if (num >= 1000000) {
                 return (num / 1000000).toFixed(1) + 'M';
@@ -724,11 +816,175 @@
             return date.toISOString();
         }
 
+        // View Velocity functions
+        function ageDays(publishedAt) {
+            const now = Date.now();
+            const ageMs = Math.max(1, now - Date.parse(publishedAt)); // guard
+            const d = ageMs / (1000 * 60 * 60 * 24);
+            return d;
+        }
+
+        function viewVelocityPerDay(video) {
+            const views = Number(video.statistics?.viewCount || 0);
+            const days = ageDays(video.snippet.publishedAt);
+
+            // Handle ultra-fresh videos fairly: show per-hour if < 1 day, but normalize to per-day for ranking
+            const perDay = views / Math.max(0.25, days); // clamp min 0.25 day to avoid infinity spikes
+            return perDay; // numeric, e.g., 25340.7
+        }
+
+        function formatVelocity(vpd) {
+            if (vpd >= 1_000_000) return `+${(vpd/1_000_000).toFixed(1)}M/day`;
+            if (vpd >= 1_000)     return `+${(vpd/1_000).toFixed(1)}K/day`;
+            return `+${Math.round(vpd)}/day`;
+        }
+
+        function classifyVelocity(vpd) {
+            if (vpd >= 50_000) return 'recent-surge'; // 최근 급상승
+            if (vpd >= 5_000)  return 'normal';       // 보통
+            return 'slow';                            // 느린 성장
+        }
+
+        function channelSizeBand(channel) {
+            const sub = Number(channel?.statistics?.subscriberCount ?? NaN);
+            if (Number.isNaN(sub)) return 'hidden'; // 구독자 미공개
+            if (sub < 10_000)      return 'small';  // <10K
+            if (sub < 100_000)     return 'mid';    // 10K–100K
+            return 'large';                          // 100K+
+        }
+
+        function sortVelocityThenSmallCreator(a, b) {
+            const d = b.vpd - a.vpd;
+            if (d !== 0) return d;
+            return (a.subs || Infinity) - (b.subs || Infinity);
+        }
+
+        function getChannelSizeEmoji(cband) {
+            switch(cband) {
+                case 'small': return '🌱';
+                case 'mid': return '🌿';
+                case 'large': return '🌳';
+                case 'hidden': return '❓';
+                default: return '';
+            }
+        }
+
+        // API Usage tracking functions
+        function loadApiUsage() {
+            const today = new Date().toDateString();
+            const stored = localStorage.getItem('youtubeApiUsage');
+            if (stored) {
+                const data = JSON.parse(stored);
+                if (data.date === today) {
+                    apiUsage = data.usage;
+                } else {
+                    // Reset for new day
+                    apiUsage = { search: 0, videos: 0, channels: 0, total: 0 };
+                }
+            }
+            updateApiUsageDisplay();
+        }
+
+        function saveApiUsage() {
+            const today = new Date().toDateString();
+            const data = {
+                date: today,
+                usage: apiUsage
+            };
+            localStorage.setItem('youtubeApiUsage', JSON.stringify(data));
+        }
+
+        function trackApiCall(type, units = 1) {
+            apiUsage[type] += units;
+            apiUsage.total += units;
+            saveApiUsage();
+            updateApiUsageDisplay();
+        }
+
+        function updateApiUsageDisplay() {
+            const usageFill = document.getElementById('usageFill');
+            const usageText = document.getElementById('usageText');
+            
+            const percentage = Math.min((apiUsage.total / 10000) * 100, 100);
+            usageFill.style.width = `${percentage}%`;
+            
+            let status = '';
+            if (percentage < 50) status = '🟢 안전';
+            else if (percentage < 80) status = '🟡 주의';
+            else if (percentage < 95) status = '🟠 위험';
+            else status = '🔴 한도초과';
+            
+            usageText.textContent = `${apiUsage.total.toLocaleString()} / 10,000 units ${status}`;
+            
+            // Show breakdown on hover
+            const apiUsageDiv = document.getElementById('apiUsage');
+            apiUsageDiv.title = `검색: ${apiUsage.search} units\n비디오: ${apiUsage.videos} units\n채널: ${apiUsage.channels} units`;
+        }
+
         // Global variables for pagination
         let allVideos = [];      // filled after API fetch
+        let allItems = [];       // enriched with velocity and channel data
         const pageSize = 8;      // items per page (4×2 grid)
         let currentPage = 1;     // 1-based
         let allChannelMap = {};
+        let searchCache = {};   // Cache search results by query
+        let apiUsage = {
+            search: 0,      // 100 units per call
+            videos: 0,      // 1 unit per call
+            channels: 0,    // 1 unit per call
+            total: 0        // Total units used today
+        };
+
+        // Filter functions
+        function filterByVelocityOption(items, opt) {
+            if (opt === 'recent-surge') return items.filter(x => x.vclass === 'recent-surge');
+            if (opt === 'normal')       return items.filter(x => x.vclass === 'normal');
+            if (opt === 'slow')         return items.filter(x => x.vclass === 'slow');
+            return items; // '전체'
+        }
+
+        function filterByChannelSize(items, opt) {
+            if (opt === 'small') return items.filter(x => x.cband === 'small');
+            if (opt === 'mid')   return items.filter(x => x.cband === 'mid');
+            if (opt === 'large') return items.filter(x => x.cband === 'large');
+            if (opt === 'hidden')return items.filter(x => x.cband === 'hidden');
+            return items; // 전체
+        }
+
+        function applyAllFilters() {
+            let items = [...allItems];
+            
+            // Get current filter values
+            const velocityFilter = document.querySelector('input[name="velocityFilter"]:checked').value;
+            const channelSizeFilter = document.querySelector('input[name="channelSize"]:checked').value;
+            const sortBy = document.getElementById('sortBy').value;
+            
+            // Apply filters
+            items = filterByChannelSize(items, channelSizeFilter);
+            items = filterByVelocityOption(items, velocityFilter);
+            
+            // Apply sorting
+            if (sortBy === 'velocity') {
+                items.sort(sortVelocityThenSmallCreator);
+            } else {
+                // Keep existing sort logic for other options
+                items.sort((a, b) => {
+                    const aVideo = a.raw;
+                    const bVideo = b.raw;
+                    
+                    switch(sortBy) {
+                        case 'viewCount':
+                            return parseInt(bVideo.statistics?.viewCount || 0) - parseInt(aVideo.statistics?.viewCount || 0);
+                        case 'date':
+                            return new Date(bVideo.snippet.publishedAt) - new Date(aVideo.snippet.publishedAt);
+                        default:
+                            return 0;
+                    }
+                });
+            }
+            
+            return items;
+        }
 
         async function search() {
             const query = document.getElementById('searchInput').value.trim();
@@ -750,7 +1006,20 @@
             // Reset pagination for new search
             currentPage = 1;
             allVideos = [];
+            allItems = [];
             allChannelMap = {};
+
+            // Check cache first
+            const cacheKey = query.toLowerCase();
+            if (searchCache[cacheKey]) {
+                console.log('Using cached results for:', query);
+                const cachedData = searchCache[cacheKey];
+                allVideos = cachedData.videos;
+                allChannelMap = cachedData.channels;
+                allItems = cachedData.items;
+                renderPage(1);
+                return;
+            }
 
             try {
                 // Get filter values
@@ -760,7 +1029,9 @@
                 const sortBy = document.getElementById('sortBy').value;
 
                 // Build search URL with filters
-                let searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(query)}&order=${sortBy}&key=${apiKeyValue}`;
+                // Use default order for API, apply velocity sorting on client side
+                const apiOrder = sortBy === 'velocity' ? 'relevance' : sortBy;
+                let searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(query)}&order=${apiOrder}&key=${apiKeyValue}`;
                 
                 if (uploadDate) {
                     searchUrl += `&publishedAfter=${getPublishedAfterDate(uploadDate)}`;
@@ -773,6 +1044,9 @@
                     throw new Error(searchData.error.message);
                 }
 
+                // Track API usage
+                trackApiCall('search', 100);
+
                 const videoIds = searchData.items.map(item => item.id.videoId).join(',');
                 const channelIds = [...new Set(searchData.items.map(item => item.snippet.channelId))].join(',');
 
@@ -781,10 +1055,16 @@
                 const videosResponse = await fetch(videosUrl);
                 const videosData = await videosResponse.json();
 
+                // Track API usage
+                trackApiCall('videos', 1);
+
                 // Step 3: Get channel information for subscriber counts
                 const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelIds}&key=${apiKeyValue}`;
                 const channelsResponse = await fetch(channelsUrl);
                 const channelsData = await channelsResponse.json();
+
+                // Track API usage
+                trackApiCall('channels', 1);
 
                 const channelMap = {};
                 channelsData.items.forEach(channel => {
@@ -832,6 +1112,30 @@
                 // Save all filtered videos
                 allVideos = filteredVideos;
 
+                // Enrich videos with velocity and channel data
+                allItems = filteredVideos.map(video => {
+                    const channel = allChannelMap[video.snippet.channelId];
+                    const vpd = viewVelocityPerDay(video);
+                    const vclass = classifyVelocity(vpd);
+                    const cband = channelSizeBand(channel);
+                    const subs = Number(channel?.statistics?.subscriberCount ?? 0);
+                    
+                    return {
+                        raw: video,
+                        vpd: vpd,
+                        vclass: vclass,
+                        cband: cband,
+                        subs: subs
+                    };
+                });
+
+                // Cache the results
+                searchCache[cacheKey] = {
+                    videos: allVideos,
+                    channels: allChannelMap,
+                    items: allItems
+                };
+
                 // Display first page (8 items - 4×2 grid)
                 renderPage(1);
 
@@ -846,19 +1150,24 @@
         }
 
         function totalPages() {
-            return Math.max(1, Math.ceil(allVideos.length / pageSize));
+            const filteredItems = applyAllFilters();
+            return Math.max(1, Math.ceil(filteredItems.length / pageSize));
         }
 
         // Render current page to #results
         function renderPage(page) {
-            currentPage = Math.min(Math.max(1, page), totalPages());
+            // Apply filters first
+            const filteredItems = applyAllFilters();
+            
+            currentPage = Math.min(Math.max(1, page), Math.ceil(filteredItems.length / pageSize));
             const start = (currentPage - 1) * pageSize;
             const end = start + pageSize;
-            const pageItems = allVideos.slice(start, end);
+            const pageItems = filteredItems.slice(start, end);
 
             let html = `<div class="card-grid">`;
             
-            pageItems.forEach(video => {
+            pageItems.forEach(item => {
+                const video = item.raw;
                 const channel = allChannelMap[video.snippet.channelId];
                 const thumbnail = video.snippet.thumbnails.maxres || video.snippet.thumbnails.high || video.snippet.thumbnails.medium || video.snippet.thumbnails.default;
                 
@@ -867,12 +1176,14 @@
                         <div class="thumbnail-container">
                             <img src="${thumbnail.url}" alt="${video.snippet.title}">
                             ${video.contentDetails?.duration ? `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
+                            <div class="velocity-badge">${formatVelocity(item.vpd)}</div>
                         </div>
                         <div class="video-info">
                             <div class="video-title">${video.snippet.title}</div>
                             <div class="channel-info">
                                 ${channel?.snippet?.thumbnails?.default ? `<img src="${channel.snippet.thumbnails.default.url}" class="channel-icon" alt="${video.snippet.channelTitle}">` : ''}
                                 <span class="channel-name">${video.snippet.channelTitle}</span>
+                                <span class="channel-size-badge">${getChannelSizeEmoji(item.cband)}</span>
                             </div>
                             <div class="stats">
                                 <div class="stat-item">👁 ${formatNumber(parseInt(video.statistics.viewCount))}</div>
@@ -895,7 +1206,7 @@
             document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages()} page`;
 
             // Update result summary
-            document.getElementById('totalCount').textContent = allVideos.length;
+            document.getElementById('totalCount').textContent = filteredItems.length;
             document.getElementById('pageSizeView').textContent = pageSize;
 
             // Enable/disable arrows
@@ -912,6 +1223,54 @@
             if (e.key === 'ArrowRight') renderPage(currentPage + 1);
             if (e.key === 'ArrowLeft') renderPage(currentPage - 1);
         });
+
+        // Add filter change listeners to re-render without API calls
+        function addFilterListeners() {
+            // Velocity filter
+            document.querySelectorAll('input[name="velocityFilter"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    if (allItems.length > 0) {
+                        currentPage = 1;
+                        renderPage(1);
+                    }
+                });
+            });
+
+            // Channel size filter
+            document.querySelectorAll('input[name="channelSize"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    if (allItems.length > 0) {
+                        currentPage = 1;
+                        renderPage(1);
+                    }
+                });
+            });
+
+            // Sort dropdown
+            document.getElementById('sortBy').addEventListener('change', () => {
+                if (allItems.length > 0) {
+                    currentPage = 1;
+                    renderPage(1);
+                }
+            });
+
+            // Other filters
+            document.querySelectorAll('input[name="uploadDate"], input[name="videoDuration"], input[name="viewCount"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    if (allItems.length > 0) {
+                        currentPage = 1;
+                        renderPage(1);
+                    }
+                });
+            });
+        }
+
+        // Initialize filter listeners
+        addFilterListeners();
+
+        // Load API usage on page load
+        loadApiUsage();
+
     </script>
 </body>
 </html>
