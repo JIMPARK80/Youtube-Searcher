@@ -357,6 +357,11 @@
             }
         });
 
+        // API 키 자동 저장 (입력 시마다 저장)
+        document.getElementById('apiKey').addEventListener('input', function() {
+            localStorage.setItem('youtubeApiKey', this.value);
+        });
+
         document.getElementById('apiKey').addEventListener('change', function() {
             localStorage.setItem('youtubeApiKey', this.value);
         });
