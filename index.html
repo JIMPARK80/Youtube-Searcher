@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube 검색기</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .search-box {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+
+        .search-input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        #searchInput {
+            flex: 1;
+            padding: 15px 20px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        #searchInput:focus {
+            border-color: #667eea;
+        }
+
+        #searchBtn {
+            padding: 15px 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        #searchBtn:hover {
+            transform: translateY(-2px);
+        }
+
+        #searchBtn:active {
+            transform: translateY(0);
+        }
+
+        .api-key-toggle {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        #toggleApiKeyBtn {
+            padding: 10px 20px;
+            background: #f8f9fa;
+            color: #667eea;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        #toggleApiKeyBtn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .api-key-section {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .api-key-section.show {
+            display: block;
+        }
+
+        .api-key-section label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .api-key-section input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: monospace;
+        }
+
+        .api-key-section small {
+            display: block;
+            margin-top: 5px;
+            color: #666;
+        }
+
+        .results {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+
+        .video-card {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+
+        .video-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .thumbnail-container {
+            position: relative;
+            width: 100%;
+            padding-top: 56.25%; /* 16:9 aspect ratio */
+            overflow: hidden;
+            background: #f0f0f0;
+        }
+
+        .thumbnail-container img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .duration {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .video-info {
+            padding: 20px;
+        }
+
+        .video-title {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .channel-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .channel-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .channel-name {
+            font-weight: 600;
+            color: #555;
+            font-size: 0.95em;
+        }
+
+        .stats {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 12px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        .tag {
+            background: #e9ecef;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            color: #495057;
+        }
+
+        .video-description {
+            margin-top: 12px;
+            font-size: 0.9em;
+            color: #666;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.2em;
+            padding: 50px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .subscriber-count {
+            font-size: 0.85em;
+            color: #888;
+        }
+
+        @media (max-width: 1200px) {
+            .results {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 900px) {
+            .results {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .search-input-group {
+                flex-direction: column;
+            }
+
+            #searchBtn {
+                width: 100%;
+            }
+
+            .results {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎬 YouTube 검색기</h1>
+            <p>검색어를 입력하고 다양한 정보를 확인하세요!</p>
+        </div>
+
+        <div class="search-box">
+            <div class="search-input-group">
+                <input type="text" id="searchInput" placeholder="검색어를 입력하세요..." />
+                <button id="searchBtn">검색</button>
+            </div>
+            
+            <div class="api-key-toggle">
+                <button id="toggleApiKeyBtn">🔑 API 키 설정</button>
+            </div>
+
+            <div class="api-key-section" id="apiKeySection">
+                <label for="apiKey">YouTube Data API v3 키:</label>
+                <input type="password" id="apiKey" placeholder="API 키를 입력하세요" />
+                <small>💡 API 키는 <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>에서 발급받으세요</small>
+            </div>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const apiKey = localStorage.getItem('youtubeApiKey');
+        if (apiKey) {
+            document.getElementById('apiKey').value = apiKey;
+        }
+
+        // API 키 토글 버튼
+        let apiKeyVisible = false;
+        document.getElementById('toggleApiKeyBtn').addEventListener('click', function() {
+            apiKeyVisible = !apiKeyVisible;
+            const apiKeySection = document.getElementById('apiKeySection');
+            const input = document.getElementById('apiKey');
+            
+            if (apiKeyVisible) {
+                apiKeySection.classList.add('show');
+                this.textContent = '🔒 API 키 숨기기';
+                input.focus();
+            } else {
+                apiKeySection.classList.remove('show');
+                this.textContent = '🔑 API 키 설정';
+            }
+        });
+
+        document.getElementById('apiKey').addEventListener('change', function() {
+            localStorage.setItem('youtubeApiKey', this.value);
+        });
+
+        document.getElementById('searchBtn').addEventListener('click', search);
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                search();
+            }
+        });
+
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+
+        function formatDuration(duration) {
+            const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+            const hours = (match[1] || '').replace('H', '');
+            const minutes = (match[2] || '').replace('M', '');
+            const seconds = (match[3] || '').replace('S', '');
+            
+            let result = '';
+            if (hours) result += hours + ':';
+            result += (minutes || '0').padStart(2, '0') + ':';
+            result += (seconds || '0').padStart(2, '0');
+            return result;
+        }
+
+        async function search() {
+            const query = document.getElementById('searchInput').value.trim();
+            const apiKeyValue = document.getElementById('apiKey').value.trim();
+            
+            if (!query) {
+                alert('검색어를 입력해주세요!');
+                return;
+            }
+            
+            if (!apiKeyValue) {
+                alert('API 키를 입력해주세요!');
+                return;
+            }
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="loading">⏳ 검색 중...</div>';
+
+            try {
+                // Step 1: Search for videos
+                const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=16&q=${encodeURIComponent(query)}&key=${apiKeyValue}`;
+                const searchResponse = await fetch(searchUrl);
+                const searchData = await searchResponse.json();
+
+                if (searchData.error) {
+                    throw new Error(searchData.error.message);
+                }
+
+                const videoIds = searchData.items.map(item => item.id.videoId).join(',');
+                const channelIds = [...new Set(searchData.items.map(item => item.snippet.channelId))].join(',');
+
+                // Step 2: Get detailed video information
+                const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${apiKeyValue}`;
+                const videosResponse = await fetch(videosUrl);
+                const videosData = await videosResponse.json();
+
+                // Step 3: Get channel information for subscriber counts
+                const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelIds}&key=${apiKeyValue}`;
+                const channelsResponse = await fetch(channelsUrl);
+                const channelsData = await channelsResponse.json();
+
+                const channelMap = {};
+                channelsData.items.forEach(channel => {
+                    channelMap[channel.id] = channel;
+                });
+
+                // Step 4: Render results
+                let html = '';
+                videosData.items.forEach(video => {
+                    const channel = channelMap[video.snippet.channelId];
+                    const thumbnail = video.snippet.thumbnails.high || video.snippet.thumbnails.default;
+                    
+                    html += `
+                        <div class="video-card" onclick="window.open('https://www.youtube.com/watch?v=${video.id}', '_blank')">
+                            <div class="thumbnail-container">
+                                <img src="${thumbnail.url}" alt="${video.snippet.title}" />
+                                ${video.contentDetails && video.contentDetails.duration ? 
+                                    `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
+                            </div>
+                            <div class="video-info">
+                                <div class="video-title">${video.snippet.title}</div>
+                                <div class="channel-info">
+                                    ${channel && channel.snippet.thumbnails.default ? 
+                                        `<img src="${channel.snippet.thumbnails.default.url}" class="channel-icon" alt="${video.snippet.channelTitle}" />` : ''}
+                                    <span class="channel-name">${video.snippet.channelTitle}</span>
+                                </div>
+                                <div class="stats">
+                                    <div class="stat-item">
+                                        <strong>👁</strong> ${formatNumber(parseInt(video.statistics.viewCount))}
+                                    </div>
+                                    ${video.statistics.likeCount ? 
+                                        `<div class="stat-item">
+                                            <strong>👍</strong> ${formatNumber(parseInt(video.statistics.likeCount))}
+                                        </div>` : ''}
+                                    ${channel && channel.statistics.subscriberCount ? 
+                                        `<div class="stat-item">
+                                            <strong>👥</strong> ${formatNumber(parseInt(channel.statistics.subscriberCount))} 구독자
+                                        </div>` : ''}
+                                </div>
+                                ${video.snippet.tags ? `
+                                    <div class="tags">
+                                        ${video.snippet.tags.slice(0, 5).map(tag => 
+                                            `<span class="tag">#${tag}</span>`
+                                        ).join('')}
+                                    </div>
+                                ` : ''}
+                                <div class="video-description">${video.snippet.description}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                resultsDiv.innerHTML = html;
+
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ 오류 발생:</strong> ${error.message}
+                    </div>
+                `;
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
