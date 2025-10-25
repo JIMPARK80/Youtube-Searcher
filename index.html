@@ -321,6 +321,85 @@
             color: #888;
         }
 
+        .filters-section {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .filter-label {
+            font-weight: 600;
+            color: #333;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .filter-options {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-radio,
+        .filter-checkbox {
+            display: none;
+        }
+
+        .filter-radio-label,
+        .filter-checkbox-label {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 20px;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: all 0.3s;
+            user-select: none;
+        }
+
+        .filter-radio-label:hover,
+        .filter-checkbox-label:hover {
+            background: #e9ecef;
+            border-color: #adb5bd;
+        }
+
+        .filter-radio:checked + .filter-radio-label,
+        .filter-checkbox:checked + .filter-checkbox-label {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .sort-select {
+            padding: 8px 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 0.9em;
+            cursor: pointer;
+            background: white;
+            transition: border-color 0.3s;
+        }
+
+        .sort-select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
         @media (max-width: 1200px) {
             .card-grid {
                 grid-template-columns: repeat(3, 1fr);
@@ -340,6 +419,21 @@
 
             #searchBtn {
                 width: 100%;
+            }
+
+            .filters-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-options {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .filter-radio-label,
+            .filter-checkbox-label {
+                width: 100%;
+                text-align: center;
             }
 
             .card-grid {
@@ -373,6 +467,66 @@
                     <button class="api-key-btn save-btn" id="saveBtn">💾 저장</button>
                 </div>
                 <small>💡 API 키는 <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>에서 발급받으세요</small>
+            </div>
+        </div>
+
+        <div class="filters-section">
+            <div class="filters-grid">
+                <div class="filter-group">
+                    <div class="filter-label">기간 필터</div>
+                    <div class="filter-options">
+                        <input type="radio" name="uploadDate" id="anyTime" class="filter-radio" value="" checked>
+                        <label for="anyTime" class="filter-radio-label">전체</label>
+                        <input type="radio" name="uploadDate" id="custom1" class="filter-radio" value="1">
+                        <label for="custom1" class="filter-radio-label">1개월</label>
+                        <input type="radio" name="uploadDate" id="custom3" class="filter-radio" value="3">
+                        <label for="custom3" class="filter-radio-label">3개월</label>
+                        <input type="radio" name="uploadDate" id="custom6" class="filter-radio" value="6">
+                        <label for="custom6" class="filter-radio-label">6개월</label>
+                        <input type="radio" name="uploadDate" id="custom12" class="filter-radio" value="12">
+                        <label for="custom12" class="filter-radio-label">1년</label>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <div class="filter-label">길이 필터</div>
+                    <div class="filter-options">
+                        <input type="radio" name="videoDuration" id="anyDuration" class="filter-radio" value="" checked>
+                        <label for="anyDuration" class="filter-radio-label">전체</label>
+                        <input type="radio" name="videoDuration" id="short" class="filter-radio" value="short">
+                        <label for="short" class="filter-radio-label">숏폼(&lt;4분)</label>
+                        <input type="radio" name="videoDuration" id="medium" class="filter-radio" value="medium">
+                        <label for="medium" class="filter-radio-label">중간(4~20분)</label>
+                        <input type="radio" name="videoDuration" id="long" class="filter-radio" value="long">
+                        <label for="long" class="filter-radio-label">롱폼(20분+)</label>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <div class="filter-label">조회수 필터</div>
+                    <div class="filter-options">
+                        <input type="radio" name="viewCount" id="anyViews" class="filter-radio" value="" checked>
+                        <label for="anyViews" class="filter-radio-label">전체</label>
+                        <input type="radio" name="viewCount" id="views1K" class="filter-radio" value="1000">
+                        <label for="views1K" class="filter-radio-label">1K+</label>
+                        <input type="radio" name="viewCount" id="views10K" class="filter-radio" value="10000">
+                        <label for="views10K" class="filter-radio-label">10K+</label>
+                        <input type="radio" name="viewCount" id="views100K" class="filter-radio" value="100000">
+                        <label for="views100K" class="filter-radio-label">100K+</label>
+                        <input type="radio" name="viewCount" id="views1M" class="filter-radio" value="1000000">
+                        <label for="views1M" class="filter-radio-label">1M+</label>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <div class="filter-label">정렬</div>
+                    <select id="sortBy" class="sort-select">
+                        <option value="relevance">관련도순</option>
+                        <option value="viewCount" selected>조회수 내림차순</option>
+                        <option value="rating">평점순</option>
+                        <option value="date">업로드 날짜순</option>
+                    </select>
+                </div>
             </div>
         </div>
 
@@ -461,7 +615,11 @@
         }
 
         function formatDuration(duration) {
+            if (!duration) return '0:00';
+            
             const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+            if (!match) return '0:00';
+            
             const hours = (match[1] || '').replace('H', '');
             const minutes = (match[2] || '').replace('M', '');
             const seconds = (match[3] || '').replace('S', '');
@@ -471,6 +629,34 @@
             result += (minutes || '0').padStart(2, '0') + ':';
             result += (seconds || '0').padStart(2, '0');
             return result;
+        }
+
+        function parseDurationToSeconds(duration) {
+            if (!duration) return 0;
+            
+            const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+            if (!match) return 0;
+            
+            const hours = parseInt((match[1] || '').replace('H', '')) || 0;
+            const minutes = parseInt((match[2] || '').replace('M', '')) || 0;
+            const seconds = parseInt((match[3] || '').replace('S', '')) || 0;
+            return hours * 3600 + minutes * 60 + seconds;
+        }
+
+        function getPublishedAfterDate(period) {
+            if (!period) return '';
+            
+            const now = new Date();
+            let date = new Date();
+            const months = parseInt(period);
+
+            if (!isNaN(months) && months > 0) {
+                date.setMonth(now.getMonth() - months);
+            } else {
+                return '';
+            }
+
+            return date.toISOString();
         }
 
         async function search() {
@@ -491,8 +677,19 @@
             resultsDiv.innerHTML = '<div class="loading">⏳ 검색 중...</div>';
 
             try {
-                // Step 1: Search for videos
-                const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=16&q=${encodeURIComponent(query)}&key=${apiKeyValue}`;
+                // Get filter values
+                const uploadDate = document.querySelector('input[name="uploadDate"]:checked').value;
+                const videoDuration = document.querySelector('input[name="videoDuration"]:checked').value;
+                const viewCount = document.querySelector('input[name="viewCount"]:checked').value;
+                const sortBy = document.getElementById('sortBy').value;
+
+                // Build search URL with filters
+                let searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(query)}&order=${sortBy}&key=${apiKeyValue}`;
+                
+                if (uploadDate) {
+                    searchUrl += `&publishedAfter=${getPublishedAfterDate(uploadDate)}`;
+                }
+
                 const searchResponse = await fetch(searchUrl);
                 const searchData = await searchResponse.json();
 
@@ -518,10 +715,50 @@
                     channelMap[channel.id] = channel;
                 });
 
+                // Filter by video duration and view count if needed
+                let filteredVideos = videosData.items;
+                if (videoDuration || viewCount) {
+                    filteredVideos = videosData.items.filter(video => {
+                        // Duration filter
+                        if (videoDuration) {
+                            const duration = video.contentDetails?.duration || '';
+                            const seconds = parseDurationToSeconds(duration);
+                            
+                            let passesDurationFilter = false;
+                            switch(videoDuration) {
+                                case 'short':
+                                    passesDurationFilter = seconds < 240; // Less than 4 minutes
+                                    break;
+                                case 'medium':
+                                    passesDurationFilter = seconds >= 240 && seconds < 1200; // 4 to 20 minutes
+                                    break;
+                                case 'long':
+                                    passesDurationFilter = seconds >= 1200; // 20 minutes or more
+                                    break;
+                                default:
+                                    passesDurationFilter = true;
+                            }
+                            if (!passesDurationFilter) return false;
+                        }
+
+                        // View count filter
+                        if (viewCount) {
+                            const minViews = parseInt(viewCount);
+                            const videoViews = parseInt(video.statistics?.viewCount || 0);
+                            if (videoViews < minViews) return false;
+                        }
+
+                        return true;
+                    });
+                }
+
+                // Limit to 16 results for display
+                filteredVideos = filteredVideos.slice(0, 16);
+
                 // Step 4: Render results as 4-column card grid
                 let html = `<div class="card-grid">`;
                 
-                videosData.items.forEach(video => {
+                filteredVideos.forEach(video => {
                     const channel = channelMap[video.snippet.channelId];
                     const thumbnail = video.snippet.thumbnails.maxres || video.snippet.thumbnails.high || video.snippet.thumbnails.medium || video.snippet.thumbnails.default;
                     
