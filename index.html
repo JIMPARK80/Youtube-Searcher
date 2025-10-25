@@ -400,6 +400,55 @@
             border-color: #667eea;
         }
 
+        .pagination-section {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .pagination-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            margin: 18px 0 10px;
+        }
+
+        .page-btn {
+            border: none;
+            padding: 10px 14px;
+            border-radius: 999px;
+            font-weight: 700;
+            cursor: pointer;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        .page-info {
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+            font-size: 16px;
+        }
+
+        .result-summary {
+            color: white;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+
         @media (max-width: 1200px) {
             .card-grid {
                 grid-template-columns: repeat(3, 1fr);
@@ -434,6 +483,11 @@
             .filter-checkbox-label {
                 width: 100%;
                 text-align: center;
+            }
+
+            .page-btn {
+                width: 100%;
+                padding: 15px 40px;
             }
 
             .card-grid {
@@ -527,6 +581,17 @@
                         <option value="date">업로드 날짜순</option>
                     </select>
                 </div>
+            </div>
+        </div>
+
+        <div class="pagination-section">
+            <div class="result-summary" id="resultSummary">
+                검색 결과: <span id="totalCount">0</span>개 / 표시: <span id="pageSizeView">8</span>개
+            </div>
+            <div class="pagination-bar">
+                <button id="prevPage" class="page-btn" aria-label="Previous page">◀</button>
+                <span id="pageInfo" class="page-info">1 / 1 page</span>
+                <button id="nextPage" class="page-btn" aria-label="Next page">▶</button>
             </div>
         </div>
 
@@ -659,6 +724,12 @@
             return date.toISOString();
         }
 
+        // Global variables for pagination
+        let allVideos = [];      // filled after API fetch
+        const pageSize = 8;      // items per page (4×2 grid)
+        let currentPage = 1;     // 1-based
+        let allChannelMap = {};
+
         async function search() {
             const query = document.getElementById('searchInput').value.trim();
             const apiKeyValue = document.getElementById('apiKey').value.trim();
@@ -675,6 +746,11 @@
 
             const resultsDiv = document.getElementById('results');
             resultsDiv.innerHTML = '<div class="loading">⏳ 검색 중...</div>';
+            
+            // Reset pagination for new search
+            currentPage = 1;
+            allVideos = [];
+            allChannelMap = {};
 
             try {
                 // Get filter values
@@ -713,6 +789,7 @@
                 const channelMap = {};
                 channelsData.items.forEach(channel => {
                     channelMap[channel.id] = channel;
+                    allChannelMap[channel.id] = channel; // Save to global map
                 });
 
                 // Filter by video duration and view count if needed
@@ -752,44 +829,11 @@
                     });
                 }
 
-                // Limit to 16 results for display
-                filteredVideos = filteredVideos.slice(0, 16);
+                // Save all filtered videos
+                allVideos = filteredVideos;
 
-                // Step 4: Render results as 4-column card grid
-                let html = `<div class="card-grid">`;
-                
-                filteredVideos.forEach(video => {
-                    const channel = channelMap[video.snippet.channelId];
-                    const thumbnail = video.snippet.thumbnails.maxres || video.snippet.thumbnails.high || video.snippet.thumbnails.medium || video.snippet.thumbnails.default;
-                    
-                    html += `
-                        <div class="video-card" onclick="window.open('https://www.youtube.com/watch?v=${video.id}', '_blank')">
-                            <div class="thumbnail-container">
-                                <img src="${thumbnail.url}" alt="${video.snippet.title}">
-                                ${video.contentDetails?.duration ? `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
-                            </div>
-                            <div class="video-info">
-                                <div class="video-title">${video.snippet.title}</div>
-                                <div class="channel-info">
-                                    ${channel?.snippet?.thumbnails?.default ? `<img src="${channel.snippet.thumbnails.default.url}" class="channel-icon" alt="${video.snippet.channelTitle}">` : ''}
-                                    <span class="channel-name">${video.snippet.channelTitle}</span>
-                                </div>
-                                <div class="stats">
-                                    <div class="stat-item">👁 ${formatNumber(parseInt(video.statistics.viewCount))}</div>
-                                    ${video.statistics.likeCount ? `<div class="stat-item">👍 ${formatNumber(parseInt(video.statistics.likeCount))}</div>` : ''}
-                                    ${channel?.statistics?.subscriberCount ? `<div class="stat-item">👥 ${formatNumber(parseInt(channel.statistics.subscriberCount))}</div>` : ''}
-                                </div>
-                                <div class="tags">
-                                    ${video.snippet.tags ? video.snippet.tags.slice(0, 3).map(t => `<span class="tag">#${t}</span>`).join('') : ''}
-                                </div>
-                                <div class="video-description">${video.snippet.description || '-'}</div>
-                            </div>
-                        </div>
-                    `;
-                });
-                
-                html += `</div>`;
-                resultsDiv.innerHTML = html;
+                // Display first page (8 items - 4×2 grid)
+                renderPage(1);
 
             } catch (error) {
                 resultsDiv.innerHTML = `
@@ -800,6 +844,74 @@
                 console.error('Error:', error);
             }
         }
+
+        function totalPages() {
+            return Math.max(1, Math.ceil(allVideos.length / pageSize));
+        }
+
+        // Render current page to #results
+        function renderPage(page) {
+            currentPage = Math.min(Math.max(1, page), totalPages());
+            const start = (currentPage - 1) * pageSize;
+            const end = start + pageSize;
+            const pageItems = allVideos.slice(start, end);
+
+            let html = `<div class="card-grid">`;
+            
+            pageItems.forEach(video => {
+                const channel = allChannelMap[video.snippet.channelId];
+                const thumbnail = video.snippet.thumbnails.maxres || video.snippet.thumbnails.high || video.snippet.thumbnails.medium || video.snippet.thumbnails.default;
+                
+                html += `
+                    <div class="video-card" onclick="window.open('https://www.youtube.com/watch?v=${video.id}', '_blank')">
+                        <div class="thumbnail-container">
+                            <img src="${thumbnail.url}" alt="${video.snippet.title}">
+                            ${video.contentDetails?.duration ? `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
+                        </div>
+                        <div class="video-info">
+                            <div class="video-title">${video.snippet.title}</div>
+                            <div class="channel-info">
+                                ${channel?.snippet?.thumbnails?.default ? `<img src="${channel.snippet.thumbnails.default.url}" class="channel-icon" alt="${video.snippet.channelTitle}">` : ''}
+                                <span class="channel-name">${video.snippet.channelTitle}</span>
+                            </div>
+                            <div class="stats">
+                                <div class="stat-item">👁 ${formatNumber(parseInt(video.statistics.viewCount))}</div>
+                                ${video.statistics.likeCount ? `<div class="stat-item">👍 ${formatNumber(parseInt(video.statistics.likeCount))}</div>` : ''}
+                                ${channel?.statistics?.subscriberCount ? `<div class="stat-item">👥 ${formatNumber(parseInt(channel.statistics.subscriberCount))}</div>` : ''}
+                            </div>
+                            <div class="tags">
+                                ${video.snippet.tags ? video.snippet.tags.slice(0, 3).map(t => `<span class="tag">#${t}</span>`).join('') : ''}
+                            </div>
+                            <div class="video-description">${video.snippet.description || '-'}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += `</div>`;
+            document.getElementById('results').innerHTML = html;
+
+            // Update page text: "1 / 7 page"
+            document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages()} page`;
+
+            // Update result summary
+            document.getElementById('totalCount').textContent = allVideos.length;
+            document.getElementById('pageSizeView').textContent = pageSize;
+
+            // Enable/disable arrows
+            document.getElementById('prevPage').disabled = currentPage === 1;
+            document.getElementById('nextPage').disabled = currentPage === totalPages();
+        }
+
+        // Hook up pagination buttons
+        document.getElementById('prevPage').addEventListener('click', () => renderPage(currentPage - 1));
+        document.getElementById('nextPage').addEventListener('click', () => renderPage(currentPage + 1));
+
+        // Optional: keyboard arrow support
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') renderPage(currentPage + 1);
+            if (e.key === 'ArrowLeft') renderPage(currentPage - 1);
+        });
     </script>
 </body>
 </html>
