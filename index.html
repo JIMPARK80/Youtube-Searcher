@@ -1416,11 +1416,91 @@
                         publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
                     }
                     
+                    // Extract channel subscriber count from SerpAPI data
+                    // SerpAPI provides subscribers as a number or string like "1.5M subscribers"
+                    let channelSubscriberCount = '0';
+                    if (v.channel?.subscribers) {
+                        if (typeof v.channel.subscribers === 'number') {
+                            channelSubscriberCount = v.channel.subscribers.toString();
+                        } else if (typeof v.channel.subscribers === 'string') {
+                            // Parse strings like "1.5M subscribers" or "150K subscribers"
+                            const subStr = v.channel.subscribers.toLowerCase().trim();
+                            let mult = 1;
+                            if (subStr.includes('m')) {
+                                mult = 1000000;
+                                channelSubscriberCount = (parseFloat(subStr) * mult).toString();
+                            } else if (subStr.includes('k')) {
+                                mult = 1000;
+                                channelSubscriberCount = (parseFloat(subStr) * mult).toString();
+                            } else {
+                                // Try to extract numbers from string
+                                const numMatch = subStr.match(/[\d.]+/);
+                                if (numMatch) {
+                                    channelSubscriberCount = numMatch[0];
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Parse views - handle both number and string formats
+                    let viewCount = '0';
+                    if (v.views !== undefined && v.views !== null) {
+                        if (typeof v.views === 'number') {
+                            viewCount = v.views.toString();
+                        } else if (typeof v.views === 'string') {
+                            // Parse strings like "1.5M views" or "150K views"
+                            const viewStr = v.views.toLowerCase().trim();
+                            if (viewStr.includes('m')) {
+                                viewCount = (parseFloat(viewStr) * 1000000).toString();
+                            } else if (viewStr.includes('k')) {
+                                viewCount = (parseFloat(viewStr) * 1000).toString();
+                            } else {
+                                const numMatch = viewStr.match(/[\d.]+/);
+                                if (numMatch) {
+                                    viewCount = numMatch[0];
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Parse likes similarly
+                    let likeCount = '0';
+                    if (v.likes !== undefined && v.likes !== null) {
+                        if (typeof v.likes === 'number') {
+                            likeCount = v.likes.toString();
+                        } else if (typeof v.likes === 'string') {
+                            const likeStr = v.likes.toLowerCase().trim();
+                            if (likeStr.includes('m')) {
+                                likeCount = (parseFloat(likeStr) * 1000000).toString();
+                            } else if (likeStr.includes('k')) {
+                                likeCount = (parseFloat(likeStr) * 1000).toString();
+                            } else {
+                                const numMatch = likeStr.match(/[\d.]+/);
+                                if (numMatch) {
+                                    likeCount = numMatch[0];
+                                }
+                            }
+                        }
+                    }
+                    
+                    console.log('🔍 SerpAPI 데이터 추출:', {
+                        title: v.title,
+                        channelName: v.channel?.name,
+                        subscribers: v.channel?.subscribers,
+                        parsedSubscribers: channelSubscriberCount,
+                        views: v.views,
+                        parsedViews: viewCount,
+                        likes: v.likes,
+                        parsedLikes: likeCount,
+                        published_date: v.published_date
+                    });
+                    
                     return {
                         id: videoId,
                         snippet: {
                             title: v.title,
                             channelTitle: v.channel?.name || 'Unknown Channel',
+                            channelId: v.channel?.id || '',
                             publishedAt: publishedAtISO,
                             description: v.description || '',
                             thumbnails: {
@@ -1430,8 +1510,8 @@
                             }
                         },
                         statistics: {
-                            viewCount: v.views || '0',
-                            likeCount: v.likes || '0',
+                            viewCount: viewCount,
+                            likeCount: likeCount,
                             commentCount: v.comments || '0'
                         },
                         contentDetails: {
@@ -1440,10 +1520,11 @@
                         // Additional SerpAPI data
                         serpData: {
                             channel: v.channel,
-                            views: v.views,
+                            channelSubscribers: channelSubscriberCount,
+                            views: viewCount,
                             published_date: v.published_date,
                             description: v.description,
-                            likes: v.likes,
+                            likes: likeCount,
                             comments: v.comments,
                             duration: v.duration,
                             thumbnail: v.thumbnail,
@@ -1513,9 +1594,9 @@
                 }
                 
                 if (channelSizeStatus) {
-                    channelSizeStatus.textContent = '❌ 불가능';
-                    channelSizeStatus.className = 'filter-status unavailable';
-                    channelSizeStatus.title = 'SerpAPI는 채널 구독자 수를 제공하지 않습니다';
+                    channelSizeStatus.textContent = '✅ 가능';
+                    channelSizeStatus.className = 'filter-status available';
+                    channelSizeStatus.title = 'SerpAPI는 채널 구독자 수를 제공합니다';
                 }
             } else {
                 // Google API mode - all filters available
@@ -1726,19 +1807,38 @@
                         
                         const serpVideos = await searchWithSerpAPI(query);
                         allVideos = serpVideos;
-                        allChannelMap = {}; // SerpAPI doesn't provide channel details
+                        
+                        // Build channel map from SerpAPI data
+                        allChannelMap = {};
+                        serpVideos.forEach(video => {
+                            if (video.snippet.channelId && video.serpData?.channelSubscribers) {
+                                allChannelMap[video.snippet.channelId] = {
+                                    id: video.snippet.channelId,
+                                    snippet: {
+                                        title: video.snippet.channelTitle,
+                                        thumbnails: { default: { url: '' } }
+                                    },
+                                    statistics: {
+                                        subscriberCount: video.serpData.channelSubscribers
+                                    }
+                                };
+                            }
+                        });
                         
                         // Create enriched items for SerpAPI results
                         allItems = serpVideos.map(video => {
                             const vpd = viewVelocityPerDay(video);
                             const vclass = classifyVelocity(vpd);
+                            const channel = allChannelMap[video.snippet.channelId];
+                            const cband = channelSizeBand(channel);
+                            const subs = Number(channel?.statistics?.subscriberCount ?? 0);
                             
                             return {
                                 raw: video,
                                 vpd: vpd,
                                 vclass: vclass,
-                                cband: 'unknown', // SerpAPI doesn't provide channel info
-                                subs: 0
+                                cband: cband,
+                                subs: subs
                             };
                         });
 
