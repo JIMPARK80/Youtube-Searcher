@@ -176,9 +176,13 @@
         }
 
         .results {
+            width: 100%;
+        }
+
+        .card-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
+            gap: 16px;
         }
 
         .video-card {
@@ -198,15 +202,12 @@
         .thumbnail-container {
             position: relative;
             width: 100%;
-            padding-top: 56.25%; /* 16:9 aspect ratio */
+            aspect-ratio: 16 / 9;
             overflow: hidden;
             background: #f0f0f0;
         }
 
         .thumbnail-container img {
-            position: absolute;
-            top: 0;
-            left: 0;
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -214,41 +215,42 @@
 
         .duration {
             position: absolute;
-            bottom: 8px;
-            right: 8px;
+            bottom: 6px;
+            right: 6px;
             background: rgba(0,0,0,0.8);
             color: white;
-            padding: 4px 8px;
+            padding: 2px 6px;
             border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
+            font-size: 11px;
+            font-weight: 700;
         }
 
         .video-info {
-            padding: 20px;
+            padding: 12px;
         }
 
         .video-title {
-            font-size: 1.1em;
-            font-weight: bold;
-            margin-bottom: 10px;
+            font-size: 0.95em;
+            font-weight: 700;
+            margin-bottom: 6px;
             color: #333;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
+            line-height: 1.35;
         }
 
         .channel-info {
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 12px;
+            gap: 8px;
+            margin-bottom: 8px;
         }
 
         .channel-icon {
-            width: 36px;
-            height: 36px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
             object-fit: cover;
         }
@@ -256,45 +258,45 @@
         .channel-name {
             font-weight: 600;
             color: #555;
-            font-size: 0.95em;
+            font-size: 0.85em;
         }
 
         .stats {
             display: flex;
-            gap: 15px;
-            margin-bottom: 12px;
-            font-size: 0.9em;
+            gap: 10px;
+            font-size: 0.8em;
             color: #666;
+            margin-bottom: 6px;
+            flex-wrap: wrap;
         }
 
         .stat-item {
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 3px;
         }
 
         .tags {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
-            margin-top: 12px;
         }
 
         .tag {
             background: #e9ecef;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 0.8em;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.7em;
             color: #495057;
         }
 
         .video-description {
-            margin-top: 12px;
-            font-size: 0.9em;
+            margin-top: 6px;
+            font-size: 0.8em;
             color: #666;
-            line-height: 1.5;
+            line-height: 1.4;
             display: -webkit-box;
-            -webkit-line-clamp: 3;
+            -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
@@ -320,13 +322,13 @@
         }
 
         @media (max-width: 1200px) {
-            .results {
+            .card-grid {
                 grid-template-columns: repeat(3, 1fr);
             }
         }
 
         @media (max-width: 900px) {
-            .results {
+            .card-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
@@ -340,7 +342,7 @@
                 width: 100%;
             }
 
-            .results {
+            .card-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -516,52 +518,40 @@
                     channelMap[channel.id] = channel;
                 });
 
-                // Step 4: Render results
-                let html = '';
+                // Step 4: Render results as 4-column card grid
+                let html = `<div class="card-grid">`;
+                
                 videosData.items.forEach(video => {
                     const channel = channelMap[video.snippet.channelId];
-                    const thumbnail = video.snippet.thumbnails.high || video.snippet.thumbnails.default;
+                    const thumbnail = video.snippet.thumbnails.maxres || video.snippet.thumbnails.high || video.snippet.thumbnails.medium || video.snippet.thumbnails.default;
                     
                     html += `
                         <div class="video-card" onclick="window.open('https://www.youtube.com/watch?v=${video.id}', '_blank')">
                             <div class="thumbnail-container">
-                                <img src="${thumbnail.url}" alt="${video.snippet.title}" />
-                                ${video.contentDetails && video.contentDetails.duration ? 
-                                    `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
+                                <img src="${thumbnail.url}" alt="${video.snippet.title}">
+                                ${video.contentDetails?.duration ? `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
                             </div>
                             <div class="video-info">
                                 <div class="video-title">${video.snippet.title}</div>
                                 <div class="channel-info">
-                                    ${channel && channel.snippet.thumbnails.default ? 
-                                        `<img src="${channel.snippet.thumbnails.default.url}" class="channel-icon" alt="${video.snippet.channelTitle}" />` : ''}
+                                    ${channel?.snippet?.thumbnails?.default ? `<img src="${channel.snippet.thumbnails.default.url}" class="channel-icon" alt="${video.snippet.channelTitle}">` : ''}
                                     <span class="channel-name">${video.snippet.channelTitle}</span>
                                 </div>
                                 <div class="stats">
-                                    <div class="stat-item">
-                                        <strong>👁</strong> ${formatNumber(parseInt(video.statistics.viewCount))}
-                                    </div>
-                                    ${video.statistics.likeCount ? 
-                                        `<div class="stat-item">
-                                            <strong>👍</strong> ${formatNumber(parseInt(video.statistics.likeCount))}
-                                        </div>` : ''}
-                                    ${channel && channel.statistics.subscriberCount ? 
-                                        `<div class="stat-item">
-                                            <strong>👥</strong> ${formatNumber(parseInt(channel.statistics.subscriberCount))} 구독자
-                                        </div>` : ''}
+                                    <div class="stat-item">👁 ${formatNumber(parseInt(video.statistics.viewCount))}</div>
+                                    ${video.statistics.likeCount ? `<div class="stat-item">👍 ${formatNumber(parseInt(video.statistics.likeCount))}</div>` : ''}
+                                    ${channel?.statistics?.subscriberCount ? `<div class="stat-item">👥 ${formatNumber(parseInt(channel.statistics.subscriberCount))}</div>` : ''}
                                 </div>
-                                ${video.snippet.tags ? `
-                                    <div class="tags">
-                                        ${video.snippet.tags.slice(0, 5).map(tag => 
-                                            `<span class="tag">#${tag}</span>`
-                                        ).join('')}
-                                    </div>
-                                ` : ''}
-                                <div class="video-description">${video.snippet.description}</div>
+                                <div class="tags">
+                                    ${video.snippet.tags ? video.snippet.tags.slice(0, 3).map(t => `<span class="tag">#${t}</span>`).join('') : ''}
+                                </div>
+                                <div class="video-description">${video.snippet.description || '-'}</div>
                             </div>
                         </div>
                     `;
                 });
-
+                
+                html += `</div>`;
                 resultsDiv.innerHTML = html;
 
             } catch (error) {
