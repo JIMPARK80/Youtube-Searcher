@@ -500,6 +500,30 @@
             opacity: 0.8;
         }
 
+        .search-mode-indicator {
+            text-align: center;
+            margin: 10px 0;
+            padding: 8px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            color: white;
+            backdrop-filter: blur(10px);
+        }
+
+        .search-mode-indicator.serpapi {
+            background: rgba(0, 123, 255, 0.2);
+            border: 1px solid rgba(0, 123, 255, 0.3);
+        }
+
+        .search-mode-indicator .mode-text {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
 
         @media (max-width: 1200px) {
             .card-grid {
@@ -561,6 +585,10 @@
                 <button id="searchBtn">검색</button>
             </div>
             
+            <div class="search-mode-indicator" id="searchModeIndicator">
+                <span class="mode-text">현재 검색 모드: 🟢 Google API</span>
+            </div>
+            
             <div class="api-key-toggle">
                 <button id="toggleApiKeyBtn">🔑 API 키 설정</button>
             </div>
@@ -573,6 +601,14 @@
                     <button class="api-key-btn save-btn" id="saveBtn">💾 저장</button>
                 </div>
                 <small>💡 API 키는 <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>에서 발급받으세요</small>
+                
+                <label for="serpApiKey" style="margin-top: 20px;">SerpAPI 키 (백업용):</label>
+                <div class="api-key-input-wrapper">
+                    <input type="password" id="serpApiKey" placeholder="SerpAPI 키를 입력하세요" />
+                    <button class="api-key-btn toggle-visibility-btn" id="toggleSerpVisibilityBtn">👁️ 보기</button>
+                    <button class="api-key-btn save-btn" id="saveSerpBtn">💾 저장</button>
+                </div>
+                <small>💡 SerpAPI 키는 <a href="https://serpapi.com/manage-api-key" target="_blank">SerpAPI</a>에서 발급받으세요 (무료 250회/월)</small>
             </div>
         </div>
 
@@ -692,12 +728,21 @@
     <script>
         // API 키 초기화
         const apiKey = localStorage.getItem('youtubeApiKey');
+        const serpApiKey = localStorage.getItem('serpApiKey');
         const apiKeyInput = document.getElementById('apiKey');
+        const serpApiKeyInput = document.getElementById('serpApiKey');
+        
         if (apiKey) {
             apiKeyInput.value = apiKey;
             // localStorage에 값이 있으면 처음부터 text 타입으로 설정
             apiKeyInput.type = 'text';
             document.getElementById('toggleVisibilityBtn').textContent = '🙈 숨기기';
+        }
+        
+        if (serpApiKey) {
+            serpApiKeyInput.value = serpApiKey;
+            serpApiKeyInput.type = 'text';
+            document.getElementById('toggleSerpVisibilityBtn').textContent = '🙈 숨기기';
         }
 
         // API 키 토글 버튼
@@ -732,6 +777,21 @@
             }
         });
 
+        // SerpAPI 키 표시/숨김 토글
+        let isSerpVisible = serpApiKey ? true : false;
+        document.getElementById('toggleSerpVisibilityBtn').addEventListener('click', function() {
+            isSerpVisible = !isSerpVisible;
+            const input = document.getElementById('serpApiKey');
+            
+            if (isSerpVisible) {
+                input.type = 'text';
+                this.textContent = '🙈 숨기기';
+            } else {
+                input.type = 'password';
+                this.textContent = '👁️ 보기';
+            }
+        });
+
         // 저장 버튼 기능
         document.getElementById('saveBtn').addEventListener('click', function() {
             const apiKeyValue = document.getElementById('apiKey').value.trim();
@@ -742,6 +802,28 @@
             }
             
             localStorage.setItem('youtubeApiKey', apiKeyValue);
+            
+            // 저장 성공 피드백
+            const originalText = this.textContent;
+            this.textContent = '✅ 저장됨';
+            this.classList.add('saved');
+            
+            setTimeout(() => {
+                this.textContent = originalText;
+                this.classList.remove('saved');
+            }, 2000);
+        });
+
+        // SerpAPI 키 저장 버튼 기능
+        document.getElementById('saveSerpBtn').addEventListener('click', function() {
+            const serpApiKeyValue = document.getElementById('serpApiKey').value.trim();
+            
+            if (!serpApiKeyValue) {
+                alert('SerpAPI 키를 입력해주세요!');
+                return;
+            }
+            
+            localStorage.setItem('serpApiKey', serpApiKeyValue);
             
             // 저장 성공 피드백
             const originalText = this.textContent;
@@ -878,8 +960,9 @@
                 if (data.date === today) {
                     apiUsage = data.usage;
                 } else {
-                    // Reset for new day
-                    apiUsage = { search: 0, videos: 0, channels: 0, total: 0 };
+                    // Reset for new day (but keep SerpAPI monthly count)
+                    const serpapiCount = apiUsage.serpapi || 0;
+                    apiUsage = { search: 0, videos: 0, channels: 0, total: 0, serpapi: serpapiCount };
                 }
             }
             updateApiUsageDisplay();
@@ -896,7 +979,9 @@
 
         function trackApiCall(type, units = 1) {
             apiUsage[type] += units;
-            apiUsage.total += units;
+            if (type !== 'serpapi') {
+                apiUsage.total += units;
+            }
             saveApiUsage();
             updateApiUsageDisplay();
         }
@@ -914,11 +999,16 @@
             else if (percentage < 95) status = '🟠 위험';
             else status = '🔴 한도초과';
             
-            usageText.textContent = `${apiUsage.total.toLocaleString()} / 10,000 units ${status}`;
+            // Show both Google API and SerpAPI usage
+            const serpapiStatus = apiUsage.serpapi >= 250 ? '🔴 한도초과' : 
+                                 apiUsage.serpapi >= 200 ? '🟠 위험' : 
+                                 apiUsage.serpapi >= 100 ? '🟡 주의' : '🟢 안전';
+            
+            usageText.textContent = `Google: ${apiUsage.total.toLocaleString()}/10K ${status} | SerpAPI: ${apiUsage.serpapi}/250 ${serpapiStatus}`;
             
             // Show breakdown on hover
             const apiUsageDiv = document.getElementById('apiUsage');
-            apiUsageDiv.title = `검색: ${apiUsage.search} units\n비디오: ${apiUsage.videos} units\n채널: ${apiUsage.channels} units`;
+            apiUsageDiv.title = `Google API:\n검색: ${apiUsage.search} units\n비디오: ${apiUsage.videos} units\n채널: ${apiUsage.channels} units\n\nSerpAPI: ${apiUsage.serpapi}/250 calls`;
         }
 
         // Global variables for pagination
@@ -932,8 +1022,12 @@
             search: 0,      // 100 units per call
             videos: 0,      // 1 unit per call
             channels: 0,    // 1 unit per call
-            total: 0        // Total units used today
+            total: 0,       // Total units used today
+            serpapi: 0      // SerpAPI calls (250 free/month)
         };
+        
+        // SerpAPI configuration
+        let currentSearchMode = 'google'; // 'google' or 'serpapi'
 
         // Filter functions
         function filterByVelocityOption(items, opt) {
@@ -986,6 +1080,75 @@
             return items;
         }
 
+        // SerpAPI search function
+        async function searchWithSerpAPI(query) {
+            try {
+                console.log('🔄 SerpAPI로 검색 중...');
+                const serpApiKey = localStorage.getItem('serpApiKey');
+                if (!serpApiKey) {
+                    throw new Error('SerpAPI 키가 설정되지 않았습니다. API 키 설정에서 SerpAPI 키를 입력해주세요.');
+                }
+                
+                const serpUrl = `https://serpapi.com/search.json?engine=youtube&search_query=${encodeURIComponent(query)}&api_key=${serpApiKey}`;
+                
+                // Use CORS proxy to avoid CORS issues
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(serpUrl)}`;
+                const res = await fetch(proxyUrl);
+                const data = await res.json();
+
+                if (!data.video_results || data.video_results.length === 0) {
+                    throw new Error('SerpAPI에서 검색 결과를 찾을 수 없습니다.');
+                }
+
+                // Track SerpAPI usage
+                trackApiCall('serpapi', 1);
+
+                // Convert SerpAPI format to our format
+                const videos = data.video_results.map(v => ({
+                    id: v.link.split('v=')[1]?.split('&')[0] || '',
+                    snippet: {
+                        title: v.title,
+                        channelTitle: v.channel?.name || 'Unknown Channel',
+                        publishedAt: v.published_date || new Date().toISOString(),
+                        thumbnails: {
+                            default: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${v.link.split('v=')[1]?.split('&')[0]}/default.jpg` },
+                            medium: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${v.link.split('v=')[1]?.split('&')[0]}/mqdefault.jpg` },
+                            high: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${v.link.split('v=')[1]?.split('&')[0]}/hqdefault.jpg` }
+                        }
+                    },
+                    statistics: {
+                        viewCount: v.views || '0',
+                        likeCount: '0'
+                    },
+                    contentDetails: {
+                        duration: 'PT0S' // SerpAPI doesn't provide duration
+                    }
+                }));
+
+                return videos;
+
+            } catch (error) {
+                console.error('SerpAPI 오류:', error);
+                throw new Error(`SerpAPI 검색 실패: ${error.message}`);
+            }
+        }
+
+        // Update search mode indicator
+        function updateSearchModeIndicator(mode) {
+            const indicator = document.getElementById('searchModeIndicator');
+            const modeText = indicator.querySelector('.mode-text');
+            
+            if (mode === 'serpapi') {
+                indicator.classList.add('serpapi');
+                modeText.innerHTML = '현재 검색 모드: 🔵 SerpAPI (백업모드)';
+                currentSearchMode = 'serpapi';
+            } else {
+                indicator.classList.remove('serpapi');
+                modeText.innerHTML = '현재 검색 모드: 🟢 Google API';
+                currentSearchMode = 'google';
+            }
+        }
+
         async function search() {
             const query = document.getElementById('searchInput').value.trim();
             const apiKeyValue = document.getElementById('apiKey').value.trim();
@@ -1028,116 +1191,166 @@
                 const viewCount = document.querySelector('input[name="viewCount"]:checked').value;
                 const sortBy = document.getElementById('sortBy').value;
 
-                // Build search URL with filters
-                // Use default order for API, apply velocity sorting on client side
-                const apiOrder = sortBy === 'velocity' ? 'relevance' : sortBy;
-                let searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(query)}&order=${apiOrder}&key=${apiKeyValue}`;
-                
-                if (uploadDate) {
-                    searchUrl += `&publishedAfter=${getPublishedAfterDate(uploadDate)}`;
-                }
-
-                const searchResponse = await fetch(searchUrl);
-                const searchData = await searchResponse.json();
-
-                if (searchData.error) {
-                    throw new Error(searchData.error.message);
-                }
-
-                // Track API usage
-                trackApiCall('search', 100);
-
-                const videoIds = searchData.items.map(item => item.id.videoId).join(',');
-                const channelIds = [...new Set(searchData.items.map(item => item.snippet.channelId))].join(',');
-
-                // Step 2: Get detailed video information
-                const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${apiKeyValue}`;
-                const videosResponse = await fetch(videosUrl);
-                const videosData = await videosResponse.json();
-
-                // Track API usage
-                trackApiCall('videos', 1);
-
-                // Step 3: Get channel information for subscriber counts
-                const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelIds}&key=${apiKeyValue}`;
-                const channelsResponse = await fetch(channelsUrl);
-                const channelsData = await channelsResponse.json();
-
-                // Track API usage
-                trackApiCall('channels', 1);
-
-                const channelMap = {};
-                channelsData.items.forEach(channel => {
-                    channelMap[channel.id] = channel;
-                    allChannelMap[channel.id] = channel; // Save to global map
-                });
-
-                // Filter by video duration and view count if needed
-                let filteredVideos = videosData.items;
-                if (videoDuration || viewCount) {
-                    filteredVideos = videosData.items.filter(video => {
-                        // Duration filter
-                        if (videoDuration) {
-                            const duration = video.contentDetails?.duration || '';
-                            const seconds = parseDurationToSeconds(duration);
-                            
-                            let passesDurationFilter = false;
-                            switch(videoDuration) {
-                                case 'short':
-                                    passesDurationFilter = seconds < 240; // Less than 4 minutes
-                                    break;
-                                case 'medium':
-                                    passesDurationFilter = seconds >= 240 && seconds < 1200; // 4 to 20 minutes
-                                    break;
-                                case 'long':
-                                    passesDurationFilter = seconds >= 1200; // 20 minutes or more
-                                    break;
-                                default:
-                                    passesDurationFilter = true;
-                            }
-                            if (!passesDurationFilter) return false;
-                        }
-
-                        // View count filter
-                        if (viewCount) {
-                            const minViews = parseInt(viewCount);
-                            const videoViews = parseInt(video.statistics?.viewCount || 0);
-                            if (videoViews < minViews) return false;
-                        }
-
-                        return true;
-                    });
-                }
-
-                // Save all filtered videos
-                allVideos = filteredVideos;
-
-                // Enrich videos with velocity and channel data
-                allItems = filteredVideos.map(video => {
-                    const channel = allChannelMap[video.snippet.channelId];
-                    const vpd = viewVelocityPerDay(video);
-                    const vclass = classifyVelocity(vpd);
-                    const cband = channelSizeBand(channel);
-                    const subs = Number(channel?.statistics?.subscriberCount ?? 0);
+                // Try Google API first
+                try {
+                    // Build search URL with filters
+                    // Use default order for API, apply velocity sorting on client side
+                    const apiOrder = sortBy === 'velocity' ? 'relevance' : sortBy;
+                    let searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(query)}&order=${apiOrder}&key=${apiKeyValue}`;
                     
-                    return {
-                        raw: video,
-                        vpd: vpd,
-                        vclass: vclass,
-                        cband: cband,
-                        subs: subs
+                    if (uploadDate) {
+                        searchUrl += `&publishedAfter=${getPublishedAfterDate(uploadDate)}`;
+                    }
+
+                    const searchResponse = await fetch(searchUrl);
+                    const searchData = await searchResponse.json();
+
+                    // Check for quota exceeded error
+                    if (searchData.error && searchData.error.errors && 
+                        searchData.error.errors[0].reason === "quotaExceeded") {
+                        console.warn("⚠️ Google API 한도 초과 — SerpAPI로 전환합니다.");
+                        updateSearchModeIndicator('serpapi');
+                        throw new Error("quotaExceeded");
+                    }
+
+                    if (searchData.error) {
+                        throw new Error(searchData.error.message);
+                    }
+
+                    // Track API usage
+                    trackApiCall('search', 100);
+                    updateSearchModeIndicator('google');
+
+                    // Process Google API results
+                    const videoIds = searchData.items.map(item => item.id.videoId).join(',');
+                    const channelIds = [...new Set(searchData.items.map(item => item.snippet.channelId))].join(',');
+
+                    // Step 2: Get detailed video information
+                    const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${apiKeyValue}`;
+                    const videosResponse = await fetch(videosUrl);
+                    const videosData = await videosResponse.json();
+
+                    // Track API usage
+                    trackApiCall('videos', 1);
+
+                    // Step 3: Get channel information for subscriber counts
+                    const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelIds}&key=${apiKeyValue}`;
+                    const channelsResponse = await fetch(channelsUrl);
+                    const channelsData = await channelsResponse.json();
+
+                    // Track API usage
+                    trackApiCall('channels', 1);
+
+                    const channelMap = {};
+                    channelsData.items.forEach(channel => {
+                        channelMap[channel.id] = channel;
+                        allChannelMap[channel.id] = channel; // Save to global map
+                    });
+
+                    // Filter by video duration and view count if needed
+                    let filteredVideos = videosData.items;
+                    if (videoDuration || viewCount) {
+                        filteredVideos = videosData.items.filter(video => {
+                            // Duration filter
+                            if (videoDuration) {
+                                const duration = video.contentDetails?.duration || '';
+                                const seconds = parseDurationToSeconds(duration);
+                                
+                                let passesDurationFilter = false;
+                                switch(videoDuration) {
+                                    case 'short':
+                                        passesDurationFilter = seconds < 240; // Less than 4 minutes
+                                        break;
+                                    case 'medium':
+                                        passesDurationFilter = seconds >= 240 && seconds < 1200; // 4 to 20 minutes
+                                        break;
+                                    case 'long':
+                                        passesDurationFilter = seconds >= 1200; // 20 minutes or more
+                                        break;
+                                    default:
+                                        passesDurationFilter = true;
+                                }
+                                if (!passesDurationFilter) return false;
+                            }
+
+                            // View count filter
+                            if (viewCount) {
+                                const minViews = parseInt(viewCount);
+                                const videoViews = parseInt(video.statistics?.viewCount || 0);
+                                if (videoViews < minViews) return false;
+                            }
+
+                            return true;
+                        });
+                    }
+
+                    // Save all filtered videos
+                    allVideos = filteredVideos;
+
+                    // Enrich videos with velocity and channel data
+                    allItems = filteredVideos.map(video => {
+                        const channel = allChannelMap[video.snippet.channelId];
+                        const vpd = viewVelocityPerDay(video);
+                        const vclass = classifyVelocity(vpd);
+                        const cband = channelSizeBand(channel);
+                        const subs = Number(channel?.statistics?.subscriberCount ?? 0);
+                        
+                        return {
+                            raw: video,
+                            vpd: vpd,
+                            vclass: vclass,
+                            cband: cband,
+                            subs: subs
+                        };
+                    });
+
+                    // Cache the results
+                    searchCache[cacheKey] = {
+                        videos: allVideos,
+                        channels: allChannelMap,
+                        items: allItems
                     };
-                });
 
-                // Cache the results
-                searchCache[cacheKey] = {
-                    videos: allVideos,
-                    channels: allChannelMap,
-                    items: allItems
-                };
+                    // Display first page (8 items - 4×2 grid)
+                    renderPage(1);
 
-                // Display first page (8 items - 4×2 grid)
-                renderPage(1);
+                } catch (googleError) {
+                    if (googleError.message === "quotaExceeded") {
+                        // Switch to SerpAPI
+                        console.log('🔄 SerpAPI로 자동 전환합니다...');
+                        resultsDiv.innerHTML = '<div class="loading">🔄 SerpAPI로 전환 중...</div>';
+                        
+                        const serpVideos = await searchWithSerpAPI(query);
+                        allVideos = serpVideos;
+                        allChannelMap = {}; // SerpAPI doesn't provide channel details
+                        
+                        // Create enriched items for SerpAPI results
+                        allItems = serpVideos.map(video => {
+                            const vpd = viewVelocityPerDay(video);
+                            const vclass = classifyVelocity(vpd);
+                            
+                            return {
+                                raw: video,
+                                vpd: vpd,
+                                vclass: vclass,
+                                cband: 'unknown', // SerpAPI doesn't provide channel info
+                                subs: 0
+                            };
+                        });
+
+                        // Cache the results
+                        searchCache[cacheKey] = {
+                            videos: allVideos,
+                            channels: allChannelMap,
+                            items: allItems
+                        };
+
+                        // Display results
+                        renderPage(1);
+                    } else {
+                        throw googleError;
+                    }
+                }
 
             } catch (error) {
                 resultsDiv.innerHTML = `
