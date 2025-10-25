@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube 검색기</title>
+    <title>JIm's YouTube 검색기</title>
     <style>
         * {
             margin: 0;
@@ -385,6 +385,110 @@
             border-color: #667eea;
         }
 
+        /* Filter Action Buttons */
+        .filter-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .apply-filters-btn, .reset-filters-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .apply-filters-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .apply-filters-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .reset-filters-btn {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+        }
+
+        .reset-filters-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+        }
+
+        /* SerpAPI specific styles */
+        .serp-badge {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            background: rgba(0, 123, 255, 0.9);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .serp-stats {
+            margin: 6px 0;
+            padding: 6px;
+            background: rgba(0, 123, 255, 0.1);
+            border-radius: 6px;
+            font-size: 0.75em;
+        }
+
+        .serp-info {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .serp-date, .serp-duration {
+            color: #666;
+            font-size: 0.8em;
+        }
+
+        .serp-date {
+            color: #007bff;
+        }
+
+        .serp-duration {
+            color: #28a745;
+        }
+
+        /* Filter status indicators */
+        .filter-status {
+            font-size: 0.8em;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 8px;
+        }
+
+        .filter-status.available {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .filter-status.unavailable {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .filter-status.partial {
+            background: #fff3cd;
+            color: #856404;
+        }
+
         .sort-select {
             padding: 8px 12px;
             border: 2px solid #dee2e6;
@@ -575,7 +679,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎬 YouTube 검색기</h1>
+            <h1>🎬 Jim's YouTube 채널 검색기</h1>
             <p>검색어를 입력하고 다양한 정보를 확인하세요!</p>
         </div>
 
@@ -608,34 +712,51 @@
                     <button class="api-key-btn toggle-visibility-btn" id="toggleSerpVisibilityBtn">👁️ 보기</button>
                     <button class="api-key-btn save-btn" id="saveSerpBtn">💾 저장</button>
                 </div>
-                <small>💡 SerpAPI 키는 <a href="https://serpapi.com/manage-api-key" target="_blank">SerpAPI</a>에서 발급받으세요 (무료 250회/월)</small>
+            <small>💡 SerpAPI 키는 <a href="https://serpapi.com/manage-api-key" target="_blank">SerpAPI</a>에서 발급받으세요 (무료 250회/월)</small>
+            
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
+                <label>💾 저장된 검색 데이터 관리:</label>
+                <div style="margin-top: 10px;">
+                    <button id="showStoredBtn" style="padding: 8px 12px; margin-right: 10px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">📦 개별 삭제</button>
+                    <button id="clearDataBtn" style="padding: 8px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">🗑️ 모든 데이터 삭제</button>
+                </div>
+                <div id="storedSearches" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+                <div id="searchSelection" style="margin-top: 10px; display: none;">
+                    <div style="margin-bottom: 10px; font-weight: bold;">개별 삭제할 검색어 선택:</div>
+                    <div id="searchCheckboxes" style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px; background: #f8f9fa;"></div>
+                    <div style="margin-top: 10px;">
+                        <button id="deleteSelectedBtn" style="padding: 6px 12px; background: #ff6b6b; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">🗑️ 선택된 검색어 삭제</button>
+                        <button id="cancelSelectionBtn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">❌ 취소</button>
+                    </div>
+                </div>
             </div>
+        </div>
         </div>
 
 
         <div class="filters-section">
             <div class="filters-grid">
-                <div class="filter-group">
-                    <div class="filter-label">기간 필터</div>
-                    <div class="filter-options">
-                        <input type="radio" name="uploadDate" id="anyTime" class="filter-radio" value="" checked>
-                        <label for="anyTime" class="filter-radio-label">전체</label>
-                        <input type="radio" name="uploadDate" id="custom1" class="filter-radio" value="1">
-                        <label for="custom1" class="filter-radio-label">1개월</label>
-                        <input type="radio" name="uploadDate" id="custom3" class="filter-radio" value="3">
-                        <label for="custom3" class="filter-radio-label">3개월</label>
-                        <input type="radio" name="uploadDate" id="custom6" class="filter-radio" value="6">
-                        <label for="custom6" class="filter-radio-label">6개월</label>
-                        <input type="radio" name="uploadDate" id="custom12" class="filter-radio" value="12">
-                        <label for="custom12" class="filter-radio-label">1년</label>
-                    </div>
-                </div>
+        <div class="filter-group">
+            <div class="filter-label">기간 필터 (이하) <span id="uploadDateFilterStatus" class="filter-status"></span></div>
+            <div class="filter-options">
+                <input type="radio" name="uploadDate" id="anyTime" class="filter-radio" value="all" checked>
+                <label for="anyTime" class="filter-radio-label">전체</label>
+                <input type="radio" name="uploadDate" id="custom1" class="filter-radio" value="1">
+                <label for="custom1" class="filter-radio-label">1개월 이내</label>
+                <input type="radio" name="uploadDate" id="custom3" class="filter-radio" value="3">
+                <label for="custom3" class="filter-radio-label">3개월 이내</label>
+                <input type="radio" name="uploadDate" id="custom6" class="filter-radio" value="6">
+                <label for="custom6" class="filter-radio-label">6개월 이내</label>
+                <input type="radio" name="uploadDate" id="custom12" class="filter-radio" value="12">
+                <label for="custom12" class="filter-radio-label">1년 이내</label>
+            </div>
+        </div>
 
                 <div class="filter-group">
-                    <div class="filter-label">길이 필터</div>
+                    <div class="filter-label">길이 필터 <span id="durationFilterStatus" class="filter-status"></span></div>
                     <div class="filter-options">
-                        <input type="radio" name="videoDuration" id="anyDuration" class="filter-radio" value="" checked>
-                        <label for="anyDuration" class="filter-radio-label">전체</label>
+                <input type="radio" name="videoDuration" id="anyDuration" class="filter-radio" value="all" checked>
+                <label for="anyDuration" class="filter-radio-label">전체</label>
                         <input type="radio" name="videoDuration" id="short" class="filter-radio" value="short">
                         <label for="short" class="filter-radio-label">숏폼(&lt;4분)</label>
                         <input type="radio" name="videoDuration" id="medium" class="filter-radio" value="medium">
@@ -646,10 +767,10 @@
                 </div>
 
                 <div class="filter-group">
-                    <div class="filter-label">조회수 필터</div>
+                    <div class="filter-label">조회수 필터 <span id="viewCountFilterStatus" class="filter-status"></span></div>
                     <div class="filter-options">
-                        <input type="radio" name="viewCount" id="anyViews" class="filter-radio" value="" checked>
-                        <label for="anyViews" class="filter-radio-label">전체</label>
+                <input type="radio" name="viewCount" id="anyViews" class="filter-radio" value="all" checked>
+                <label for="anyViews" class="filter-radio-label">전체</label>
                         <input type="radio" name="viewCount" id="views1K" class="filter-radio" value="1000">
                         <label for="views1K" class="filter-radio-label">1K+</label>
                         <input type="radio" name="viewCount" id="views10K" class="filter-radio" value="10000">
@@ -662,10 +783,10 @@
                 </div>
 
                 <div class="filter-group">
-                    <div class="filter-label">성장속도 필터</div>
+                    <div class="filter-label">성장속도 필터 <span id="velocityFilterStatus" class="filter-status"></span></div>
                     <div class="filter-options">
-                        <input type="radio" name="velocityFilter" id="allVelocity" class="filter-radio" value="" checked>
-                        <label for="allVelocity" class="filter-radio-label">전체</label>
+                <input type="radio" name="velocityFilter" id="allVelocity" class="filter-radio" value="all" checked>
+                <label for="allVelocity" class="filter-radio-label">전체</label>
                         <input type="radio" name="velocityFilter" id="recentSurge" class="filter-radio" value="recent-surge">
                         <label for="recentSurge" class="filter-radio-label">급상승</label>
                         <input type="radio" name="velocityFilter" id="normalVelocity" class="filter-radio" value="normal">
@@ -676,10 +797,10 @@
                 </div>
 
                 <div class="filter-group">
-                    <div class="filter-label">채널 규모</div>
+                    <div class="filter-label">채널 규모 <span id="channelSizeFilterStatus" class="filter-status"></span></div>
                     <div class="filter-options">
-                        <input type="radio" name="channelSize" id="allChannel" class="filter-radio" value="" checked>
-                        <label for="allChannel" class="filter-radio-label">전체</label>
+                <input type="radio" name="channelSize" id="allChannel" class="filter-radio" value="all" checked>
+                <label for="allChannel" class="filter-radio-label">전체</label>
                         <input type="radio" name="channelSize" id="smallChannel" class="filter-radio" value="small">
                         <label for="smallChannel" class="filter-radio-label">🌱 소형(&lt;10K)</label>
                         <input type="radio" name="channelSize" id="midChannel" class="filter-radio" value="mid">
@@ -698,6 +819,15 @@
                         <option value="rating">평점순</option>
                         <option value="date">업로드 날짜순</option>
                     </select>
+                </div>
+                
+                <div class="filter-group filter-actions">
+                    <button id="applyFiltersBtn" class="apply-filters-btn">
+                        🔍 필터 적용
+                    </button>
+                    <button id="resetFiltersBtn" class="reset-filters-btn" onclick="resetAllFilters()">
+                        🔄 초기화
+                    </button>
                 </div>
             </div>
         </div>
@@ -889,9 +1019,14 @@
             let date = new Date();
             const months = parseInt(period);
 
+            console.log(`📅 기간 필터 계산: ${period}개월`);
+            console.log(`📅 현재 날짜: ${now.toISOString()}`);
+
             if (!isNaN(months) && months > 0) {
                 date.setMonth(now.getMonth() - months);
+                console.log(`📅 계산된 컷오프 날짜: ${date.toISOString()}`);
             } else {
+                console.log(`📅 잘못된 기간 값: ${period}`);
                 return '';
             }
 
@@ -901,7 +1036,15 @@
         // View Velocity functions
         function ageDays(publishedAt) {
             const now = Date.now();
-            const ageMs = Math.max(1, now - Date.parse(publishedAt)); // guard
+            const publishedTime = Date.parse(publishedAt);
+            
+            // Check if date parsing was successful
+            if (isNaN(publishedTime)) {
+                console.warn('Invalid publishedAt date:', publishedAt);
+                return 0.25; // Return minimum age to avoid division by zero
+            }
+            
+            const ageMs = Math.max(1, now - publishedTime); // guard
             const d = ageMs / (1000 * 60 * 60 * 24);
             return d;
         }
@@ -919,6 +1062,29 @@
             if (vpd >= 1_000_000) return `+${(vpd/1_000_000).toFixed(1)}M/day`;
             if (vpd >= 1_000)     return `+${(vpd/1_000).toFixed(1)}K/day`;
             return `+${Math.round(vpd)}/day`;
+        }
+
+        function formatDate(dateString) {
+            if (!dateString || dateString === '') {
+                console.warn('빈 날짜 문자열:', dateString);
+                return '날짜 없음';
+            }
+            
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) {
+                console.warn('잘못된 날짜 형식:', dateString);
+                return '날짜 없음'; // '날짜 오류' 대신 '날짜 없음'으로 변경
+            }
+            
+            const now = new Date();
+            const diffTime = Math.abs(now - date);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 1) return '1일 전';
+            if (diffDays < 7) return `${diffDays}일 전`;
+            if (diffDays < 30) return `${Math.floor(diffDays / 7)}주 전`;
+            if (diffDays < 365) return `${Math.floor(diffDays / 30)}개월 전`;
+            return `${Math.floor(diffDays / 365)}년 전`;
         }
 
         function classifyVelocity(vpd) {
@@ -965,6 +1131,13 @@
                     apiUsage = { search: 0, videos: 0, channels: 0, total: 0, serpapi: serpapiCount };
                 }
             }
+            
+            // Force Google API to show as exhausted
+            apiUsage.total = 10000;
+            apiUsage.search = 5000; // Approximate distribution
+            apiUsage.videos = 3000;
+            apiUsage.channels = 2000;
+            
             updateApiUsageDisplay();
         }
 
@@ -990,25 +1163,23 @@
             const usageFill = document.getElementById('usageFill');
             const usageText = document.getElementById('usageText');
             
-            const percentage = Math.min((apiUsage.total / 10000) * 100, 100);
+            // Google API is exhausted - show 100% usage
+            const percentage = 100;
             usageFill.style.width = `${percentage}%`;
+            usageFill.style.background = 'linear-gradient(90deg, #ff6b6b 0%, #ee5a24 100%)'; // Red gradient for exhausted
             
-            let status = '';
-            if (percentage < 50) status = '🟢 안전';
-            else if (percentage < 80) status = '🟡 주의';
-            else if (percentage < 95) status = '🟠 위험';
-            else status = '🔴 한도초과';
+            const googleStatus = '🔴 한도초과';
             
             // Show both Google API and SerpAPI usage
             const serpapiStatus = apiUsage.serpapi >= 250 ? '🔴 한도초과' : 
                                  apiUsage.serpapi >= 200 ? '🟠 위험' : 
                                  apiUsage.serpapi >= 100 ? '🟡 주의' : '🟢 안전';
             
-            usageText.textContent = `Google: ${apiUsage.total.toLocaleString()}/10K ${status} | SerpAPI: ${apiUsage.serpapi}/250 ${serpapiStatus}`;
+            usageText.textContent = `Google: 10,000/10K ${googleStatus} | SerpAPI: ${apiUsage.serpapi}/250 ${serpapiStatus}`;
             
             // Show breakdown on hover
             const apiUsageDiv = document.getElementById('apiUsage');
-            apiUsageDiv.title = `Google API:\n검색: ${apiUsage.search} units\n비디오: ${apiUsage.videos} units\n채널: ${apiUsage.channels} units\n\nSerpAPI: ${apiUsage.serpapi}/250 calls`;
+            apiUsageDiv.title = `Google API: 한도 초과 (10,000/10,000 units)\n검색: ${apiUsage.search} units\n비디오: ${apiUsage.videos} units\n채널: ${apiUsage.channels} units\n\nSerpAPI: ${apiUsage.serpapi}/250 calls`;
         }
 
         // Global variables for pagination
@@ -1018,6 +1189,7 @@
         let currentPage = 1;     // 1-based
         let allChannelMap = {};
         let searchCache = {};   // Cache search results by query
+        let currentSearchQuery = ''; // Track current search query
         let apiUsage = {
             search: 0,      // 100 units per call
             videos: 0,      // 1 unit per call
@@ -1045,16 +1217,109 @@
             return items; // 전체
         }
 
+        // Load search data from localStorage
+        function loadSearchData(query) {
+            const cacheKey = query.toLowerCase();
+            const stored = localStorage.getItem(`searchData_${cacheKey}`);
+            if (stored) {
+                const data = JSON.parse(stored);
+                allVideos = data.videos || [];
+                allChannelMap = data.channels || {};
+                allItems = data.items || [];
+                console.log(`📦 로드된 검색 데이터: ${query} (${allItems.length}개 항목)`);
+                return true;
+            }
+            return false;
+        }
+
+        // Save search data to localStorage
+        function saveSearchData(query, videos, channels, items) {
+            const cacheKey = query.toLowerCase();
+            const data = {
+                videos: videos,
+                channels: channels,
+                items: items,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(`searchData_${cacheKey}`, JSON.stringify(data));
+            console.log(`💾 검색 데이터 저장: ${query} (${items.length}개 항목)`);
+        }
+
         function applyAllFilters() {
             let items = [...allItems];
             
             // Get current filter values
             const velocityFilter = document.querySelector('input[name="velocityFilter"]:checked').value;
             const channelSizeFilter = document.querySelector('input[name="channelSize"]:checked').value;
+            const viewCountFilter = document.querySelector('input[name="viewCount"]:checked').value;
+            const uploadDateFilter = document.querySelector('input[name="uploadDate"]:checked').value;
+            const videoDurationFilter = document.querySelector('input[name="videoDuration"]:checked').value;
             const sortBy = document.getElementById('sortBy').value;
             
-            // Apply filters
+            console.log('🔍 필터 값들:', {
+                velocityFilter,
+                channelSizeFilter,
+                viewCountFilter,
+                uploadDateFilter,
+                videoDurationFilter,
+                sortBy
+            });
+            
+            // Apply view count filter
+            if (viewCountFilter && viewCountFilter !== 'all') {
+                const minViews = parseInt(viewCountFilter);
+                items = items.filter(item => {
+                    const videoViews = parseInt(item.raw.statistics?.viewCount || 0);
+                    return videoViews >= minViews;
+                });
+                console.log(`📊 조회수 필터 적용: ${minViews}+ (${items.length}개 남음)`);
+            } else {
+                console.log('📊 조회수 필터: 전체 (모든 조회수)');
+            }
+            
+            // Apply upload date filter
+            if (uploadDateFilter && uploadDateFilter !== 'all') {
+                const cutoffDate = getPublishedAfterDate(uploadDateFilter);
+                console.log(`📅 필터링 전: ${items.length}개 항목`);
+                console.log(`📅 컷오프 날짜: ${cutoffDate}`);
+                
+                items = items.filter(item => {
+                    const publishedDate = new Date(item.raw.snippet.publishedAt);
+                    const isIncluded = publishedDate >= new Date(cutoffDate);
+                    console.log(`📅 비디오: ${item.raw.snippet.title.substring(0, 30)}... | 업로드: ${item.raw.snippet.publishedAt} | 포함: ${isIncluded}`);
+                    return isIncluded;
+                });
+                console.log(`📅 업로드 날짜 필터 적용: ${uploadDateFilter} (${items.length}개 남음)`);
+            } else {
+                console.log('📅 업로드 날짜 필터: 전체 (모든 날짜)');
+            }
+            
+            // Apply video duration filter
+            if (videoDurationFilter && videoDurationFilter !== 'all') {
+                items = items.filter(item => {
+                    const duration = item.raw.contentDetails?.duration || '';
+                    const seconds = parseDurationToSeconds(duration);
+                    
+                    switch(videoDurationFilter) {
+                        case 'short':
+                            return seconds < 240; // Less than 4 minutes
+                        case 'medium':
+                            return seconds >= 240 && seconds <= 1200; // 4-20 minutes
+                        case 'long':
+                            return seconds > 1200; // More than 20 minutes
+                        default:
+                            return true;
+                    }
+                });
+                console.log(`⏱️ 비디오 길이 필터 적용: ${videoDurationFilter} (${items.length}개 남음)`);
+            } else {
+                console.log('⏱️ 비디오 길이 필터: 전체 (모든 길이)');
+            }
+            
+            // Apply channel size filter
             items = filterByChannelSize(items, channelSizeFilter);
+            
+            // Apply velocity filter
             items = filterByVelocityOption(items, velocityFilter);
             
             // Apply sorting
@@ -1077,6 +1342,7 @@
                 });
             }
             
+            console.log(`✅ 최종 필터링 결과: ${items.length}개 항목`);
             return items;
         }
 
@@ -1104,26 +1370,87 @@
                 trackApiCall('serpapi', 1);
 
                 // Convert SerpAPI format to our format
-                const videos = data.video_results.map(v => ({
-                    id: v.link.split('v=')[1]?.split('&')[0] || '',
-                    snippet: {
+                const videos = data.video_results.map(v => {
+                    const videoId = v.link.split('v=')[1]?.split('&')[0] || '';
+                    
+                    // Debug: Log SerpAPI data
+                    console.log('🔍 SerpAPI 비디오 데이터:', {
                         title: v.title,
-                        channelTitle: v.channel?.name || 'Unknown Channel',
-                        publishedAt: v.published_date || new Date().toISOString(),
-                        thumbnails: {
-                            default: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${v.link.split('v=')[1]?.split('&')[0]}/default.jpg` },
-                            medium: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${v.link.split('v=')[1]?.split('&')[0]}/mqdefault.jpg` },
-                            high: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${v.link.split('v=')[1]?.split('&')[0]}/hqdefault.jpg` }
+                        published_date: v.published_date,
+                        published_date_type: typeof v.published_date,
+                        duration: v.duration,
+                        hasDuration: !!v.duration,
+                        durationType: typeof v.duration
+                    });
+                    
+                    // Parse published date safely
+                    let publishedAtISO = '';
+                    try {
+                        if (v.published_date) {
+                            const parsedDate = new Date(v.published_date);
+                            if (!isNaN(parsedDate.getTime()) && parsedDate.getTime() > 0) {
+                                publishedAtISO = parsedDate.toISOString();
+                                console.log('✅ 유효한 날짜 파싱됨:', v.title, '→', publishedAtISO);
+                            } else {
+                                console.warn('⚠️ Invalid published_date:', v.published_date, 'for video:', v.title);
+                                // Use a safe default date (1 week ago) if parsing fails
+                                publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                                console.log('📅 기본 날짜 사용 (1주 전):', publishedAtISO);
+                            }
+                        } else {
+                            // No published_date available, use a safe default
+                            console.warn('⚠️ No published_date for video:', v.title);
+                            publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                            console.log('📅 기본 날짜 사용 (1주 전):', publishedAtISO);
                         }
-                    },
-                    statistics: {
-                        viewCount: v.views || '0',
-                        likeCount: '0'
-                    },
-                    contentDetails: {
-                        duration: 'PT0S' // SerpAPI doesn't provide duration
+                    } catch (e) {
+                        console.error('❌ Error parsing published_date:', v.published_date, e);
+                        // Use a safe default date if all else fails
+                        publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                        console.log('📅 기본 날짜 사용 (1주 전):', publishedAtISO);
                     }
-                }));
+                    
+                    // Ensure we never have an empty string
+                    if (!publishedAtISO || publishedAtISO === '') {
+                        console.error('❌ publishedAtISO is still empty for video:', v.title);
+                        publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                    }
+                    
+                    return {
+                        id: videoId,
+                        snippet: {
+                            title: v.title,
+                            channelTitle: v.channel?.name || 'Unknown Channel',
+                            publishedAt: publishedAtISO,
+                            description: v.description || '',
+                            thumbnails: {
+                                default: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/default.jpg` },
+                                medium: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` },
+                                high: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` }
+                            }
+                        },
+                        statistics: {
+                            viewCount: v.views || '0',
+                            likeCount: v.likes || '0',
+                            commentCount: v.comments || '0'
+                        },
+                        contentDetails: {
+                            duration: v.duration || 'PT0S' // SerpAPI may provide duration in some cases
+                        },
+                        // Additional SerpAPI data
+                        serpData: {
+                            channel: v.channel,
+                            views: v.views,
+                            published_date: v.published_date,
+                            description: v.description,
+                            likes: v.likes,
+                            comments: v.comments,
+                            duration: v.duration,
+                            thumbnail: v.thumbnail,
+                            link: v.link
+                        }
+                    };
+                });
 
                 return videos;
 
@@ -1140,12 +1467,87 @@
             
             if (mode === 'serpapi') {
                 indicator.classList.add('serpapi');
-                modeText.innerHTML = '현재 검색 모드: 🔵 SerpAPI (백업모드)';
+                modeText.innerHTML = '현재 검색 모드: 🔵 SerpAPI (Google API 한도초과)';
                 currentSearchMode = 'serpapi';
+                updateFilterStatusIndicators('serpapi');
             } else {
                 indicator.classList.remove('serpapi');
                 modeText.innerHTML = '현재 검색 모드: 🟢 Google API';
                 currentSearchMode = 'google';
+                updateFilterStatusIndicators('google');
+            }
+        }
+
+        // Update filter status indicators based on current search mode
+        function updateFilterStatusIndicators(mode) {
+            const uploadDateStatus = document.getElementById('uploadDateFilterStatus');
+            const durationStatus = document.getElementById('durationFilterStatus');
+            const viewCountStatus = document.getElementById('viewCountFilterStatus');
+            const velocityStatus = document.getElementById('velocityFilterStatus');
+            const channelSizeStatus = document.getElementById('channelSizeFilterStatus');
+            
+            if (mode === 'serpapi') {
+                // SerpAPI mode - show what's available vs unavailable
+                if (uploadDateStatus) {
+                    uploadDateStatus.textContent = '✅ 가능';
+                    uploadDateStatus.className = 'filter-status available';
+                    uploadDateStatus.title = 'SerpAPI는 업로드 날짜 데이터를 제공합니다';
+                }
+                
+                if (viewCountStatus) {
+                    viewCountStatus.textContent = '✅ 가능';
+                    viewCountStatus.className = 'filter-status available';
+                    viewCountStatus.title = 'SerpAPI는 조회수 데이터를 제공합니다';
+                }
+                
+                if (velocityStatus) {
+                    velocityStatus.textContent = '✅ 가능';
+                    velocityStatus.className = 'filter-status available';
+                    velocityStatus.title = 'SerpAPI는 조회수와 날짜로 성장속도를 계산합니다';
+                }
+                
+                if (durationStatus) {
+                    durationStatus.textContent = '❌ 불가능';
+                    durationStatus.className = 'filter-status unavailable';
+                    durationStatus.title = 'SerpAPI는 비디오 길이 데이터를 제공하지 않습니다';
+                }
+                
+                if (channelSizeStatus) {
+                    channelSizeStatus.textContent = '❌ 불가능';
+                    channelSizeStatus.className = 'filter-status unavailable';
+                    channelSizeStatus.title = 'SerpAPI는 채널 구독자 수를 제공하지 않습니다';
+                }
+            } else {
+                // Google API mode - all filters available
+                if (uploadDateStatus) {
+                    uploadDateStatus.textContent = '✅ 가능';
+                    uploadDateStatus.className = 'filter-status available';
+                    uploadDateStatus.title = 'Google API는 모든 업로드 날짜 데이터를 제공합니다';
+                }
+                
+                if (viewCountStatus) {
+                    viewCountStatus.textContent = '✅ 가능';
+                    viewCountStatus.className = 'filter-status available';
+                    viewCountStatus.title = 'Google API는 모든 조회수 데이터를 제공합니다';
+                }
+                
+                if (velocityStatus) {
+                    velocityStatus.textContent = '✅ 가능';
+                    velocityStatus.className = 'filter-status available';
+                    velocityStatus.title = 'Google API는 모든 데이터로 성장속도를 계산합니다';
+                }
+                
+                if (durationStatus) {
+                    durationStatus.textContent = '✅ 가능';
+                    durationStatus.className = 'filter-status available';
+                    durationStatus.title = 'Google API는 모든 비디오 길이 데이터를 제공합니다';
+                }
+                
+                if (channelSizeStatus) {
+                    channelSizeStatus.textContent = '✅ 가능';
+                    channelSizeStatus.className = 'filter-status available';
+                    channelSizeStatus.title = 'Google API는 채널 구독자 수를 제공합니다';
+                }
             }
         }
 
@@ -1163,6 +1565,7 @@
                 return;
             }
 
+            currentSearchQuery = query;
             const resultsDiv = document.getElementById('results');
             resultsDiv.innerHTML = '<div class="loading">⏳ 검색 중...</div>';
             
@@ -1172,14 +1575,23 @@
             allItems = [];
             allChannelMap = {};
 
-            // Check cache first
+            // Check localStorage first
+            if (loadSearchData(query)) {
+                console.log('📦 localStorage에서 검색 데이터 로드');
+                renderPage(1);
+                return;
+            }
+
+            // Check cache second
             const cacheKey = query.toLowerCase();
             if (searchCache[cacheKey]) {
-                console.log('Using cached results for:', query);
+                console.log('📦 메모리 캐시에서 결과 로드');
                 const cachedData = searchCache[cacheKey];
                 allVideos = cachedData.videos;
                 allChannelMap = cachedData.channels;
                 allItems = cachedData.items;
+                // Save to localStorage for persistence
+                saveSearchData(query, allVideos, allChannelMap, allItems);
                 renderPage(1);
                 return;
             }
@@ -1205,21 +1617,10 @@
                     const searchResponse = await fetch(searchUrl);
                     const searchData = await searchResponse.json();
 
-                    // Check for quota exceeded error
-                    if (searchData.error && searchData.error.errors && 
-                        searchData.error.errors[0].reason === "quotaExceeded") {
-                        console.warn("⚠️ Google API 한도 초과 — SerpAPI로 전환합니다.");
-                        updateSearchModeIndicator('serpapi');
-                        throw new Error("quotaExceeded");
-                    }
-
-                    if (searchData.error) {
-                        throw new Error(searchData.error.message);
-                    }
-
-                    // Track API usage
-                    trackApiCall('search', 100);
-                    updateSearchModeIndicator('google');
+                    // Google API is exhausted - always use SerpAPI
+                    console.warn("⚠️ Google API 한도 초과 — SerpAPI로 전환합니다.");
+                    updateSearchModeIndicator('serpapi');
+                    throw new Error("quotaExceeded");
 
                     // Process Google API results
                     const videoIds = searchData.items.map(item => item.id.videoId).join(',');
@@ -1304,15 +1705,18 @@
                         };
                     });
 
-                    // Cache the results
-                    searchCache[cacheKey] = {
-                        videos: allVideos,
-                        channels: allChannelMap,
-                        items: allItems
-                    };
+                        // Cache the results
+                        searchCache[cacheKey] = {
+                            videos: allVideos,
+                            channels: allChannelMap,
+                            items: allItems
+                        };
 
-                    // Display first page (8 items - 4×2 grid)
-                    renderPage(1);
+                        // Save to localStorage for persistence
+                        saveSearchData(query, allVideos, allChannelMap, allItems);
+
+                        // Display first page (8 items - 4×2 grid)
+                        renderPage(1);
 
                 } catch (googleError) {
                     if (googleError.message === "quotaExceeded") {
@@ -1344,6 +1748,9 @@
                             channels: allChannelMap,
                             items: allItems
                         };
+
+                        // Save to localStorage for persistence
+                        saveSearchData(query, allVideos, allChannelMap, allItems);
 
                         // Display results
                         renderPage(1);
@@ -1384,12 +1791,17 @@
                 const channel = allChannelMap[video.snippet.channelId];
                 const thumbnail = video.snippet.thumbnails.maxres || video.snippet.thumbnails.high || video.snippet.thumbnails.medium || video.snippet.thumbnails.default;
                 
+                // Check if this is SerpAPI data
+                const isSerpAPI = video.serpData;
+                const serpData = video.serpData || {};
+                
                 html += `
                     <div class="video-card" onclick="window.open('https://www.youtube.com/watch?v=${video.id}', '_blank')">
                         <div class="thumbnail-container">
                             <img src="${thumbnail.url}" alt="${video.snippet.title}">
-                            ${video.contentDetails?.duration ? `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
+                            ${video.contentDetails?.duration && video.contentDetails.duration !== 'PT0S' ? `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
                             <div class="velocity-badge">${formatVelocity(item.vpd)}</div>
+                            ${isSerpAPI ? '<div class="serp-badge">🔵 SerpAPI</div>' : ''}
                         </div>
                         <div class="video-info">
                             <div class="video-title">${video.snippet.title}</div>
@@ -1400,8 +1812,17 @@
                             </div>
                             <div class="stats">
                                 <div class="stat-item">👁 ${formatNumber(parseInt(video.statistics.viewCount))}</div>
-                                ${video.statistics.likeCount ? `<div class="stat-item">👍 ${formatNumber(parseInt(video.statistics.likeCount))}</div>` : ''}
+                                ${video.statistics.likeCount && video.statistics.likeCount !== '0' ? `<div class="stat-item">👍 ${formatNumber(parseInt(video.statistics.likeCount))}</div>` : ''}
+                                ${video.statistics.commentCount && video.statistics.commentCount !== '0' ? `<div class="stat-item">💬 ${formatNumber(parseInt(video.statistics.commentCount))}</div>` : ''}
                                 ${channel?.statistics?.subscriberCount ? `<div class="stat-item">👥 ${formatNumber(parseInt(channel.statistics.subscriberCount))}</div>` : ''}
+                            </div>
+                            <div class="serp-stats">
+                                ${isSerpAPI ? `
+                                    <div class="serp-info">
+                                        <div class="serp-date">📅 ${formatDate(video.snippet.publishedAt)}</div>
+                                        ${serpData.duration ? `<div class="serp-duration">⏱️ ${serpData.duration}</div>` : ''}
+                                    </div>
+                                ` : ''}
                             </div>
                             <div class="tags">
                                 ${video.snippet.tags ? video.snippet.tags.slice(0, 3).map(t => `<span class="tag">#${t}</span>`).join('') : ''}
@@ -1427,55 +1848,11 @@
             document.getElementById('nextPage').disabled = currentPage === totalPages();
         }
 
-        // Hook up pagination buttons
-        document.getElementById('prevPage').addEventListener('click', () => renderPage(currentPage - 1));
-        document.getElementById('nextPage').addEventListener('click', () => renderPage(currentPage + 1));
-
-        // Optional: keyboard arrow support
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowRight') renderPage(currentPage + 1);
-            if (e.key === 'ArrowLeft') renderPage(currentPage - 1);
-        });
 
         // Add filter change listeners to re-render without API calls
         function addFilterListeners() {
-            // Velocity filter
-            document.querySelectorAll('input[name="velocityFilter"]').forEach(radio => {
-                radio.addEventListener('change', () => {
-                    if (allItems.length > 0) {
-                        currentPage = 1;
-                        renderPage(1);
-                    }
-                });
-            });
-
-            // Channel size filter
-            document.querySelectorAll('input[name="channelSize"]').forEach(radio => {
-                radio.addEventListener('change', () => {
-                    if (allItems.length > 0) {
-                        currentPage = 1;
-                        renderPage(1);
-                    }
-                });
-            });
-
-            // Sort dropdown
-            document.getElementById('sortBy').addEventListener('change', () => {
-                if (allItems.length > 0) {
-                    currentPage = 1;
-                    renderPage(1);
-                }
-            });
-
-            // Other filters
-            document.querySelectorAll('input[name="uploadDate"], input[name="videoDuration"], input[name="viewCount"]').forEach(radio => {
-                radio.addEventListener('change', () => {
-                    if (allItems.length > 0) {
-                        currentPage = 1;
-                        renderPage(1);
-                    }
-                });
-            });
+            // Remove automatic filtering - now controlled by apply button
+            console.log('필터는 이제 수동으로 제어됩니다. "필터 적용" 버튼을 사용하세요.');
         }
 
         // Initialize filter listeners
@@ -1483,6 +1860,229 @@
 
         // Load API usage on page load
         loadApiUsage();
+        
+        // Set initial search mode to SerpAPI since Google API is exhausted
+        updateSearchModeIndicator('serpapi');
+        
+        // Update filter status indicators on page load
+        updateFilterStatusIndicators('serpapi');
+        
+        // Update stored searches display on page load
+        updateStoredSearchesDisplay();
+
+        // Add localStorage data management functions
+        function clearSearchData() {
+            const keys = Object.keys(localStorage);
+            keys.forEach(key => {
+                if (key.startsWith('searchData_')) {
+                    localStorage.removeItem(key);
+                }
+            });
+            console.log('🗑️ 모든 검색 데이터가 삭제되었습니다.');
+        }
+
+        function showStoredSearches() {
+            const keys = Object.keys(localStorage);
+            const searchKeys = keys.filter(key => key.startsWith('searchData_'));
+            console.log('📦 저장된 검색 데이터:', searchKeys.map(key => key.replace('searchData_', '')));
+            return searchKeys.map(key => key.replace('searchData_', ''));
+        }
+
+        function showSearchSelection() {
+            const searches = showStoredSearches();
+            const searchSelection = document.getElementById('searchSelection');
+            const searchCheckboxes = document.getElementById('searchCheckboxes');
+            
+            if (searches.length === 0) {
+                alert('저장된 검색 데이터가 없습니다.');
+                return;
+            }
+            
+            // Create checkboxes for each search term
+            searchCheckboxes.innerHTML = '';
+            searches.forEach(searchTerm => {
+                const checkboxDiv = document.createElement('div');
+                checkboxDiv.style.marginBottom = '8px';
+                checkboxDiv.innerHTML = `
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" value="${searchTerm}" style="margin-right: 8px;">
+                        <span>${searchTerm}</span>
+                    </label>
+                `;
+                searchCheckboxes.appendChild(checkboxDiv);
+            });
+            
+            searchSelection.style.display = 'block';
+        }
+
+        function deleteSelectedSearches() {
+            const checkboxes = document.querySelectorAll('#searchCheckboxes input[type="checkbox"]:checked');
+            const selectedSearches = Array.from(checkboxes).map(cb => cb.value);
+            
+            if (selectedSearches.length === 0) {
+                alert('삭제할 검색어를 선택해주세요.');
+                return;
+            }
+            
+            if (confirm(`선택된 ${selectedSearches.length}개의 검색어를 삭제하시겠습니까?\n\n${selectedSearches.join(', ')}`)) {
+                selectedSearches.forEach(searchTerm => {
+                    localStorage.removeItem(`searchData_${searchTerm.toLowerCase()}`);
+                    console.log(`🗑️ 검색어 삭제됨: ${searchTerm}`);
+                });
+                
+                alert(`${selectedSearches.length}개의 검색어가 삭제되었습니다.`);
+                hideSearchSelection();
+                updateStoredSearchesDisplay();
+            }
+        }
+
+        function hideSearchSelection() {
+            document.getElementById('searchSelection').style.display = 'none';
+        }
+
+        function updateStoredSearchesDisplay() {
+            const searches = showStoredSearches();
+            const display = document.getElementById('storedSearches');
+            if (searches.length > 0) {
+                display.innerHTML = `저장된 검색어: ${searches.join(', ')}`;
+            } else {
+                display.innerHTML = '저장된 검색 데이터가 없습니다.';
+            }
+        }
+
+        // Add clear data button functionality
+        window.clearAllSearchData = clearSearchData;
+        window.showStoredSearches = showStoredSearches;
+        
+        // Add reset filters function
+        window.resetAllFilters = function() {
+            console.log('🔄 전역 초기화 함수 호출됨');
+            
+            try {
+                // Reset all filters to default values
+                const uploadDateAll = document.querySelector('input[name="uploadDate"][value="all"]');
+                const videoDurationAll = document.querySelector('input[name="videoDuration"][value="all"]');
+                const viewCountAll = document.querySelector('input[name="viewCount"][value="all"]');
+                const velocityFilterAll = document.querySelector('input[name="velocityFilter"][value="all"]');
+                const channelSizeAll = document.querySelector('input[name="channelSize"][value="all"]');
+                const sortBySelect = document.getElementById('sortBy');
+                
+                if (uploadDateAll) uploadDateAll.checked = true;
+                if (videoDurationAll) videoDurationAll.checked = true;
+                if (viewCountAll) viewCountAll.checked = true;
+                if (velocityFilterAll) velocityFilterAll.checked = true;
+                if (channelSizeAll) channelSizeAll.checked = true;
+                if (sortBySelect) sortBySelect.value = 'velocity';
+                
+                console.log('✅ 모든 필터 리셋 완료');
+                
+                if (allItems.length > 0) {
+                    console.log('🔄 필터 초기화 중...');
+                    console.log('📊 전체 데이터 복원:', allItems.length, '개');
+                    currentPage = 1;
+                    renderPage(1);
+                } else {
+                    console.log('⚠️ 검색 데이터가 없습니다. 먼저 검색을 실행해주세요.');
+                    alert('먼저 검색을 실행해주세요!');
+                }
+            } catch (error) {
+                console.error('❌ 초기화 중 오류 발생:', error);
+                alert('초기화 중 오류가 발생했습니다: ' + error.message);
+            }
+        };
+
+        // Wait for DOM to be fully loaded before adding event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 DOM 로드 완료 - 이벤트 리스너 등록 중...');
+            
+            // Data management buttons
+            document.getElementById('showStoredBtn').addEventListener('click', function() {
+                showSearchSelection();
+            });
+
+            document.getElementById('clearDataBtn').addEventListener('click', function() {
+                if (confirm('모든 저장된 검색 데이터를 삭제하시겠습니까?')) {
+                    clearSearchData();
+                    updateStoredSearchesDisplay();
+                }
+            });
+
+            // Individual deletion buttons
+            document.getElementById('deleteSelectedBtn').addEventListener('click', function() {
+                deleteSelectedSearches();
+            });
+
+            document.getElementById('cancelSelectionBtn').addEventListener('click', function() {
+                hideSearchSelection();
+            });
+            
+            // Filter action buttons
+            document.getElementById('applyFiltersBtn').addEventListener('click', function() {
+                if (allItems.length === 0) {
+                    alert('먼저 검색을 실행해주세요!');
+                    return;
+                }
+                
+                console.log('🔍 필터 적용 중...');
+                console.log('📊 전체 데이터:', allItems.length, '개');
+                
+                // Get current filter values for debugging
+                const viewCountFilter = document.querySelector('input[name="viewCount"]:checked');
+                console.log('🎯 선택된 조회수 필터:', viewCountFilter ? viewCountFilter.value : 'none');
+                
+                currentPage = 1;
+                renderPage(1);
+            });
+
+            document.getElementById('resetFiltersBtn').addEventListener('click', function(e) {
+                e.preventDefault();
+                console.log('🔄 초기화 버튼 클릭됨');
+                
+                try {
+                    // Reset all filters to default values
+                    const uploadDateAll = document.querySelector('input[name="uploadDate"][value="all"]');
+                    const videoDurationAll = document.querySelector('input[name="videoDuration"][value="all"]');
+                    const viewCountAll = document.querySelector('input[name="viewCount"][value="all"]');
+                    const velocityFilterAll = document.querySelector('input[name="velocityFilter"][value="all"]');
+                    const channelSizeAll = document.querySelector('input[name="channelSize"][value="all"]');
+                    const sortBySelect = document.getElementById('sortBy');
+                    
+                    if (uploadDateAll) uploadDateAll.checked = true;
+                    if (videoDurationAll) videoDurationAll.checked = true;
+                    if (viewCountAll) viewCountAll.checked = true;
+                    if (velocityFilterAll) velocityFilterAll.checked = true;
+                    if (channelSizeAll) channelSizeAll.checked = true;
+                    if (sortBySelect) sortBySelect.value = 'velocity';
+                    
+                    console.log('✅ 모든 필터 리셋 완료');
+                    
+                    if (allItems.length > 0) {
+                        console.log('🔄 필터 초기화 중...');
+                        console.log('📊 전체 데이터 복원:', allItems.length, '개');
+                        currentPage = 1;
+                        renderPage(1);
+                    } else {
+                        console.log('⚠️ 검색 데이터가 없습니다. 먼저 검색을 실행해주세요.');
+                        alert('먼저 검색을 실행해주세요!');
+                    }
+                } catch (error) {
+                    console.error('❌ 초기화 중 오류 발생:', error);
+                    alert('초기화 중 오류가 발생했습니다: ' + error.message);
+                }
+            });
+            
+            // Pagination buttons
+            document.getElementById('prevPage').addEventListener('click', () => renderPage(currentPage - 1));
+            document.getElementById('nextPage').addEventListener('click', () => renderPage(currentPage + 1));
+
+            // Keyboard arrow support
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight') renderPage(currentPage + 1);
+                if (e.key === 'ArrowLeft') renderPage(currentPage - 1);
+            });
+            
+            console.log('✅ 모든 이벤트 리스너 등록 완료');
+        });
 
     </script>
 </body>
