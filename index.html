@@ -1914,16 +1914,17 @@
                                 <div class="stat-item">👁 ${formatNumber(parseInt(video.statistics.viewCount))}</div>
                                 ${video.statistics.likeCount && video.statistics.likeCount !== '0' ? `<div class="stat-item">👍 ${formatNumber(parseInt(video.statistics.likeCount))}</div>` : ''}
                                 ${video.statistics.commentCount && video.statistics.commentCount !== '0' ? `<div class="stat-item">💬 ${formatNumber(parseInt(video.statistics.commentCount))}</div>` : ''}
-                                ${channel?.statistics?.subscriberCount ? `<div class="stat-item">👥 ${formatNumber(parseInt(channel.statistics.subscriberCount))}</div>` : ''}
+                                ${isSerpAPI && serpData.channelSubscribers ? `<div class="stat-item">👥 ${formatNumber(parseInt(serpData.channelSubscribers))}</div>` : ''}
+                                ${!isSerpAPI && channel?.statistics?.subscriberCount ? `<div class="stat-item">👥 ${formatNumber(parseInt(channel.statistics.subscriberCount))}</div>` : ''}
                             </div>
+                            ${isSerpAPI ? `
                             <div class="serp-stats">
-                                ${isSerpAPI ? `
-                                    <div class="serp-info">
-                                        <div class="serp-date">📅 ${formatDate(video.snippet.publishedAt)}</div>
-                                        ${serpData.duration ? `<div class="serp-duration">⏱️ ${serpData.duration}</div>` : ''}
-                                    </div>
-                                ` : ''}
+                                <div class="serp-info">
+                                    <div class="serp-date">📅 ${formatDate(video.snippet.publishedAt)}</div>
+                                    ${serpData.duration ? `<div class="serp-duration">⏱️ ${serpData.duration}</div>` : ''}
+                                </div>
                             </div>
+                            ` : ''}
                             <div class="tags">
                                 ${video.snippet.tags ? video.snippet.tags.slice(0, 3).map(t => `<span class="tag">#${t}</span>`).join('') : ''}
                             </div>
