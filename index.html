@@ -903,6 +903,18 @@
         
         // Skip Analytics for now to avoid 404 errors
         // Analytics can be added later if needed
+        
+        // Helper function to sanitize document IDs
+        function toDocId(s) {
+            return (s || '')
+                .toLowerCase()
+                .trim()
+                .replace(/[\/.#\[\]]/g, '_')   // Replace forbidden characters
+                .slice(0, 500);                // Prevent overly long keys
+        }
+        
+        // Make toDocId available globally
+        window.toDocId = toDocId;
     </script>
     
     <script>
@@ -1346,10 +1358,12 @@
                     return null;
                 }
                 
-                const cacheRef = window.firebaseDoc(window.firebaseDb, 'searchCache', query.toLowerCase());
-                const cacheSnap = await window.firebaseGetDoc(cacheRef);
+                // Sanitize document ID
+                const docId = window.toDocId(query);
+                console.log(`🔍 Firebase 캐시 확인 중: 검색어="${query}" -> 문서 ID: "${docId}"`);
                 
-                console.log(`🔍 Firebase 캐시 확인 중: 검색어="${query}" (소문자: "${query.toLowerCase()}")`);
+                const cacheRef = window.firebaseDoc(window.firebaseDb, 'searchCache', docId);
+                const cacheSnap = await window.firebaseGetDoc(cacheRef);
                 
                 if (cacheSnap.exists()) {
                     const data = cacheSnap.data();
@@ -1385,14 +1399,45 @@
                     return;
                 }
                 
-                const cacheRef = window.firebaseDoc(window.firebaseDb, 'searchCache', query.toLowerCase());
+                // Sanitize document ID
+                const docId = window.toDocId(query);
+                console.log(`📝 문서 ID: "${query}" -> "${docId}"`);
+                
+                const cacheRef = window.firebaseDoc(window.firebaseDb, 'searchCache', docId);
+                
+                // Shrink data to prevent payload size issues
+                const shrinkVideo = v => ({
+                    id: v.id,
+                    title: v.snippet?.title,
+                    channelId: v.snippet?.channelId,
+                    channelTitle: v.snippet?.channelTitle,
+                    publishedAt: v.snippet?.publishedAt,
+                    viewCount: v.statistics?.viewCount ?? null,
+                    likeCount: v.statistics?.likeCount ?? null,
+                    duration: v.contentDetails?.duration ?? null,
+                    serp: v.serpData ? {
+                        subs: v.serpData.channelSubscribers ?? null,
+                        views: v.serpData.views ?? null,
+                        link: v.serpData.link ?? null,
+                        extracted_date: v.serpData.extracted_date_from_description ?? null
+                    } : null
+                });
+                
+                const shrinkItem = x => ({
+                    id: x?.raw?.id,
+                    vpd: x.vpd,
+                    vclass: x.vclass,
+                    cband: x.cband,
+                    subs: x.subs
+                });
+                
                 const data = {
                     query: query,
-                    videos: videos,
-                    channels: channels,
-                    items: items,
+                    videos: (videos || []).map(shrinkVideo),
+                    channels: channels || {},
+                    items: (items || []).map(shrinkItem),
                     timestamp: Date.now(),
-                    cacheVersion: '1.0',
+                    cacheVersion: '1.1',
                     dataSource: dataSource  // 'google' or 'serpapi'
                 };
                 
@@ -1899,9 +1944,47 @@
                     // Firebase 캐시 무시하고 API 호출 계속 진행
                 } else {
                     console.log('☁️ Firebase 캐시에서 로드');
-                    allVideos = firebaseData.videos;
-                    allChannelMap = firebaseData.channels;
-                    allItems = firebaseData.items;
+                    
+                    // Restore full structure from compressed Firebase data
+                    const restoredVideos = firebaseData.videos.map(v => ({
+                        id: v.id,
+                        snippet: {
+                            title: v.title,
+                            channelId: v.channelId,
+                            channelTitle: v.channelTitle,
+                            publishedAt: v.publishedAt,
+                            thumbnails: {},
+                            description: '',
+                            tags: []
+                        },
+                        statistics: {
+                            viewCount: v.viewCount || '0',
+                            likeCount: v.likeCount || '0',
+                            commentCount: '0'
+                        },
+                        contentDetails: {
+                            duration: v.duration || 'PT0S'
+                        },
+                        serpData: v.serp ? {
+                            channelSubscribers: v.serp.subs,
+                            views: v.serp.views,
+                            link: v.serp.link,
+                            extracted_date_from_description: v.serp.extracted_date
+                        } : null
+                    }));
+                    
+                    // Restore items with full structure
+                    const restoredItems = firebaseData.items.map((x, idx) => ({
+                        raw: restoredVideos[idx],
+                        vpd: x.vpd,
+                        vclass: x.vclass,
+                        cband: x.cband,
+                        subs: x.subs
+                    }));
+                    
+                    allVideos = restoredVideos;
+                    allChannelMap = firebaseData.channels || {};
+                    allItems = restoredItems;
                     renderPage(1);
                     return;
                 }
