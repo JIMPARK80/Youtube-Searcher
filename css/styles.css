@@ -1003,3 +1003,36 @@ body {
 .password-toggle:hover {
     color: #333;
 }
+
+/* Duration Filter Optimization */
+.filter-group.duration-filter {
+    display: flex;
+    flex-direction: row !important;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: nowrap;
+    margin-top: 10px;
+}
+
+.filter-group.duration-filter > label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+}
+
+.filter-group.duration-filter > label:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+.filter-group.duration-filter input[type="radio"] {
+    accent-color: #ff6b35;
+    margin: 0;
+}

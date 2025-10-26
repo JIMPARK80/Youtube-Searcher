@@ -157,9 +157,19 @@
                      <label><input type="radio" name="uploadDateFilter" value="30"> 1개월 이내</label>
                      <label><input type="radio" name="uploadDateFilter" value="90"> 3개월 이내</label>
                      <label><input type="radio" name="uploadDateFilter" value="180"> 6개월 이내</label>
-                     <label><input type="radio" name="uploadDateFilter" value="365"> 1년 이내</label>
-                 </div>
-             </div>
+                    <label><input type="radio" name="uploadDateFilter" value="365"> 1년 이내</label>
+                </div>
+                
+                <!-- Video Duration Filter -->
+                <div class="filter-group duration-filter">
+                    <label>영상길이 필터:</label>
+                    <label><input type="radio" name="durationFilter" value="all" checked> 전체</label>
+                    <label><input type="radio" name="durationFilter" value="0-60"> <1min</label>
+                    <label><input type="radio" name="durationFilter" value="60-600"> 1min-10min</label>
+                    <label><input type="radio" name="durationFilter" value="1200-3600"> 20min-1hour</label>
+                    <label><input type="radio" name="durationFilter" value="3600"> 1hour+</label>
+                </div>
+            </div>
 
         <div class="pagination-section">
             <div class="result-summary" id="resultSummary">
@@ -710,6 +720,30 @@
                     if (!publishedAt) return false;
                     return publishedAt >= cutoffDate;
                 });
+            }
+            
+            // Apply video duration filter
+            const durationFilter = document.querySelector('input[name="durationFilter"]:checked')?.value;
+            if (durationFilter && durationFilter !== 'all') {
+                if (durationFilter.includes('-')) {
+                    // Range filter (e.g., "60-600")
+                    const [minStr, maxStr] = durationFilter.split('-');
+                    const minSeconds = parseInt(minStr);
+                    const maxSeconds = parseInt(maxStr);
+                    items = items.filter(item => {
+                        const duration = item.raw.contentDetails?.duration || '';
+                        const seconds = parseDurationToSeconds(duration);
+                        return seconds >= minSeconds && seconds <= maxSeconds;
+                    });
+                } else {
+                    // Minimum filter (e.g., "3600" for 1hour+)
+                    const minSeconds = parseInt(durationFilter);
+                    items = items.filter(item => {
+                        const duration = item.raw.contentDetails?.duration || '';
+                        const seconds = parseDurationToSeconds(duration);
+                        return seconds >= minSeconds;
+                    });
+                }
             }
             
             // 성장속도 기준 정렬만 적용
@@ -1588,6 +1622,7 @@
                 const channelSizeAll = document.querySelector('input[name="channelSize"][value="all"]');
                 const sortBySelect = document.getElementById('sortBy');
                 const subCountAll = document.querySelector('input[name="subCountFilter"][value="all"]');
+                const durationAll = document.querySelector('input[name="durationFilter"][value="all"]');
                 
                 if (uploadDateAll) uploadDateAll.checked = true;
                 // videoDuration filter removed
@@ -1595,6 +1630,7 @@
                 if (velocityFilterAll) velocityFilterAll.checked = true;
                 if (channelSizeAll) channelSizeAll.checked = true;
                 if (subCountAll) subCountAll.checked = true;
+                if (durationAll) durationAll.checked = true;
                 if (sortBySelect) sortBySelect.value = 'velocity';
                 
                 console.log('✅ 모든 필터 리셋 완료');
@@ -1701,6 +1737,15 @@
             uploadDateFilters.forEach(radio => {
                 radio.addEventListener('change', () => {
                     console.log('🔍 업로드일자 필터 변경:', radio.value);
+                    renderPage(1); // Reset to page 1 when filter changes
+                });
+            });
+
+            // Duration filter change event listeners
+            const durationFilters = document.querySelectorAll('input[name="durationFilter"]');
+            durationFilters.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    console.log('🔍 영상길이 필터 변경:', radio.value);
                     renderPage(1); // Reset to page 1 when filter changes
                 });
             });
