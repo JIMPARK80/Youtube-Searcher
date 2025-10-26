@@ -2500,8 +2500,16 @@
             // Update page text: "1 / 7 page"
             document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages()} page`;
 
-            // Update result summary
-            document.getElementById('totalCount').textContent = filteredItems.length;
+            // Update result summary - show filtered count out of total count
+            const totalCount = allItems.length;
+            const filteredCount = filteredItems.length;
+            if (filteredCount === totalCount) {
+                // No filter applied, show only total count
+                document.getElementById('totalCount').textContent = totalCount;
+            } else {
+                // Filter applied, show "filtered / total"
+                document.getElementById('totalCount').innerHTML = `${filteredCount} / ${totalCount}`;
+            }
 
             // Enable/disable arrows
             document.getElementById('prevPage').disabled = currentPage === 1;
