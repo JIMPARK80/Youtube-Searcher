@@ -1157,6 +1157,11 @@
             const resultsDiv = document.getElementById('results');
             resultsDiv.innerHTML = '<div class="loading">⏳ 검색 중...</div>';
             
+            // Save user's last search keyword if logged in and not a default search
+            if (window.currentUser && !window.isDefaultSearch && query !== 'news') {
+                saveUserLastSearchKeyword(window.currentUser.uid, query);
+            }
+            
             // Reset pagination for new search
             currentPage = 1;
             allVideos = [];
@@ -1608,6 +1613,55 @@
          window.addEventListener('DOMContentLoaded', function() {
              updateSearchModeIndicator('serpapi');
          });
+
+        // User-specific search keyword management
+        async function saveUserLastSearchKeyword(userId, keyword) {
+            try {
+                if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseSetDoc) {
+                    console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
+                    return false;
+                }
+                
+                const userRef = window.firebaseDoc(window.firebaseDb, 'users', userId);
+                await window.firebaseSetDoc(userRef, {
+                    lastSearchKeyword: keyword,
+                    lastSearchTime: Date.now()
+                }, { merge: true });
+                
+                console.log(`💾 사용자 마지막 검색 키워드 저장: "${keyword}"`);
+                return true;
+            } catch (error) {
+                console.error('❌ 마지막 검색 키워드 저장 실패:', error);
+                return false;
+            }
+        }
+        
+        async function loadUserLastSearchKeyword(userId) {
+            try {
+                if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseGetDoc) {
+                    console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
+                    return null;
+                }
+                
+                const userRef = window.firebaseDoc(window.firebaseDb, 'users', userId);
+                const userSnap = await window.firebaseGetDoc(userRef);
+                
+                if (userSnap.exists()) {
+                    const userData = userSnap.data();
+                    const lastSearchKeyword = userData.lastSearchKeyword;
+                    
+                    if (lastSearchKeyword) {
+                        console.log(`📖 사용자 마지막 검색 키워드 로드: "${lastSearchKeyword}"`);
+                        return lastSearchKeyword;
+                    }
+                }
+                
+                return null;
+            } catch (error) {
+                console.error('❌ 마지막 검색 키워드 로드 실패:', error);
+                return null;
+            }
+        }
 
         // Firebase-only data management functions
         function clearSearchData() {
@@ -2111,11 +2165,23 @@
                     }
                     window.currentUser = user;
                     
-                    // Automatically search for 'news' when user is logged in
-                    console.log('📰 로그인된 사용자에게 기본 검색 결과 표시 (news)');
-                    setTimeout(() => {
-                        document.getElementById('searchInput').value = 'news';
-                        performDefaultSearch();
+                    // Load user's last search keyword and perform search
+                    console.log('📰 로그인된 사용자 - 마지막 검색 키워드 복원 중...');
+                    setTimeout(async () => {
+                        const lastSearchKeyword = await loadUserLastSearchKeyword(user.uid);
+                        const searchKeyword = lastSearchKeyword || 'news';
+                        document.getElementById('searchInput').value = searchKeyword;
+                        
+                        if (lastSearchKeyword) {
+                            console.log(`🔄 마지막 검색 키워드 복원: "${lastSearchKeyword}"`);
+                            // Use regular search for saved keyword
+                            window.isDefaultSearch = true;
+                            await search(searchKeyword);
+                            window.isDefaultSearch = false;
+                        } else {
+                            console.log('📰 기본 검색 키워드 사용: "news"');
+                            performDefaultSearch();
+                        }
                     }, 500);
                 } else {
                     // User is signed out
