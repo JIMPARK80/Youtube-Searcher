@@ -1013,7 +1013,16 @@
         // Update search mode indicator
         function updateSearchModeIndicator(mode) {
             const indicator = document.getElementById('searchModeIndicator');
+            if (!indicator) {
+                console.log('⚠️ Search mode indicator not found, skipping update');
+                return;
+            }
+            
             const modeText = indicator.querySelector('.mode-text');
+            if (!modeText) {
+                console.log('⚠️ Mode text element not found, skipping update');
+                return;
+            }
             
             if (mode === 'serpapi') {
                 indicator.classList.add('serpapi');
@@ -1575,7 +1584,10 @@
          loadApiUsage();
          
          // Set initial search mode to SerpAPI since Google API is exhausted
-         updateSearchModeIndicator('serpapi');
+         // Defer this call until DOM is fully loaded to avoid temporal dead zone issues
+         window.addEventListener('DOMContentLoaded', function() {
+             updateSearchModeIndicator('serpapi');
+         });
 
         // Firebase-only data management functions
         function clearSearchData() {
