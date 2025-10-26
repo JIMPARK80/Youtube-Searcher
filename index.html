@@ -785,7 +785,7 @@
                     <button id="applyFiltersBtn" class="apply-filters-btn">
                         🔍 필터 적용
                     </button>
-                    <button id="resetFiltersBtn" class="reset-filters-btn" onclick="resetAllFilters()">
+                    <button id="resetFiltersBtn" class="reset-filters-btn">
                         🔄 초기화
                     </button>
                 </div>
@@ -874,11 +874,34 @@
                     return true;
                 } else {
                     console.warn('⚠️ Firebase에 API 키가 저장되어 있지 않습니다.');
-                    console.log('💡 API 키 설정 버튼을 눌러 직접 입력할 수도 있습니다.');
+                    // Try fallback to localStorage if Firebase keys not found
+                    console.log('💡 localStorage에서 API 키를 확인합니다.');
+                    const youtubeKey = localStorage.getItem('youtubeApiKey');
+                    const serpApiKey = localStorage.getItem('serpApiKey');
+                    if (youtubeKey || serpApiKey) {
+                        window.serverApiKeys = {
+                            youtube: youtubeKey,
+                            serpapi: serpApiKey
+                        };
+                        console.log('✅ localStorage에서 API 키 로드 완료');
+                        return true;
+                    }
                     return false;
                 }
             } catch (error) {
-                console.error('❌ Firebase API 키 로드 실패:', error);
+                console.warn('⚠️ Firebase API 키 로드 실패 (권한 부족), localStorage로 대체');
+                console.error('에러 상세:', error);
+                // Fallback to localStorage
+                const youtubeKey = localStorage.getItem('youtubeApiKey');
+                const serpApiKey = localStorage.getItem('serpApiKey');
+                if (youtubeKey || serpApiKey) {
+                    window.serverApiKeys = {
+                        youtube: youtubeKey,
+                        serpapi: serpApiKey
+                    };
+                    console.log('✅ localStorage에서 API 키 로드 완료');
+                    return true;
+                }
                 return false;
             }
         }
