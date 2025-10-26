@@ -109,7 +109,7 @@
 
         <div class="search-box">
             <div class="search-input-group">
-                <input type="text" id="searchInput" placeholder="검색어를 입력하세요..." />
+                <input type="text" id="searchInput" placeholder="검색어를 입력하세요..." value="news" />
                 <button id="searchBtn">검색</button>
             </div>
             
@@ -2110,6 +2110,13 @@
                         }
                     }
                     window.currentUser = user;
+                    
+                    // Automatically search for 'news' when user is logged in
+                    console.log('📰 로그인된 사용자에게 기본 검색 결과 표시 (news)');
+                    setTimeout(() => {
+                        document.getElementById('searchInput').value = 'news';
+                        performDefaultSearch();
+                    }, 500);
                 } else {
                     // User is signed out
                     console.log('🔓 사용자 로그아웃됨');
@@ -2276,7 +2283,7 @@
                 console.log('🔍 캐시 없음 - API 호출 진행');
                 
                 // Get API keys
-                const keys = getApiKeys();
+                const keys = await getApiKeys();
                 const apiKeyValue = keys.youtube;
                 
                 if (!apiKeyValue) {
