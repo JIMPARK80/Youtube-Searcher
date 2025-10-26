@@ -48,21 +48,11 @@ Firebase에 API 키를 저장하면 다른 사용자가 개별적으로 키를 �
 7. "저장" 클릭
 
 **Security Rules 설정:**
-Firestore Rules 탭에서 다음 규칙 추가:
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Allow read-only access to API keys (for app usage)
-    match /config/apiKeys {
-      allow read: if true;
-      allow write: if false; // Only you can write via console
-    }
-    
-    // Existing searchCache rules...
-  }
-}
-```
+1. Firebase Console > Firestore Database > Rules 탭 열기
+2. `FIREBASE_SECURITY_RULES.txt` 파일의 **전체 내용**을 복사하여 붙여넣기
+3. "게시" 버튼 클릭
+
+⚠️ **중요**: 전체 규칙을 복사해야 `config/apiKeys` 문서 읽기 권한이 올바르게 설정됩니다!
 
 ✅ 완료! 이제 모든 사용자가 API 키 없이 앱을 사용할 수 있습니다.
 

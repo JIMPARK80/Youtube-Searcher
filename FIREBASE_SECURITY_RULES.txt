@@ -5,6 +5,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // Allow read-only access to API keys (for app usage)
+    match /config/apiKeys {
+      allow read: if true;
+      allow write: if false; // Only you can write via console
+    }
+    
     // Allow read/write access to searchCache collection
     // Anyone can read and write, making it a public cache
     match /searchCache/{searchQuery} {
