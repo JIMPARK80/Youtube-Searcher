@@ -103,7 +103,7 @@
 
     <div class="container">
         <div class="header">
-            <h1>🎬 Jim's YouTube 채널 검색기</h1>
+            <h1>🎬 Jim's YouTube 채널</h1>
             <p>검색어를 입력하고 다양한 정보를 확인하세요!</p>
         </div>
 
@@ -219,8 +219,14 @@
         const serpApiKeyInput = document.getElementById('serpApiKey');
         
         // Helper function to get API keys (Firebase server only)
-        function getApiKeys() {
-            // Always try Firebase server keys first
+        async function getApiKeys() {
+            // Try to load API keys from Firebase if not already loaded
+            if (!window.serverApiKeys && window.loadApiKeysFromFirebase) {
+                console.log('🔄 Firebase에서 API 키 로드 시도 중...');
+                await window.loadApiKeysFromFirebase();
+            }
+            
+            // Check if API keys are available
             if (window.serverApiKeys && window.serverApiKeys.youtube) {
                 console.log('✅ Firebase에서 API 키 로드 성공');
                 return {
@@ -239,8 +245,8 @@
         }
         
                  // Wait for Firebase to load, then initialize
-         setTimeout(() => {
-             const keys = getApiKeys();
+         setTimeout(async () => {
+             const keys = await getApiKeys();
              apiKey = keys.youtube;
              serpApiKey = keys.serpapi;
              
