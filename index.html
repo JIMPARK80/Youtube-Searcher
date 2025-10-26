@@ -1168,6 +1168,7 @@
         window.firebaseSetDoc = setDoc;
         
         console.log('✅ Firebase initialized successfully');
+        console.log('✅ Firebase Auth initialized:', auth);
         
         // Helper function to sanitize document IDs
         function toDocId(s) {
@@ -2734,7 +2735,7 @@
             const signupModal = document.getElementById('signupModal');
             const loginModal = document.getElementById('loginModal');
             const closeModal = document.getElementById('closeModal');
-            const closeLoginModal = document.getElementById('closeLoginModal');
+            const closeLoginModalBtn = document.getElementById('closeLoginModal');
             const cancelSignup = document.getElementById('cancelSignup');
             const cancelLogin = document.getElementById('cancelLogin');
             const submitSignup = document.getElementById('submitSignup');
@@ -2776,8 +2777,8 @@
                 closeModal.addEventListener('click', closeSignupModal);
             }
 
-            if (closeLoginModal) {
-                closeLoginModal.addEventListener('click', closeLoginModal);
+            if (closeLoginModalBtn) {
+                closeLoginModalBtn.addEventListener('click', closeLoginModal);
             }
 
             if (cancelSignup) {
