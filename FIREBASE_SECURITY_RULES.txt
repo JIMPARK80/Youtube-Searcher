@@ -1,0 +1,24 @@
+// Firestore Security Rules for YouTube Search Cache
+// Copy and paste these rules into Firebase Console > Firestore Database > Rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Allow read/write access to searchCache collection
+    // Anyone can read and write, making it a public cache
+    match /searchCache/{searchQuery} {
+      allow read: if true;  // Anyone can read cached searches
+      allow write: if true; // Anyone can write to cache (public caching)
+    }
+    
+    // Optional: Restrict to authenticated users only
+    // Uncomment the following rules if you want authentication:
+    /*
+    match /searchCache/{searchQuery} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+    */
+  }
+}
