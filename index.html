@@ -863,7 +863,7 @@
 
         <div class="pagination-section">
             <div class="result-summary" id="resultSummary">
-                검색 결과: <span id="totalCount">0</span>개 / 표시: <span id="pageSizeView">8</span>개
+                검색 결과: <span id="totalCount">0</span>개
             </div>
             <div class="pagination-bar">
                 <button id="prevPage" class="page-btn" aria-label="Previous page">◀</button>
@@ -2244,7 +2244,6 @@
 
             // Update result summary
             document.getElementById('totalCount').textContent = filteredItems.length;
-            document.getElementById('pageSizeView').textContent = pageSize;
 
             // Enable/disable arrows
             document.getElementById('prevPage').disabled = currentPage === 1;
