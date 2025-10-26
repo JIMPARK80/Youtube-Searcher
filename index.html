@@ -1238,6 +1238,9 @@
 
                     // Filter by video duration and view count if needed
                     let filteredVideos = videosData.items;
+                    const videoDuration = null; // Duration filter disabled
+                    const viewCount = null; // View count filter disabled
+                    
                     if (videoDuration || viewCount) {
                         filteredVideos = videosData.items.filter(video => {
                             // Duration filter
@@ -1521,14 +1524,14 @@
             try {
                 // Reset all filters to default values
                 const uploadDateAll = document.querySelector('input[name="uploadDate"][value="all"]');
-                const videoDurationAll = document.querySelector('input[name="videoDuration"][value="all"]');
+                // videoDuration filter removed
                 const viewCountAll = document.querySelector('input[name="viewCount"][value="all"]');
                 const velocityFilterAll = document.querySelector('input[name="velocityFilter"][value="all"]');
                 const channelSizeAll = document.querySelector('input[name="channelSize"][value="all"]');
                 const sortBySelect = document.getElementById('sortBy');
                 
                 if (uploadDateAll) uploadDateAll.checked = true;
-                if (videoDurationAll) videoDurationAll.checked = true;
+                // videoDuration filter removed
                 if (viewCountAll) viewCountAll.checked = true;
                 if (velocityFilterAll) velocityFilterAll.checked = true;
                 if (channelSizeAll) channelSizeAll.checked = true;
