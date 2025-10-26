@@ -1710,9 +1710,9 @@
                 }
                 
                 if (channelSizeStatus) {
-                    channelSizeStatus.textContent = '✅ 가능';
-                    channelSizeStatus.className = 'filter-status available';
-                    channelSizeStatus.title = 'SerpAPI는 채널 구독자 수를 제공합니다';
+                    channelSizeStatus.textContent = '❌ 불가능';
+                    channelSizeStatus.className = 'filter-status unavailable';
+                    channelSizeStatus.title = 'SerpAPI는 채널 구독자 정보를 제한적으로 제공합니다';
                 }
             } else {
                 // Google API mode - all filters available
