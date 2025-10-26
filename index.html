@@ -901,21 +901,8 @@
         
         console.log('✅ Firebase initialized successfully');
         
-        // Initialize Analytics only if available and after DOM is ready
-        if (typeof window !== 'undefined') {
-            import('https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js').then(({ getAnalytics, logEvent }) => {
-                try {
-                    const analytics = getAnalytics(app);
-                    window.logEvent = logEvent;
-                    window.analytics = analytics;
-                    console.log('✅ Firebase Analytics initialized successfully');
-                } catch (error) {
-                    console.warn('⚠️ Firebase Analytics initialization failed:', error);
-                }
-            }).catch(error => {
-                console.warn('⚠️ Failed to load Firebase Analytics:', error);
-            });
-        }
+        // Skip Analytics for now to avoid 404 errors
+        // Analytics can be added later if needed
     </script>
     
     <script>
