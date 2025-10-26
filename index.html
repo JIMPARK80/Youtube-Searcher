@@ -2187,8 +2187,9 @@
         async function search() {
             const query = document.getElementById('searchInput').value.trim();
             
-            // Check if user is logged in (only for manual searches, not default search)
-            if (!window.currentUser && !window.isDefaultSearch) {
+            // Check if user is logged in (only for manual searches, not default search or 'news' query)
+            const isNewsQuery = query.toLowerCase() === 'news';
+            if (!window.currentUser && !window.isDefaultSearch && !isNewsQuery) {
                 // Show login modal
                 const loginModal = document.getElementById('loginModal');
                 if (loginModal) {
