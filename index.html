@@ -1108,14 +1108,11 @@
             allItems = [];
             allChannelMap = {};
 
-            // 1. Check Firebase cloud cache first
-            const firebaseData = await loadFromFirebase(query);
-            if (firebaseData) {
-                // Google API 모드인데 SerpAPI 데이터가 있으면 업데이트
-                if (currentSearchMode === 'google' && firebaseData.dataSource === 'serpapi') {
-                    console.log('🔄 Google API 모드: SerpAPI 데이터 발견 → 업데이트 진행');
-                    // Firebase 캐시 무시하고 API 호출 계속 진행
-                } else {
+            // 1. Check Firebase cloud cache first (Google API 모드인 경우에만)
+            // Google API 모드가 아닐 때만 Firebase에서 로드
+            if (currentSearchMode !== 'google') {
+                const firebaseData = await loadFromFirebase(query);
+                if (firebaseData) {
                     console.log('☁️ Firebase 캐시에서 로드');
                     console.log(`📊 데이터 출처: ${firebaseData.dataSource || 'unknown'}`);
                     
@@ -1175,6 +1172,9 @@
                     renderPage(1);
                     return;
                 }
+            } else {
+                // Google API 모드: Firebase 캐시 확인만 하고 실제 데이터는 로드하지 않음
+                console.log('🔄 Google API 모드: 100개 데이터 업데이트를 위해 API 호출 진행');
             }
             
             // 2. Check localStorage second
