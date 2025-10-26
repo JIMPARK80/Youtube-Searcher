@@ -2054,10 +2054,16 @@
                     const searchResponse = await fetch(searchUrl);
                     const searchData = await searchResponse.json();
 
-                    // Google API is exhausted - always use SerpAPI
-                    console.warn("⚠️ Google API 한도 초과 — SerpAPI로 전환합니다.");
-                    updateSearchModeIndicator('serpapi');
-                    throw new Error("quotaExceeded");
+                    // Check for quota exceeded error
+                    if (searchData.error && searchData.error.code === 403) {
+                        console.warn("⚠️ Google API 한도 초과 — SerpAPI로 전환합니다.");
+                        updateSearchModeIndicator('serpapi');
+                        throw new Error("quotaExceeded");
+                    }
+                    
+                    // Google API is working - update mode indicator
+                    console.log('✅ Google API 정상 작동');
+                    updateSearchModeIndicator('google');
 
                     // Process Google API results
                     const videoIds = searchData.items.map(item => item.id.videoId).join(',');
