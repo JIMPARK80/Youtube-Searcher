@@ -688,6 +688,39 @@
                margin: 0;
            }
 
+          /* Subscriber Filter Optimization */
+          .filter-group.sub-filter {
+              display: flex;
+              flex-direction: row !important;
+              align-items: center;
+              gap: 12px;
+              flex-wrap: nowrap;
+              margin-top: 10px;
+          }
+
+          .filter-group.sub-filter > label {
+              display: inline-flex;
+              align-items: center;
+              gap: 6px;
+              padding: 4px 8px;
+              background: rgba(255, 255, 255, 0.1);
+              border-radius: 5px;
+              cursor: pointer;
+              transition: all 0.3s;
+              color: rgba(255, 255, 255, 0.9);
+              font-size: 12px;
+          }
+
+          .filter-group.sub-filter > label:hover {
+              background: rgba(255, 255, 255, 0.2);
+              transform: translateY(-2px);
+          }
+
+          .filter-group.sub-filter input[type="radio"] {
+              accent-color: #42a5f5;
+              margin: 0;
+          }
+
         @media (max-width: 1200px) {
             .card-grid {
                 grid-template-columns: repeat(3, 1fr);
@@ -768,6 +801,16 @@
                     <label><input type="radio" name="viewCountFilter" value="10000"> 10K+</label>
                     <label><input type="radio" name="viewCountFilter" value="100000"> 100K+</label>
                     <label><input type="radio" name="viewCountFilter" value="1000000"> 1M+</label>
+                </div>
+                
+                <!-- Subscriber Count Filter -->
+                <div class="filter-group sub-filter">
+                    <label>구독자 필터:</label>
+                    <label><input type="radio" name="subCountFilter" value="all" checked> 전체</label>
+                    <label><input type="radio" name="subCountFilter" value="1000"> 1K+</label>
+                    <label><input type="radio" name="subCountFilter" value="10000"> 10K+</label>
+                    <label><input type="radio" name="subCountFilter" value="100000"> 100K+</label>
+                    <label><input type="radio" name="subCountFilter" value="1000000"> 1M+</label>
                 </div>
             </div>
 
@@ -1380,6 +1423,16 @@
                 items = items.filter(item => {
                     const views = parseInt(item.raw.statistics?.viewCount || 0);
                     return views >= minViews;
+                });
+            }
+            
+            // Apply subscriber count filter
+            const subCountFilter = document.querySelector('input[name="subCountFilter"]:checked')?.value;
+            if (subCountFilter && subCountFilter !== 'all') {
+                const minSubs = parseInt(subCountFilter);
+                items = items.filter(item => {
+                    const subs = parseInt(item.subs || 0);
+                    return subs >= minSubs;
                 });
             }
             
@@ -2337,6 +2390,15 @@
             viewCountFilters.forEach(radio => {
                 radio.addEventListener('change', () => {
                     console.log('🔍 조회수 필터 변경:', radio.value);
+                    renderPage(1); // Reset to page 1 when filter changes
+                });
+            });
+
+            // Subscriber filter change event listeners
+            const subCountFilters = document.querySelectorAll('input[name="subCountFilter"]');
+            subCountFilters.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    console.log('🔍 구독자 필터 변경:', radio.value);
                     renderPage(1); // Reset to page 1 when filter changes
                 });
             });
