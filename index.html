@@ -1108,13 +1108,22 @@
             allItems = [];
             allChannelMap = {};
 
-            // 1. Check Firebase cloud cache first (Google API 모드인 경우에만)
-            // Google API 모드가 아닐 때만 Firebase에서 로드
-            if (currentSearchMode !== 'google') {
-                const firebaseData = await loadFromFirebase(query);
-                if (firebaseData) {
-                    console.log('☁️ Firebase 캐시에서 로드');
-                    console.log(`📊 데이터 출처: ${firebaseData.dataSource || 'unknown'}`);
+            // 1. Check Firebase cloud cache first
+            const firebaseData = await loadFromFirebase(query);
+            if (firebaseData) {
+                console.log('☁️ Firebase 캐시 발견');
+                console.log(`📊 데이터 출처: ${firebaseData.dataSource || 'unknown'}`);
+                
+                // Check if data is older than 24 hours
+                const age = Date.now() - firebaseData.timestamp;
+                const ageHours = age / (1000 * 60 * 60);
+                const isExpired = ageHours >= 24;
+                
+                console.log(`⏰ 캐시 데이터 연령: ${ageHours.toFixed(1)}시간 (만료: ${isExpired ? '예' : '아니오'})`);
+                
+                // If not expired OR if expired and not Google API mode, use cached data
+                if (!isExpired || (isExpired && currentSearchMode !== 'google')) {
+                    console.log('✅ Firebase 캐시 사용 (만료 전 또는 SerpAPI 모드)');
                     
                     // Update search mode indicator based on data source
                     if (firebaseData.dataSource === 'serpapi') {
@@ -1124,23 +1133,23 @@
                     }
                     
                     // Restore full structure from compressed Firebase data
-                                         const restoredVideos = firebaseData.videos.map(v => ({
-                         id: v.id,
-                         snippet: {
-                             title: v.title,
-                             channelId: v.channelId,
-                             channelTitle: v.channelTitle,
-                             publishedAt: v.publishedAt,
-                             thumbnails: {
-                                 maxres: { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` },
-                                 standard: { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` },
-                                 high: { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` },
-                                 medium: { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` },
-                                 default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
-                             },
-                             description: '',
-                             tags: []
-                         },
+                    const restoredVideos = firebaseData.videos.map(v => ({
+                        id: v.id,
+                        snippet: {
+                            title: v.title,
+                            channelId: v.channelId,
+                            channelTitle: v.channelTitle,
+                            publishedAt: v.publishedAt,
+                            thumbnails: {
+                                maxres: { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` },
+                                standard: { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` },
+                                high: { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` },
+                                medium: { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` },
+                                default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
+                            },
+                            description: '',
+                            tags: []
+                        },
                         statistics: {
                             viewCount: v.viewCount || '0',
                             likeCount: v.likeCount || '0',
@@ -1171,10 +1180,12 @@
                     allItems = restoredItems;
                     renderPage(1);
                     return;
+                } else if (isExpired && currentSearchMode === 'google') {
+                    // Expired and Google API mode - need to update
+                    console.log('🔄 Google API 모드: 캐시 만료 (24시간 경과) - 업데이트 진행');
                 }
             } else {
-                // Google API 모드: Firebase 캐시 확인만 하고 실제 데이터는 로드하지 않음
-                console.log('🔄 Google API 모드: 100개 데이터 업데이트를 위해 API 호출 진행');
+                console.log('📭 Firebase 캐시 없음 - API 호출 진행');
             }
             
             // 2. Check localStorage second
