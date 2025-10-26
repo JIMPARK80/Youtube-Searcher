@@ -1003,6 +1003,26 @@
         </div>
     </div>
 
+    <!-- Login Modal -->
+    <div class="signup-modal" id="loginModal">
+        <div class="signup-form">
+            <button class="close-modal" id="closeLoginModal">&times;</button>
+            <h2>로그인</h2>
+            <div class="form-group">
+                <label for="loginEmail">이메일</label>
+                <input type="email" id="loginEmail" placeholder="이메일을 입력하세요">
+            </div>
+            <div class="form-group">
+                <label for="loginPassword">비밀번호</label>
+                <input type="password" id="loginPassword" placeholder="비밀번호를 입력하세요">
+            </div>
+            <div class="form-buttons">
+                <button class="submit-btn" id="submitLogin">로그인</button>
+                <button class="cancel-btn" id="cancelLogin">취소</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Signup Modal -->
     <div class="signup-modal" id="signupModal">
         <div class="signup-form">
@@ -2712,15 +2732,27 @@
             const signupBtn = document.getElementById('signupBtn');
             const loginBtn = document.getElementById('loginBtn');
             const signupModal = document.getElementById('signupModal');
+            const loginModal = document.getElementById('loginModal');
             const closeModal = document.getElementById('closeModal');
+            const closeLoginModal = document.getElementById('closeLoginModal');
             const cancelSignup = document.getElementById('cancelSignup');
+            const cancelLogin = document.getElementById('cancelLogin');
             const submitSignup = document.getElementById('submitSignup');
+            const submitLogin = document.getElementById('submitLogin');
 
             // Open signup modal
             if (signupBtn) {
                 signupBtn.addEventListener('click', function() {
                     console.log('가입하기 버튼 클릭됨');
                     signupModal.classList.add('active');
+                });
+            }
+
+            // Open login modal
+            if (loginBtn) {
+                loginBtn.addEventListener('click', function() {
+                    console.log('로그인 버튼 클릭됨');
+                    loginModal.classList.add('active');
                 });
             }
 
@@ -2733,18 +2765,39 @@
                 document.getElementById('signupPasswordConfirm').value = '';
             }
 
+            function closeLoginModal() {
+                loginModal.classList.remove('active');
+                // Clear form fields
+                document.getElementById('loginEmail').value = '';
+                document.getElementById('loginPassword').value = '';
+            }
+
             if (closeModal) {
                 closeModal.addEventListener('click', closeSignupModal);
+            }
+
+            if (closeLoginModal) {
+                closeLoginModal.addEventListener('click', closeLoginModal);
             }
 
             if (cancelSignup) {
                 cancelSignup.addEventListener('click', closeSignupModal);
             }
 
+            if (cancelLogin) {
+                cancelLogin.addEventListener('click', closeLoginModal);
+            }
+
             // Close modal when clicking outside
             signupModal.addEventListener('click', function(e) {
                 if (e.target === signupModal) {
                     closeSignupModal();
+                }
+            });
+
+            loginModal.addEventListener('click', function(e) {
+                if (e.target === loginModal) {
+                    closeLoginModal();
                 }
             });
 
@@ -2794,18 +2847,37 @@
                 });
             }
 
-            // Login button handler
-            if (loginBtn) {
-                loginBtn.addEventListener('click', async function() {
-                    console.log('로그인 버튼 클릭됨');
+            // Submit login form
+            if (submitLogin) {
+                submitLogin.addEventListener('click', async function() {
+                    const email = document.getElementById('loginEmail').value.trim();
+                    const password = document.getElementById('loginPassword').value;
+
+                    // Validation
+                    if (!email || !password) {
+                        alert('이메일과 비밀번호를 입력해주세요.');
+                        return;
+                    }
+
+                    // Firebase Email/Password Login
                     try {
-                        // Google 로그인
-                        const result = await window.signInWithPopup(window.firebaseAuth, window.googleProvider);
-                        console.log('✅ Google 로그인 성공:', result.user);
-                        alert(`로그인 성공! 환영합니다, ${result.user.displayName}님!`);
+                        const userCredential = await window.signInWithEmailAndPassword(window.firebaseAuth, email, password);
+                        console.log('✅ 로그인 성공:', userCredential.user);
+                        alert('로그인 성공! 환영합니다!');
+                        closeLoginModal();
                     } catch (error) {
                         console.error('❌ 로그인 실패:', error);
-                        alert(`로그인 실패: ${error.message}`);
+                        let errorMessage = '로그인 실패: ';
+                        if (error.code === 'auth/user-not-found') {
+                            errorMessage += '등록되지 않은 이메일입니다.';
+                        } else if (error.code === 'auth/wrong-password') {
+                            errorMessage += '비밀번호가 올바르지 않습니다.';
+                        } else if (error.code === 'auth/invalid-email') {
+                            errorMessage += '유효하지 않은 이메일 주소입니다.';
+                        } else {
+                            errorMessage += error.message;
+                        }
+                        alert(errorMessage);
                     }
                 });
             }
