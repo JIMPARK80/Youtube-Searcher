@@ -2185,6 +2185,17 @@
         }
 
         async function search() {
+            // Check if user is logged in
+            if (!window.currentUser) {
+                // Show login modal
+                const loginModal = document.getElementById('loginModal');
+                if (loginModal) {
+                    loginModal.classList.add('active');
+                    alert('검색하려면 로그인이 필요합니다.');
+                }
+                return;
+            }
+            
             const query = document.getElementById('searchInput').value.trim();
             
             if (!query) {
