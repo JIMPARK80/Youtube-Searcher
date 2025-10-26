@@ -115,9 +115,6 @@
             
             <div class="search-mode-indicator" id="searchModeIndicator">
                 <span class="mode-text">현재 검색 모드: 🟢 Google API</span>
-                <div class="api-usage-info" id="apiUsageInfo" style="display: none;">
-                    <span class="usage-text">API 사용량: <span id="apiUsageCount">-</span> / <span id="apiUsageLimit">-</span></span>
-                </div>
             </div>
             
             <!-- API 키는 서버에서 자동으로 로드되므로 입력란 숨김 -->
@@ -1048,9 +1045,6 @@
                 currentSearchMode = 'google';
                 updateFilterStatusIndicators('google');
             }
-            
-            // Update API usage display
-            updateApiUsageDisplay();
         }
 
         // Update filter status indicators based on current search mode
@@ -1340,9 +1334,6 @@
                     // Google API is working - update mode indicator
                     console.log('✅ Google API 정상 작동');
                     updateSearchModeIndicator('google');
-                    
-                    // Increment API usage counter
-                    incrementApiUsage();
 
                     // Process Google API results
                     const videoIds = searchData.items.map(item => item.id.videoId).join(',');
@@ -1638,109 +1629,6 @@
              updateSearchModeIndicator('serpapi');
          });
 
-        // API usage tracking and display
-        async function updateApiUsageDisplay() {
-            const apiUsageInfo = document.getElementById('apiUsageInfo');
-            const apiUsageCount = document.getElementById('apiUsageCount');
-            const apiUsageLimit = document.getElementById('apiUsageLimit');
-            
-            if (currentSearchMode === 'google') {
-                // Show API usage info for Google API mode
-                apiUsageInfo.style.display = 'block';
-                
-                // Get usage from localStorage or Firebase
-                const usageData = await getApiUsageData();
-                apiUsageCount.textContent = usageData.used || '0';
-                apiUsageLimit.textContent = usageData.limit || '10,000';
-                
-                // Show data source
-                if (usageData.source) {
-                    apiUsageInfo.title = `데이터 소스: ${usageData.source}`;
-                }
-                
-                // Color coding based on usage
-                const usagePercent = (usageData.used || 0) / (usageData.limit || 10000);
-                if (usagePercent > 0.9) {
-                    apiUsageInfo.style.color = '#ff4444'; // Red for high usage
-                } else if (usagePercent > 0.7) {
-                    apiUsageInfo.style.color = '#ffaa00'; // Orange for medium usage
-                } else {
-                    apiUsageInfo.style.color = '#44ff44'; // Green for low usage
-                }
-            } else {
-                // Hide API usage info for SerpAPI mode
-                apiUsageInfo.style.display = 'none';
-            }
-        }
-        
-        async function getApiUsageData() {
-            // Try to get real-time usage from Google Cloud Monitoring API
-            try {
-                const realUsage = await getRealTimeApiUsage();
-                if (realUsage) {
-                    console.log('📊 실제 Google API 사용량 로드:', realUsage);
-                    return realUsage;
-                }
-            } catch (error) {
-                console.warn('⚠️ 실제 API 사용량 로드 실패, 로컬 데이터 사용:', error);
-            }
-            
-            // Fallback to localStorage
-            const stored = localStorage.getItem('apiUsage');
-            if (stored) {
-                try {
-                    return JSON.parse(stored);
-                } catch (e) {
-                    console.warn('Failed to parse API usage data from localStorage');
-                }
-            }
-            
-            // Default values
-            return {
-                used: 0,
-                limit: 10000,
-                lastReset: Date.now(),
-                source: 'default'
-            };
-        }
-        
-        async function getRealTimeApiUsage() {
-            try {
-                // This would require Google Cloud Monitoring API access
-                // For now, we'll simulate with localStorage data
-                const stored = localStorage.getItem('apiUsage');
-                if (stored) {
-                    const data = JSON.parse(stored);
-                    data.source = 'localStorage';
-                    return data;
-                }
-                
-                // In a real implementation, you would call:
-                // const response = await fetch(`https://monitoring.googleapis.com/v3/projects/${projectId}/timeSeries?filter=...`);
-                // return parseMonitoringData(response);
-                
-                return null;
-            } catch (error) {
-                console.error('❌ 실제 API 사용량 조회 실패:', error);
-                return null;
-            }
-        }
-        
-        async function incrementApiUsage() {
-            if (currentSearchMode === 'google') {
-                const usageData = await getApiUsageData();
-                usageData.used = (usageData.used || 0) + 1;
-                usageData.lastUpdate = Date.now();
-                
-                // Store in localStorage for now (could be moved to Firebase later)
-                localStorage.setItem('apiUsage', JSON.stringify(usageData));
-                
-                // Update display
-                updateApiUsageDisplay();
-                
-                console.log(`📊 API 사용량 증가: ${usageData.used}/${usageData.limit}`);
-            }
-        }
 
         // Thumbnail error handling function
         function handleThumbnailError(img, videoId) {
