@@ -940,24 +940,16 @@
             };
         }
         
-        // Wait for Firebase to load, then initialize
-        setTimeout(() => {
-            const keys = getApiKeys();
-            apiKey = keys.youtube;
-            serpApiKey = keys.serpapi;
-            
-            if (apiKey) {
-                apiKeyInput.value = apiKey;
-                apiKeyInput.type = 'text';
-                document.getElementById('toggleVisibilityBtn').textContent = '🙈 숨기기';
-            }
-            
-            if (serpApiKey) {
-                serpApiKeyInput.value = serpApiKey;
-                serpApiKeyInput.type = 'text';
-                document.getElementById('toggleSerpVisibilityBtn').textContent = '🙈 숨기기';
-            }
-                 }, 500); // Wait for Firebase initialization
+                 // Wait for Firebase to load, then initialize
+         setTimeout(() => {
+             const keys = getApiKeys();
+             apiKey = keys.youtube;
+             serpApiKey = keys.serpapi;
+             
+             // API keys are loaded from Firebase server
+             // No need to update UI elements as they are hidden
+             
+                  }, 500); // Wait for Firebase initialization
 
         // API 키 UI 관련 이벤트 리스너 제거됨 - 서버에서 자동 로드
 
