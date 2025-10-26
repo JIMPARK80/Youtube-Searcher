@@ -721,6 +721,39 @@
               margin: 0;
           }
 
+          /* Upload Date Filter Optimization */
+          .filter-group.date-filter {
+              display: flex;
+              flex-direction: row !important;
+              align-items: center;
+              gap: 12px;
+              flex-wrap: nowrap;
+              margin-top: 10px;
+          }
+
+          .filter-group.date-filter > label {
+              display: inline-flex;
+              align-items: center;
+              gap: 6px;
+              padding: 4px 8px;
+              background: rgba(255, 255, 255, 0.1);
+              border-radius: 5px;
+              cursor: pointer;
+              transition: all 0.3s;
+              color: rgba(255, 255, 255, 0.9);
+              font-size: 12px;
+          }
+
+          .filter-group.date-filter > label:hover {
+              background: rgba(255, 255, 255, 0.2);
+              transform: translateY(-2px);
+          }
+
+          .filter-group.date-filter input[type="radio"] {
+              accent-color: #00c853;
+              margin: 0;
+          }
+
         @media (max-width: 1200px) {
             .card-grid {
                 grid-template-columns: repeat(3, 1fr);
@@ -801,18 +834,29 @@
                     <label><input type="radio" name="viewCountFilter" value="10000"> 10K+</label>
                     <label><input type="radio" name="viewCountFilter" value="100000"> 100K+</label>
                     <label><input type="radio" name="viewCountFilter" value="1000000"> 1M+</label>
+                    <label><input type="radio" name="viewCountFilter" value="10000000"> 10M+</label>
                 </div>
                 
-                <!-- Subscriber Count Filter -->
-                <div class="filter-group sub-filter">
-                    <label>구독자 필터:</label>
-                    <label><input type="radio" name="subCountFilter" value="all" checked> 전체</label>
-                    <label><input type="radio" name="subCountFilter" value="1000"> 1K+</label>
-                    <label><input type="radio" name="subCountFilter" value="10000"> 10K+</label>
-                    <label><input type="radio" name="subCountFilter" value="100000"> 100K+</label>
-                    <label><input type="radio" name="subCountFilter" value="1000000"> 1M+</label>
-                </div>
-            </div>
+                                 <!-- Subscriber Count Filter -->
+                 <div class="filter-group sub-filter">
+                     <label>구독자 필터:</label>
+                     <label><input type="radio" name="subCountFilter" value="all" checked> 전체</label>
+                     <label><input type="radio" name="subCountFilter" value="1000"> 1K+</label>
+                     <label><input type="radio" name="subCountFilter" value="10000"> 10K+</label>
+                     <label><input type="radio" name="subCountFilter" value="100000"> 100K+</label>
+                     <label><input type="radio" name="subCountFilter" value="1000000"> 1M+</label>
+                 </div>
+                 
+                 <!-- Upload Date Filter -->
+                 <div class="filter-group date-filter">
+                     <label>업로드일자 필터:</label>
+                     <label><input type="radio" name="uploadDateFilter" value="all" checked> 전체</label>
+                     <label><input type="radio" name="uploadDateFilter" value="1"> 1개월 이내</label>
+                     <label><input type="radio" name="uploadDateFilter" value="3"> 3개월 이내</label>
+                     <label><input type="radio" name="uploadDateFilter" value="6"> 6개월 이내</label>
+                     <label><input type="radio" name="uploadDateFilter" value="12"> 1년 이내</label>
+                 </div>
+             </div>
 
         <div class="pagination-section">
             <div class="result-summary" id="resultSummary">
@@ -1433,6 +1477,18 @@
                 items = items.filter(item => {
                     const subs = parseInt(item.subs || 0);
                     return subs >= minSubs;
+                });
+            }
+            
+            // Apply upload date filter
+            const uploadDateFilter = document.querySelector('input[name="uploadDateFilter"]:checked')?.value;
+            if (uploadDateFilter && uploadDateFilter !== 'all') {
+                const months = parseInt(uploadDateFilter);
+                const cutoffDate = getPublishedAfterDate(months.toString());
+                items = items.filter(item => {
+                    const publishedAt = item.raw.snippet?.publishedAt;
+                    if (!publishedAt) return false;
+                    return publishedAt >= cutoffDate;
                 });
             }
             
@@ -2399,6 +2455,15 @@
             subCountFilters.forEach(radio => {
                 radio.addEventListener('change', () => {
                     console.log('🔍 구독자 필터 변경:', radio.value);
+                    renderPage(1); // Reset to page 1 when filter changes
+                });
+            });
+
+            // Upload date filter change event listeners
+            const uploadDateFilters = document.querySelectorAll('input[name="uploadDateFilter"]');
+            uploadDateFilters.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    console.log('🔍 업로드일자 필터 변경:', radio.value);
                     renderPage(1); // Reset to page 1 when filter changes
                 });
             });
