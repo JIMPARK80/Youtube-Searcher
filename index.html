@@ -2206,69 +2206,28 @@
                 try {
                     const docRef = window.firebaseDoc(window.firebaseDb, 'searchCache', toDocId('news'));
                     
-                    // Setup real-time listener
+                    // Setup real-time listener (disabled - only log changes, don't auto-update UI)
                     newsDataListener = window.firebaseOnSnapshot(docRef, (snapshot) => {
                         if (snapshot.exists()) {
                             const data = snapshot.data();
                             console.log('📢 Firebase 데이터 변경 감지 (news):', data);
                             
-                            // Update the display if current search is 'news'
-                            const currentQuery = document.getElementById('searchInput')?.value?.trim().toLowerCase();
-                            if (currentQuery === 'news' || currentQuery === '') {
-                                console.log('🔄 news 데이터 자동 업데이트...');
-                                
-                                // Restore full structure from compressed Firebase data
-                                const restoredVideos = data.videos.map(v => ({
-                                    id: v.id,
-                                    snippet: {
-                                        title: v.title,
-                                        channelId: v.channelId,
-                                        channelTitle: v.channelTitle,
-                                        publishedAt: v.publishedAt,
-                                        thumbnails: {
-                                            maxres: { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` },
-                                            standard: { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` },
-                                            high: { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` },
-                                            medium: { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` },
-                                            default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
-                                        },
-                                        description: '',
-                                        tags: []
-                                    },
-                                    statistics: {
-                                        viewCount: v.viewCount || '0',
-                                        likeCount: v.likeCount || '0',
-                                        commentCount: '0'
-                                    },
-                                    contentDetails: {
-                                        duration: v.duration || 'PT0S'
-                                    },
-                                    serpData: v.serp ? {
-                                        channelSubscribers: v.serp.subs,
-                                        views: v.serp.views,
-                                        link: v.serp.link,
-                                        extracted_date_from_description: v.serp.extracted_date
-                                    } : null
-                                }));
-                                
-                                // Restore items with full structure
-                                const restoredItems = data.items.map((x, idx) => ({
-                                    raw: restoredVideos[idx],
-                                    vpd: x.vpd,
-                                    vclass: x.vclass,
-                                    cband: x.cband,
-                                    subs: x.subs
-                                }));
-                                
-                                allVideos = restoredVideos;
-                                allChannelMap = data.channels || {};
-                                allItems = restoredItems;
-                                
-                                // Update UI
-                                renderPage(1);
-                                
-                                console.log('✅ news 데이터 자동 업데이트 완료');
+                            // Check if data is newer than 24 hours
+                            const age = Date.now() - (data.timestamp || 0);
+                            const ageHours = age / (1000 * 60 * 60);
+                            const isExpired = ageHours >= 24;
+                            
+                            // Don't auto-update UI, just log the change
+                            console.log(`📢 news 데이터 변경 감지됨 (${ageHours.toFixed(1)}시간 전, 만료: ${isExpired ? '예' : '아니오'})`);
+                            
+                            if (isExpired) {
+                                console.log('⏰ 24시간 경과 - 사용자에게 API 호출 안내 (자동 업데이트 안함)');
+                            } else {
+                                console.log('✅ 24시간 미만 - 캐시 유효 (자동 업데이트 안함)');
                             }
+                            
+                            // Note: We don't auto-update the UI to prevent unnecessary API calls
+                            // Users can manually refresh or search again if they want fresh data
                         } else {
                             console.log('📢 Firebase 문서가 존재하지 않음 (news)');
                         }
@@ -2343,7 +2302,7 @@
                 }
 
                 // 2. No cache found - perform API search
-                console.log('🔍 캐시 없음 - API 호출 진행');
+                console.log('🔍 캐시 없음 - API 호출 진행 (24시간 경과 또는 데이터 없음)');
                 
                 // Get API keys
                 const keys = await getApiKeys();
