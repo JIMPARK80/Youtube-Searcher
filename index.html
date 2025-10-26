@@ -901,9 +901,6 @@
         
         console.log('✅ Firebase initialized successfully');
         
-        // Skip Analytics for now to avoid 404 errors
-        // Analytics can be added later if needed
-        
         // Helper function to sanitize document IDs
         function toDocId(s) {
             return (s || '')
@@ -915,27 +912,87 @@
         
         // Make toDocId available globally
         window.toDocId = toDocId;
+        
+        // Load API keys from Firebase server-side storage
+        async function loadApiKeysFromFirebase() {
+            try {
+                const keysRef = window.firebaseDoc(window.firebaseDb, 'config', 'apiKeys');
+                const keysSnap = await window.firebaseGetDoc(keysRef);
+                
+                if (keysSnap.exists()) {
+                    const keysData = keysSnap.data();
+                    console.log('✅ 서버에서 API 키 로드 완료');
+                    
+                    // Store in memory (not localStorage for security)
+                    window.serverApiKeys = {
+                        youtube: keysData.youtubeApiKey,
+                        serpapi: keysData.serpApiKey
+                    };
+                    
+                    return true;
+                } else {
+                    console.warn('⚠️ Firebase에 API 키가 저장되어 있지 않습니다.');
+                    console.log('💡 API 키 설정 버튼을 눌러 직접 입력할 수도 있습니다.');
+                    return false;
+                }
+            } catch (error) {
+                console.error('❌ Firebase API 키 로드 실패:', error);
+                return false;
+            }
+        }
+        
+        // Make function available globally
+        window.loadApiKeysFromFirebase = loadApiKeysFromFirebase;
+        
+        // Initialize API keys on load
+        window.loadApiKeysFromFirebase().then(loaded => {
+            if (loaded) {
+                console.log('🎉 서버 API 키 사용 준비 완료');
+            }
+        });
     </script>
     
     <script>
-        // API 키 초기화
-        const apiKey = localStorage.getItem('youtubeApiKey');
-        const serpApiKey = localStorage.getItem('serpApiKey');
+        // API 키 초기화 - Firebase 서버에서 우선적으로 로드
+        let apiKey = null;
+        let serpApiKey = null;
         const apiKeyInput = document.getElementById('apiKey');
         const serpApiKeyInput = document.getElementById('serpApiKey');
         
-        if (apiKey) {
-            apiKeyInput.value = apiKey;
-            // localStorage에 값이 있으면 처음부터 text 타입으로 설정
-            apiKeyInput.type = 'text';
-            document.getElementById('toggleVisibilityBtn').textContent = '🙈 숨기기';
+        // Helper function to get API keys (Firebase first, then localStorage)
+        function getApiKeys() {
+            // Check Firebase server keys first
+            if (window.serverApiKeys) {
+                return {
+                    youtube: window.serverApiKeys.youtube || localStorage.getItem('youtubeApiKey'),
+                    serpapi: window.serverApiKeys.serpapi || localStorage.getItem('serpApiKey')
+                };
+            }
+            // Fallback to localStorage
+            return {
+                youtube: localStorage.getItem('youtubeApiKey'),
+                serpapi: localStorage.getItem('serpApiKey')
+            };
         }
         
-        if (serpApiKey) {
-            serpApiKeyInput.value = serpApiKey;
-            serpApiKeyInput.type = 'text';
-            document.getElementById('toggleSerpVisibilityBtn').textContent = '🙈 숨기기';
-        }
+        // Wait for Firebase to load, then initialize
+        setTimeout(() => {
+            const keys = getApiKeys();
+            apiKey = keys.youtube;
+            serpApiKey = keys.serpapi;
+            
+            if (apiKey) {
+                apiKeyInput.value = apiKey;
+                apiKeyInput.type = 'text';
+                document.getElementById('toggleVisibilityBtn').textContent = '🙈 숨기기';
+            }
+            
+            if (serpApiKey) {
+                serpApiKeyInput.value = serpApiKey;
+                serpApiKeyInput.type = 'text';
+                document.getElementById('toggleSerpVisibilityBtn').textContent = '🙈 숨기기';
+            }
+                 }, 500); // Wait for Firebase initialization
 
         // API 키 토글 버튼
         let apiKeyVisible = false;
@@ -1582,7 +1639,9 @@
         async function searchWithSerpAPI(query) {
             try {
                 console.log('🔄 SerpAPI로 검색 중...');
-                const serpApiKey = localStorage.getItem('serpApiKey');
+                // Get SerpAPI key from Firebase server first
+                const keys = getApiKeys();
+                const serpApiKey = keys.serpapi || localStorage.getItem('serpApiKey');
                 if (!serpApiKey) {
                     throw new Error('SerpAPI 키가 설정되지 않았습니다. API 키 설정에서 SerpAPI 키를 입력해주세요.');
                 }
@@ -1926,15 +1985,18 @@
 
         async function search() {
             const query = document.getElementById('searchInput').value.trim();
-            const apiKeyValue = document.getElementById('apiKey').value.trim();
             
             if (!query) {
                 alert('검색어를 입력해주세요!');
                 return;
             }
             
+            // Get API key from Firebase server first, then input field, then localStorage
+            const keys = getApiKeys();
+            const apiKeyValue = keys.youtube || document.getElementById('apiKey').value.trim();
+            
             if (!apiKeyValue) {
-                alert('API 키를 입력해주세요!');
+                alert('API 키를 입력해주세요! 서버에 API 키가 저장되어 있지 않습니다.');
                 return;
             }
 

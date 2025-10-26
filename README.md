@@ -32,7 +32,41 @@ A web application to search YouTube videos and view detailed information.
 2. 무료 계정 생성 (월 250회 검색)
 3. API 키 복사
 
-### 2. Firebase 설정 / Firebase Setup (선택사항 / Optional)
+### 2. 🔐 서버에 API 키 저장 (권장) / Store API Keys on Server (Recommended)
+
+Firebase에 API 키를 저장하면 다른 사용자가 개별적으로 키를 입력할 필요가 없습니다.
+
+**Firebase Console에서 설정:**
+1. [Firebase Console](https://console.firebase.google.com/) → 프로젝트 선택
+2. Firestore Database → Data 탭
+3. "컬렉션 시작" 클릭
+4. 컬렉션 ID: `config` 입력
+5. 문서 ID: `apiKeys` 입력
+6. 필드 추가:
+   - 필드 이름: `youtubeApiKey`, 유형: string, 값: (YouTube API 키)
+   - 필드 이름: `serpApiKey`, 유형: string, 값: (SerpAPI 키)
+7. "저장" 클릭
+
+**Security Rules 설정:**
+Firestore Rules 탭에서 다음 규칙 추가:
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow read-only access to API keys (for app usage)
+    match /config/apiKeys {
+      allow read: if true;
+      allow write: if false; // Only you can write via console
+    }
+    
+    // Existing searchCache rules...
+  }
+}
+```
+
+✅ 완료! 이제 모든 사용자가 API 키 없이 앱을 사용할 수 있습니다.
+
+### 3. Firebase 설정 / Firebase Setup
 
 Firebase를 사용하면 검색 결과가 클라우드에 저장되어 모든 사용자가 공유할 수 있습니다.
 
@@ -56,7 +90,7 @@ const firebaseConfig = {
    - `FIREBASE_SECURITY_RULES.txt` 파일의 규칙 복사하여 붙여넣기
    - "게시" 버튼 클릭
 
-### 3. 실행 방법 / How to Run
+### 4. 실행 방법 / How to Run
 
 1. `index.html` 파일을 브라우저에서 열기
 2. API 키 입력란에 발급받은 키 입력
