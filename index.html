@@ -81,38 +81,13 @@
             transform: translateY(0);
         }
 
+        /* API 키 입력란 숨김 - 서버에서 자동으로 로드됨 */
         .api-key-toggle {
-            margin-top: 20px;
-            text-align: center;
-        }
-
-        #toggleApiKeyBtn {
-            padding: 10px 20px;
-            background: #f8f9fa;
-            color: #667eea;
-            border: 2px solid #667eea;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        #toggleApiKeyBtn:hover {
-            background: #667eea;
-            color: white;
-        }
-
-        .api-key-section {
-            margin-top: 15px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
             display: none;
         }
 
-        .api-key-section.show {
-            display: block;
+        .api-key-section {
+            display: none;
         }
 
         .api-key-section label {
@@ -711,45 +686,12 @@
                 <span class="mode-text">현재 검색 모드: 🟢 Google API</span>
             </div>
             
-            <div class="api-key-toggle">
-                <button id="toggleApiKeyBtn">🔑 API 키 설정</button>
+            <!-- API 키는 서버에서 자동으로 로드되므로 입력란 숨김 -->
+            <div class="api-key-section" id="apiKeySection" style="display: none;">
+                <!-- Hidden inputs for backward compatibility -->
+                <input type="password" id="apiKey" style="display: none;" />
+                <input type="password" id="serpApiKey" style="display: none;" />
             </div>
-
-            <div class="api-key-section" id="apiKeySection">
-                <label for="apiKey">YouTube Data API v3 키:</label>
-                <div class="api-key-input-wrapper">
-                    <input type="password" id="apiKey" placeholder="API 키를 입력하세요" />
-                    <button class="api-key-btn toggle-visibility-btn" id="toggleVisibilityBtn">👁️ 보기</button>
-                    <button class="api-key-btn save-btn" id="saveBtn">💾 저장</button>
-                </div>
-                <small>💡 API 키는 <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>에서 발급받으세요</small>
-                
-                <label for="serpApiKey" style="margin-top: 20px;">SerpAPI 키 (백업용):</label>
-                <div class="api-key-input-wrapper">
-                    <input type="password" id="serpApiKey" placeholder="SerpAPI 키를 입력하세요" />
-                    <button class="api-key-btn toggle-visibility-btn" id="toggleSerpVisibilityBtn">👁️ 보기</button>
-                    <button class="api-key-btn save-btn" id="saveSerpBtn">💾 저장</button>
-                </div>
-            <small>💡 SerpAPI 키는 <a href="https://serpapi.com/manage-api-key" target="_blank">SerpAPI</a>에서 발급받으세요 (무료 250회/월)</small>
-            
-            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
-                <label>💾 저장된 검색 데이터 관리:</label>
-                <div style="margin-top: 10px;">
-                    <button id="showStoredBtn" style="padding: 8px 12px; margin-right: 10px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">📦 개별 삭제</button>
-                    <button id="clearDataBtn" style="padding: 8px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">🗑️ 모든 데이터 삭제</button>
-                </div>
-                <div id="storedSearches" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
-                <div id="searchSelection" style="margin-top: 10px; display: none;">
-                    <div style="margin-bottom: 10px; font-weight: bold;">개별 삭제할 검색어 선택:</div>
-                    <div id="searchCheckboxes" style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px; background: #f8f9fa;"></div>
-                    <div style="margin-top: 10px;">
-                        <button id="deleteSelectedBtn" style="padding: 6px 12px; background: #ff6b6b; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">🗑️ 선택된 검색어 삭제</button>
-                        <button id="cancelSelectionBtn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">❌ 취소</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        </div>
 
 
         <div class="filters-section">
@@ -994,96 +936,7 @@
             }
                  }, 500); // Wait for Firebase initialization
 
-        // API 키 토글 버튼
-        let apiKeyVisible = false;
-        document.getElementById('toggleApiKeyBtn').addEventListener('click', function() {
-            apiKeyVisible = !apiKeyVisible;
-            const apiKeySection = document.getElementById('apiKeySection');
-            const input = document.getElementById('apiKey');
-            
-            if (apiKeyVisible) {
-                apiKeySection.classList.add('show');
-                this.textContent = '🔒 API 키 숨기기';
-                input.focus();
-            } else {
-                apiKeySection.classList.remove('show');
-                this.textContent = '🔑 API 키 설정';
-            }
-        });
-
-        // API 키 표시/숨김 토글
-        let isVisible = apiKey ? true : false; // localStorage에 값이 있으면 처음부터 visible
-        document.getElementById('toggleVisibilityBtn').addEventListener('click', function() {
-            isVisible = !isVisible;
-            const input = document.getElementById('apiKey');
-            
-            if (isVisible) {
-                input.type = 'text';
-                this.textContent = '🙈 숨기기';
-            } else {
-                input.type = 'password';
-                this.textContent = '👁️ 보기';
-            }
-        });
-
-        // SerpAPI 키 표시/숨김 토글
-        let isSerpVisible = serpApiKey ? true : false;
-        document.getElementById('toggleSerpVisibilityBtn').addEventListener('click', function() {
-            isSerpVisible = !isSerpVisible;
-            const input = document.getElementById('serpApiKey');
-            
-            if (isSerpVisible) {
-                input.type = 'text';
-                this.textContent = '🙈 숨기기';
-            } else {
-                input.type = 'password';
-                this.textContent = '👁️ 보기';
-            }
-        });
-
-        // 저장 버튼 기능
-        document.getElementById('saveBtn').addEventListener('click', function() {
-            const apiKeyValue = document.getElementById('apiKey').value.trim();
-            
-            if (!apiKeyValue) {
-                alert('API 키를 입력해주세요!');
-                return;
-            }
-            
-            localStorage.setItem('youtubeApiKey', apiKeyValue);
-            
-            // 저장 성공 피드백
-            const originalText = this.textContent;
-            this.textContent = '✅ 저장됨';
-            this.classList.add('saved');
-            
-            setTimeout(() => {
-                this.textContent = originalText;
-                this.classList.remove('saved');
-            }, 2000);
-        });
-
-        // SerpAPI 키 저장 버튼 기능
-        document.getElementById('saveSerpBtn').addEventListener('click', function() {
-            const serpApiKeyValue = document.getElementById('serpApiKey').value.trim();
-            
-            if (!serpApiKeyValue) {
-                alert('SerpAPI 키를 입력해주세요!');
-                return;
-            }
-            
-            localStorage.setItem('serpApiKey', serpApiKeyValue);
-            
-            // 저장 성공 피드백
-            const originalText = this.textContent;
-            this.textContent = '✅ 저장됨';
-            this.classList.add('saved');
-            
-            setTimeout(() => {
-                this.textContent = originalText;
-                this.classList.remove('saved');
-            }, 2000);
-        });
+        // API 키 UI 관련 이벤트 리스너 제거됨 - 서버에서 자동 로드
 
         document.getElementById('searchBtn').addEventListener('click', search);
         document.getElementById('searchInput').addEventListener('keypress', function(e) {
