@@ -878,6 +878,117 @@
             background: #d32f2f;
             transform: translateY(-2px);
         }
+
+        /* Signup Modal Styles */
+        .signup-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .signup-modal.active {
+            display: flex;
+        }
+
+        .signup-form {
+            background: white;
+            padding: 30px 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            width: 90%;
+            max-width: 400px;
+            position: relative;
+        }
+
+        .signup-form h2 {
+            margin-bottom: 20px;
+            color: #333;
+            text-align: center;
+        }
+
+        .signup-form .form-group {
+            margin-bottom: 15px;
+        }
+
+        .signup-form label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 600;
+        }
+
+        .signup-form input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .signup-form input:focus {
+            border-color: #667eea;
+        }
+
+        .signup-form .form-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .signup-form button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .signup-form .submit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .signup-form .submit-btn:hover {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            transform: translateY(-2px);
+        }
+
+        .signup-form .cancel-btn {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .signup-form .cancel-btn:hover {
+            background: #d0d0d0;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+            line-height: 1;
+        }
+
+        .close-modal:hover {
+            color: #333;
+        }
     </style>
 </head>
 <body>
@@ -889,6 +1000,30 @@
             <img id="userAvatar" class="user-avatar" src="" alt="User Avatar">
             <span class="user-name" id="userName"></span>
             <button class="logout-btn" id="logoutBtn">로그아웃</button>
+        </div>
+    </div>
+
+    <!-- Signup Modal -->
+    <div class="signup-modal" id="signupModal">
+        <div class="signup-form">
+            <button class="close-modal" id="closeModal">&times;</button>
+            <h2>회원 가입</h2>
+            <div class="form-group">
+                <label for="signupId">아이디</label>
+                <input type="text" id="signupId" placeholder="아이디를 입력하세요">
+            </div>
+            <div class="form-group">
+                <label for="signupPassword">비밀번호</label>
+                <input type="password" id="signupPassword" placeholder="비밀번호를 입력하세요">
+            </div>
+            <div class="form-group">
+                <label for="signupPasswordConfirm">비밀번호 확인</label>
+                <input type="password" id="signupPasswordConfirm" placeholder="비밀번호를 다시 입력하세요">
+            </div>
+            <div class="form-buttons">
+                <button class="submit-btn" id="submitSignup">가입하기</button>
+                <button class="cancel-btn" id="cancelSignup">취소</button>
+            </div>
         </div>
     </div>
 
@@ -2560,6 +2695,84 @@
                     renderPage(1); // Reset to page 1 when filter changes
                 });
             });
+
+            // Auth button event listeners
+            const signupBtn = document.getElementById('signupBtn');
+            const loginBtn = document.getElementById('loginBtn');
+            const signupModal = document.getElementById('signupModal');
+            const closeModal = document.getElementById('closeModal');
+            const cancelSignup = document.getElementById('cancelSignup');
+            const submitSignup = document.getElementById('submitSignup');
+
+            // Open signup modal
+            if (signupBtn) {
+                signupBtn.addEventListener('click', function() {
+                    console.log('가입하기 버튼 클릭됨');
+                    signupModal.classList.add('active');
+                });
+            }
+
+            // Close modal functions
+            function closeSignupModal() {
+                signupModal.classList.remove('active');
+                // Clear form fields
+                document.getElementById('signupId').value = '';
+                document.getElementById('signupPassword').value = '';
+                document.getElementById('signupPasswordConfirm').value = '';
+            }
+
+            if (closeModal) {
+                closeModal.addEventListener('click', closeSignupModal);
+            }
+
+            if (cancelSignup) {
+                cancelSignup.addEventListener('click', closeSignupModal);
+            }
+
+            // Close modal when clicking outside
+            signupModal.addEventListener('click', function(e) {
+                if (e.target === signupModal) {
+                    closeSignupModal();
+                }
+            });
+
+            // Submit signup form
+            if (submitSignup) {
+                submitSignup.addEventListener('click', function() {
+                    const id = document.getElementById('signupId').value.trim();
+                    const password = document.getElementById('signupPassword').value;
+                    const passwordConfirm = document.getElementById('signupPasswordConfirm').value;
+
+                    // Validation
+                    if (!id || !password || !passwordConfirm) {
+                        alert('모든 필드를 입력해주세요.');
+                        return;
+                    }
+
+                    if (password !== passwordConfirm) {
+                        alert('비밀번호가 일치하지 않습니다.');
+                        return;
+                    }
+
+                    if (password.length < 6) {
+                        alert('비밀번호는 최소 6자 이상이어야 합니다.');
+                        return;
+                    }
+
+                    // TODO: Implement actual signup logic here (Firebase Auth, etc.)
+                    console.log('가입 정보:', { id, password });
+                    alert('가입 기능은 구현 중입니다. (Firebase Auth 연동 필요)');
+                    closeSignupModal();
+                });
+            }
+
+            // Login button handler
+            if (loginBtn) {
+                loginBtn.addEventListener('click', function() {
+                    console.log('로그인 버튼 클릭됨');
+                    alert('로그인 기능은 구현 중입니다. (Firebase Auth 연동 필요)');
+                });
+            }
             
             console.log('✅ 모든 이벤트 리스너 등록 완료');
         });
