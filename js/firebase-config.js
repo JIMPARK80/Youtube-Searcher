@@ -69,34 +69,11 @@ async function loadApiKeysFromFirebase() {
             return true;
         } else {
             console.warn('⚠️ Firebase에 API 키가 저장되어 있지 않습니다.');
-            // Try fallback to localStorage if Firebase keys not found
-            console.log('💡 localStorage에서 API 키를 확인합니다.');
-            const youtubeKey = localStorage.getItem('youtubeApiKey');
-            const serpApiKey = localStorage.getItem('serpApiKey');
-            if (youtubeKey || serpApiKey) {
-                window.serverApiKeys = {
-                    youtube: youtubeKey,
-                    serpapi: serpApiKey
-                };
-                console.log('✅ localStorage에서 API 키 로드 완료');
-                return true;
-            }
             return false;
         }
     } catch (error) {
-        console.warn('⚠️ Firebase API 키 로드 실패 (권한 부족), localStorage로 대체');
+        console.warn('⚠️ Firebase API 키 로드 실패 (권한 부족)');
         console.error('에러 상세:', error);
-        // Fallback to localStorage
-        const youtubeKey = localStorage.getItem('youtubeApiKey');
-        const serpApiKey = localStorage.getItem('serpApiKey');
-        if (youtubeKey || serpApiKey) {
-            window.serverApiKeys = {
-                youtube: youtubeKey,
-                serpapi: serpApiKey
-            };
-            console.log('✅ localStorage에서 API 키 로드 완료');
-            return true;
-        }
         return false;
     }
 }

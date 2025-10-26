@@ -207,19 +207,19 @@
         const apiKeyInput = document.getElementById('apiKey');
         const serpApiKeyInput = document.getElementById('serpApiKey');
         
-        // Helper function to get API keys (Firebase first, then localStorage)
+        // Helper function to get API keys (Firebase server only)
         function getApiKeys() {
-            // Check Firebase server keys first
+            // Use Firebase server keys only
             if (window.serverApiKeys) {
                 return {
-                    youtube: window.serverApiKeys.youtube || localStorage.getItem('youtubeApiKey'),
-                    serpapi: window.serverApiKeys.serpapi || localStorage.getItem('serpApiKey')
+                    youtube: window.serverApiKeys.youtube,
+                    serpapi: window.serverApiKeys.serpapi
                 };
             }
-            // Fallback to localStorage
+            // No fallback - Firebase keys required
             return {
-                youtube: localStorage.getItem('youtubeApiKey'),
-                serpapi: localStorage.getItem('serpApiKey')
+                youtube: null,
+                serpapi: null
             };
         }
         
@@ -427,20 +427,10 @@
             }
         }
 
-        // API Usage tracking functions
+        // API Usage tracking functions (memory only)
         function loadApiUsage() {
-            const today = new Date().toDateString();
-            const stored = localStorage.getItem('youtubeApiUsage');
-            if (stored) {
-                const data = JSON.parse(stored);
-                if (data.date === today) {
-                    apiUsage = data.usage;
-                } else {
-                    // Reset for new day (but keep SerpAPI monthly count)
-                    const serpapiCount = apiUsage.serpapi || 0;
-                    apiUsage = { search: 0, videos: 0, channels: 0, total: 0, serpapi: serpapiCount };
-                }
-            }
+            // Initialize API usage in memory only
+            apiUsage = { search: 0, videos: 0, channels: 0, total: 0, serpapi: 0 };
             
             // Force Google API to show as exhausted
             apiUsage.total = 10000;
@@ -452,12 +442,8 @@
         }
 
         function saveApiUsage() {
-            const today = new Date().toDateString();
-            const data = {
-                date: today,
-                usage: apiUsage
-            };
-            localStorage.setItem('youtubeApiUsage', JSON.stringify(data));
+            // No-op: API usage is tracked in memory only
+            console.log('📊 API 사용량 (메모리):', apiUsage);
         }
 
         function trackApiCall(type, units = 1) {
@@ -513,49 +499,48 @@
 
         
 
-        // Load search data from localStorage
-        function loadSearchData(query) {
-            const cacheKey = query.toLowerCase();
-            const stored = localStorage.getItem(`searchData_${cacheKey}`);
-            if (stored) {
-                const data = JSON.parse(stored);
-                allVideos = data.videos || [];
-                allChannelMap = data.channels || {};
-                allItems = data.items || [];
+        // Load search data from Firebase cloud cache only
+        async function loadSearchData(query) {
+            const firebaseData = await loadFromFirebase(query);
+            if (firebaseData) {
+                // Restore full structure from compressed Firebase data
+                const restoredVideos = firebaseData.videos.map(v => ({
+                    id: v.id,
+                    snippet: {
+                        title: v.title,
+                        channelId: v.channelId,
+                        channelTitle: v.channelTitle,
+                        publishedAt: v.publishedAt,
+                        thumbnails: {
+                            maxres: { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` },
+                            standard: { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` },
+                            high: { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` },
+                            medium: { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` },
+                            default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
+                        }
+                    },
+                    statistics: {
+                        viewCount: v.viewCount,
+                        likeCount: v.likeCount
+                    },
+                    contentDetails: {
+                        duration: v.duration
+                    },
+                    serpData: v.serp
+                }));
                 
-                                 // Ensure all videos have thumbnails with highest quality
-                 allVideos = allVideos.map(v => {
-                     if (!v.snippet) return v;
-                     if (!v.snippet.thumbnails || !v.snippet.thumbnails.default) {
-                         if (!v.snippet.thumbnails) v.snippet.thumbnails = {};
-                         v.snippet.thumbnails.maxres = { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` };
-                         v.snippet.thumbnails.standard = { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` };
-                         v.snippet.thumbnails.high = { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` };
-                         v.snippet.thumbnails.medium = { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` };
-                         v.snippet.thumbnails.default = { url: `https://img.youtube.com/vi/${v.id}/default.jpg` };
-                     }
-                     return v;
-                 });
+                allVideos = restoredVideos;
+                allChannelMap = firebaseData.channels || {};
+                allItems = firebaseData.items || [];
                 
-                console.log(`📦 로드된 검색 데이터: ${query} (${allItems.length}개 항목)`);
+                console.log(`📦 Firebase에서 로드된 검색 데이터: ${query} (${allItems.length}개 항목)`);
                 return true;
             }
             return false;
         }
 
-        // Save search data to localStorage
+        // Save search data to Firebase cloud cache only
         function saveSearchData(query, videos, channels, items, dataSource = null) {
-            const cacheKey = query.toLowerCase();
-            const data = {
-                videos: videos,
-                channels: channels,
-                items: items,
-                timestamp: Date.now()
-            };
-            localStorage.setItem(`searchData_${cacheKey}`, JSON.stringify(data));
-            console.log(`💾 로컬 저장: ${query} (${items.length}개 항목)`);
-            
-            // Also save to Firebase cloud cache
             // dataSource is inferred from current search mode if not provided
             const source = dataSource || (currentSearchMode === 'google' ? 'google' : 'serpapi');
             saveToFirebase(query, videos, channels, items, source);
@@ -721,7 +706,7 @@
                 console.log('🔄 SerpAPI로 검색 중...');
                 // Get SerpAPI key from Firebase server first
                 const keys = getApiKeys();
-                const serpApiKey = keys.serpapi || localStorage.getItem('serpApiKey');
+                const serpApiKey = keys.serpapi;
                 if (!serpApiKey) {
                     throw new Error('SerpAPI 키가 설정되지 않았습니다. API 키 설정에서 SerpAPI 키를 입력해주세요.');
                 }
@@ -1191,21 +1176,7 @@
                 console.log('📭 Firebase 캐시 없음 - API 호출 진행');
             }
             
-            // 2. Check localStorage second
-            if (loadSearchData(query)) {
-                console.log('📦 localStorage에서 검색 데이터 로드');
-                // Check if Firebase has this data, if not, save to Firebase
-                const firebaseCheck = await loadFromFirebase(query);
-                if (!firebaseCheck) {
-                    console.log('☁️ Firebase에 데이터가 없어 자동으로 Firebase에 저장합니다.');
-                    const source = currentSearchMode === 'google' ? 'google' : 'serpapi';
-                    saveToFirebase(query, allVideos, allChannelMap, allItems, source);
-                }
-                renderPage(1);
-                return;
-            }
-
-            // 3. Check memory cache third
+            // 2. Check memory cache second
             const cacheKey = query.toLowerCase();
             if (searchCache[cacheKey]) {
                 console.log('📦 메모리 캐시에서 결과 로드');
@@ -1213,7 +1184,7 @@
                 allVideos = cachedData.videos;
                 allChannelMap = cachedData.channels;
                 allItems = cachedData.items;
-                // Save to localStorage for persistence
+                // Save to Firebase for persistence
                 saveSearchData(query, allVideos, allChannelMap, allItems);
                 renderPage(1);
                 return;
@@ -1329,7 +1300,7 @@
                             items: allItems
                         };
 
-                        // Save to localStorage for persistence
+                        // Save to Firebase for persistence
                         saveSearchData(query, allVideos, allChannelMap, allItems);
 
                         // Display first page (8 items - 4×2 grid)
@@ -1385,7 +1356,7 @@
                             items: allItems
                         };
 
-                        // Save to localStorage for persistence
+                        // Save to Firebase for persistence
                         saveSearchData(query, allVideos, allChannelMap, allItems);
 
                         // Display results
@@ -1511,84 +1482,32 @@
          // Set initial search mode to SerpAPI since Google API is exhausted
          updateSearchModeIndicator('serpapi');
 
-        // Add localStorage data management functions
+        // Firebase-only data management functions
         function clearSearchData() {
-            const keys = Object.keys(localStorage);
-            keys.forEach(key => {
-                if (key.startsWith('searchData_')) {
-                    localStorage.removeItem(key);
-                }
-            });
-            console.log('🗑️ 모든 검색 데이터가 삭제되었습니다.');
+            console.log('🗑️ Firebase 캐시는 서버에서 관리됩니다. 개별 삭제는 Firebase Console에서 가능합니다.');
+            alert('Firebase 캐시는 서버에서 관리됩니다.\n개별 삭제는 Firebase Console에서 가능합니다.');
         }
 
         function showStoredSearches() {
-            const keys = Object.keys(localStorage);
-            const searchKeys = keys.filter(key => key.startsWith('searchData_'));
-            console.log('📦 저장된 검색 데이터:', searchKeys.map(key => key.replace('searchData_', '')));
-            return searchKeys.map(key => key.replace('searchData_', ''));
+            console.log('📦 Firebase 캐시는 서버에서 관리됩니다.');
+            return [];
         }
 
         function showSearchSelection() {
-            const searches = showStoredSearches();
-            const searchSelection = document.getElementById('searchSelection');
-            const searchCheckboxes = document.getElementById('searchCheckboxes');
-            
-            if (searches.length === 0) {
-                alert('저장된 검색 데이터가 없습니다.');
-                return;
-            }
-            
-            // Create checkboxes for each search term
-            searchCheckboxes.innerHTML = '';
-            searches.forEach(searchTerm => {
-                const checkboxDiv = document.createElement('div');
-                checkboxDiv.style.marginBottom = '8px';
-                checkboxDiv.innerHTML = `
-                    <label style="display: flex; align-items: center; cursor: pointer;">
-                        <input type="checkbox" value="${searchTerm}" style="margin-right: 8px;">
-                        <span>${searchTerm}</span>
-                    </label>
-                `;
-                searchCheckboxes.appendChild(checkboxDiv);
-            });
-            
-            searchSelection.style.display = 'block';
+            alert('Firebase 캐시는 서버에서 관리됩니다.\n개별 삭제는 Firebase Console에서 가능합니다.');
         }
 
         function deleteSelectedSearches() {
-            const checkboxes = document.querySelectorAll('#searchCheckboxes input[type="checkbox"]:checked');
-            const selectedSearches = Array.from(checkboxes).map(cb => cb.value);
-            
-            if (selectedSearches.length === 0) {
-                alert('삭제할 검색어를 선택해주세요.');
-                return;
-            }
-            
-            if (confirm(`선택된 ${selectedSearches.length}개의 검색어를 삭제하시겠습니까?\n\n${selectedSearches.join(', ')}`)) {
-                selectedSearches.forEach(searchTerm => {
-                    localStorage.removeItem(`searchData_${searchTerm.toLowerCase()}`);
-                    console.log(`🗑️ 검색어 삭제됨: ${searchTerm}`);
-                });
-                
-                alert(`${selectedSearches.length}개의 검색어가 삭제되었습니다.`);
-                hideSearchSelection();
-                updateStoredSearchesDisplay();
-            }
+            alert('Firebase 캐시는 서버에서 관리됩니다.\n개별 삭제는 Firebase Console에서 가능합니다.');
         }
 
         function hideSearchSelection() {
-            document.getElementById('searchSelection').style.display = 'none';
+            // No-op for Firebase-only mode
         }
 
         function updateStoredSearchesDisplay() {
-            const searches = showStoredSearches();
             const display = document.getElementById('storedSearches');
-            if (searches.length > 0) {
-                display.innerHTML = `저장된 검색어: ${searches.join(', ')}`;
-            } else {
-                display.innerHTML = '저장된 검색 데이터가 없습니다.';
-            }
+            display.innerHTML = 'Firebase 서버 캐시 사용 중';
         }
 
         // Add clear data button functionality
@@ -2213,31 +2132,7 @@
                     return;
                 }
 
-                // 2. Check localStorage cache
-                console.log('💾 localStorage 캐시 확인 중...');
-                const localStartTime = performance.now();
-                const localCache = loadSearchData(query);
-                const localEndTime = performance.now();
-                console.log(`⏱️ localStorage 체크 시간: ${(localEndTime - localStartTime).toFixed(2)}ms`);
-                
-                if (localCache && localCache.videos && localCache.videos.length > 0) {
-                    console.log('✅ localStorage에서 데이터 로드:', localCache.videos.length, '개');
-                    allVideos = localCache.videos;
-                    allItems = localCache.items || [];
-                    allChannelMap = localCache.channels || {};
-                    
-                    // Sync to Firebase
-                    const saveStartTime = performance.now();
-                    await saveToFirebase(query, allVideos, allChannelMap, allItems, localCache.dataSource || 'unknown');
-                    const saveEndTime = performance.now();
-                    console.log(`⏱️ saveToFirebase 시간: ${(saveEndTime - saveStartTime).toFixed(2)}ms`);
-                    
-                    renderPage(1);
-                    window.isDefaultSearch = false;
-                    return;
-                }
-
-                // 3. No cache found - perform API search
+                // 2. No cache found - perform API search
                 console.log('🔍 캐시 없음 - API 호출 진행');
                 
                 // Get API keys
