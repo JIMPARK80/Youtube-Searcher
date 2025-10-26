@@ -1029,6 +1029,10 @@
             <button class="close-modal" id="closeModal">&times;</button>
             <h2>회원 가입</h2>
             <div class="form-group">
+                <label for="signupUsername">아이디</label>
+                <input type="text" id="signupUsername" placeholder="아이디를 입력하세요">
+            </div>
+            <div class="form-group">
                 <label for="signupId">이메일</label>
                 <input type="email" id="signupId" placeholder="이메일을 입력하세요">
             </div>
@@ -2769,6 +2773,7 @@
             function closeSignupModal() {
                 signupModal.classList.remove('active');
                 // Clear form fields
+                document.getElementById('signupUsername').value = '';
                 document.getElementById('signupId').value = '';
                 document.getElementById('signupPassword').value = '';
                 document.getElementById('signupPasswordConfirm').value = '';
@@ -2813,12 +2818,13 @@
             // Submit signup form
             if (submitSignup) {
                 submitSignup.addEventListener('click', async function() {
+                    const username = document.getElementById('signupUsername').value.trim();
                     const email = document.getElementById('signupId').value.trim();
                     const password = document.getElementById('signupPassword').value;
                     const passwordConfirm = document.getElementById('signupPasswordConfirm').value;
 
                     // Validation
-                    if (!email || !password || !passwordConfirm) {
+                    if (!username || !email || !password || !passwordConfirm) {
                         alert('모든 필드를 입력해주세요.');
                         return;
                     }
@@ -2837,6 +2843,20 @@
                     try {
                         const userCredential = await window.createUserWithEmailAndPassword(window.firebaseAuth, email, password);
                         console.log('✅ 회원가입 성공:', userCredential.user);
+                        
+                        // Save username to Firestore
+                        try {
+                            const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', userCredential.user.uid);
+                            await window.firebaseSetDoc(userDocRef, {
+                                username: username,
+                                email: email,
+                                createdAt: Date.now()
+                            }, { merge: true });
+                            console.log('✅ 사용자 정보 저장 완료:', username);
+                        } catch (dbError) {
+                            console.warn('⚠️ 사용자 정보 저장 실패:', dbError);
+                        }
+                        
                         alert('회원가입 성공! 환영합니다!');
                         closeSignupModal();
                     } catch (error) {
@@ -2906,7 +2926,7 @@
             }
             
             // Firebase Auth state observer
-            window.onAuthStateChanged(window.firebaseAuth, (user) => {
+            window.onAuthStateChanged(window.firebaseAuth, async (user) => {
                 const authSection = document.getElementById('authSection');
                 const loginBtn = document.getElementById('loginBtn');
                 const signupBtn = document.getElementById('signupBtn');
@@ -2916,11 +2936,27 @@
                 
                 if (user) {
                     // User is signed in
-                    console.log('✅ 사용자 로그인 중:', user.displayName);
                     loginBtn.style.display = 'none';
                     signupBtn.style.display = 'none';
                     userInfo.style.display = 'flex';
-                    userName.textContent = user.displayName || user.email;
+                    
+                    // Load username from Firestore
+                    try {
+                        const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', user.uid);
+                        const userDocSnap = await window.firebaseGetDoc(userDocRef);
+                        if (userDocSnap.exists()) {
+                            const userData = userDocSnap.data();
+                            const displayName = userData.username || user.displayName || user.email;
+                            userName.textContent = displayName;
+                            console.log('✅ 사용자 로그인 중:', displayName);
+                        } else {
+                            userName.textContent = user.displayName || user.email;
+                            console.log('✅ 사용자 로그인 중:', user.displayName || user.email);
+                        }
+                    } catch (error) {
+                        console.warn('⚠️ 사용자 정보 로드 실패:', error);
+                        userName.textContent = user.displayName || user.email;
+                    }
                     
                     // Set avatar with error handling
                     if (userAvatar) {
