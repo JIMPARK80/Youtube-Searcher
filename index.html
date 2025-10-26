@@ -1106,6 +1106,47 @@
                 
                 console.log(`⏰ 캐시 데이터 연령: ${ageHours.toFixed(1)}시간 (만료: ${isExpired ? '예' : '아니오'})`);
                 
+                // SerpAPI 모드에서 Google 데이터가 있으면 업데이트 안함
+                if (firebaseData.dataSource === 'google' && currentSearchMode === 'serpapi') {
+                    console.log('✅ SerpAPI 모드: Google 데이터 사용 (업데이트 안함)');
+                    
+                    // Update search mode indicator
+                    updateSearchModeIndicator('google');
+                    
+                    // Restore full structure from compressed Firebase data
+                    const restoredVideos = firebaseData.videos.map(v => ({
+                        id: v.id,
+                        snippet: {
+                            title: v.title,
+                            channelId: v.channelId,
+                            channelTitle: v.channelTitle,
+                            publishedAt: v.publishedAt,
+                            thumbnails: {
+                                maxres: { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` },
+                                standard: { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` },
+                                high: { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` },
+                                medium: { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` },
+                                default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
+                            }
+                        },
+                        statistics: {
+                            viewCount: v.viewCount,
+                            likeCount: v.likeCount
+                        },
+                        contentDetails: {
+                            duration: v.duration
+                        },
+                        serpData: v.serp
+                    }));
+                    
+                    allVideos = restoredVideos;
+                    allChannelMap = firebaseData.channels || {};
+                    allItems = firebaseData.items || [];
+                    
+                    renderPage(1);
+                    return;
+                }
+                
                 // If SerpAPI data exists, replace with Google API data
                 if (firebaseData.dataSource === 'serpapi') {
                     console.log('🔄 SerpAPI 데이터 발견 → Google API로 업데이트 진행');
