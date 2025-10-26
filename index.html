@@ -3171,6 +3171,9 @@
             
             // Function to perform default search without login requirement
             async function performDefaultSearch() {
+                const startTime = performance.now();
+                console.log('⏱️ performDefaultSearch 시작');
+                
                 const query = '영화';
                 const resultsDiv = document.getElementById('results');
                 resultsDiv.innerHTML = '<div class="loading">⏳ 검색 중...</div>';
@@ -3183,7 +3186,10 @@
 
                 // 1. Check Firebase cloud cache first
                 console.log('📥 Firebase 클라우드 캐시 확인 중...');
+                const firebaseStartTime = performance.now();
                 const cachedData = await loadFromFirebase(query);
+                const firebaseEndTime = performance.now();
+                console.log(`⏱️ Firebase 체크 시간: ${(firebaseEndTime - firebaseStartTime).toFixed(2)}ms`);
                 
                 if (cachedData && cachedData.videos && cachedData.videos.length > 0) {
                     console.log('✅ Firebase 클라우드 캐시에서 데이터 로드:', cachedData.videos.length, '개');
@@ -3197,13 +3203,22 @@
                         updateDataSourceIndicator(currentDataSource);
                     }
                     
+                    const renderStartTime = performance.now();
                     renderPage(1);
+                    const renderEndTime = performance.now();
+                    console.log(`⏱️ renderPage 실행 시간: ${(renderEndTime - renderStartTime).toFixed(2)}ms`);
+                    
+                    const totalTime = performance.now() - startTime;
+                    console.log(`✅ 전체 수행 시간: ${totalTime.toFixed(2)}ms`);
                     return;
                 }
 
                 // 2. Check localStorage cache
                 console.log('💾 localStorage 캐시 확인 중...');
+                const localStartTime = performance.now();
                 const localCache = loadSearchData(query);
+                const localEndTime = performance.now();
+                console.log(`⏱️ localStorage 체크 시간: ${(localEndTime - localStartTime).toFixed(2)}ms`);
                 
                 if (localCache && localCache.videos && localCache.videos.length > 0) {
                     console.log('✅ localStorage에서 데이터 로드:', localCache.videos.length, '개');
@@ -3212,7 +3227,10 @@
                     allChannelMap = localCache.channels || {};
                     
                     // Sync to Firebase
+                    const saveStartTime = performance.now();
                     await saveToFirebase(query, allVideos, allChannelMap, allItems, localCache.dataSource || 'unknown');
+                    const saveEndTime = performance.now();
+                    console.log(`⏱️ saveToFirebase 시간: ${(saveEndTime - saveStartTime).toFixed(2)}ms`);
                     
                     renderPage(1);
                     return;
@@ -3233,6 +3251,7 @@
                 try {
                     // Try Google API first
                     console.log('🌐 Google API 호출 중...');
+                    const apiStartTime = performance.now();
                     const response = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=100&q=${encodeURIComponent(query)}&key=${apiKeyValue}&type=video`);
                     
                     if (!response.ok) {
@@ -3243,16 +3262,24 @@
                     }
                     
                     const data = await response.json();
+                    const apiEndTime = performance.now();
+                    console.log(`⏱️ Google API 첫 번째 호출 시간: ${(apiEndTime - apiStartTime).toFixed(2)}ms`);
                     
                     if (data.items && data.items.length > 0) {
                         const videoIds = data.items.map(item => item.id.videoId).join(',');
                         
+                        const detailsStartTime = performance.now();
                         const detailsResponse = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${apiKeyValue}`);
                         const detailsData = await detailsResponse.json();
+                        const detailsEndTime = performance.now();
+                        console.log(`⏱️ Google API 두 번째 호출 시간: ${(detailsEndTime - detailsStartTime).toFixed(2)}ms`);
                         
                         const channelIds = [...new Set(detailsData.items.map(item => item.snippet.channelId))];
+                        const channelsStartTime = performance.now();
                         const channelsResponse = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${channelIds.join(',')}&key=${apiKeyValue}`);
                         const channelsData = await channelsResponse.json();
+                        const channelsEndTime = performance.now();
+                        console.log(`⏱️ Google API 세 번째 호출 시간: ${(channelsEndTime - channelsStartTime).toFixed(2)}ms`);
                         
                         allVideos = detailsData.items;
                         allChannelMap = {};
@@ -3295,6 +3322,9 @@
                     console.error('❌ Google API 오류:', error);
                     resultsDiv.innerHTML = '<div class="error">❌ 검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</div>';
                 }
+                
+                const totalTime = performance.now() - startTime;
+                console.log(`⏱️ 전체 performDefaultSearch 시간: ${totalTime.toFixed(2)}ms`);
             }
             
             console.log('✅ 모든 이벤트 리스너 등록 완료');
