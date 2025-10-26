@@ -1510,20 +1510,22 @@
                          fullChannelObject: v.channel
                      });
                     
-                    return {
-                        id: videoId,
-                        snippet: {
-                            title: v.title,
-                            channelTitle: v.channel?.name || 'Unknown Channel',
-                            channelId: v.channel?.id || '',
-                            publishedAt: publishedAtISO,
-                            description: v.description || '',
-                            thumbnails: {
-                                default: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/default.jpg` },
-                                medium: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` },
-                                high: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` }
-                            }
-                        },
+                                         return {
+                         id: videoId,
+                         snippet: {
+                             title: v.title,
+                             channelTitle: v.channel?.name || 'Unknown Channel',
+                             channelId: v.channel?.id || '',
+                             publishedAt: publishedAtISO,
+                             description: v.description || '',
+                             thumbnails: {
+                                 maxres: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` },
+                                 standard: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/sddefault.jpg` },
+                                 high: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` },
+                                 medium: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` },
+                                 default: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/default.jpg` }
+                             }
+                         },
                         statistics: {
                             viewCount: viewCount,
                             likeCount: likeCount,
