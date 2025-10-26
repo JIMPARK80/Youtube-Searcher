@@ -766,7 +766,7 @@
             try {
                 console.log('🔄 SerpAPI로 검색 중...');
                 // Get SerpAPI key from Firebase server first
-                const keys = getApiKeys();
+                const keys = await getApiKeys();
                 const serpApiKey = keys.serpapi;
                 if (!serpApiKey) {
                     throw new Error('SerpAPI 키가 설정되지 않았습니다. API 키 설정에서 SerpAPI 키를 입력해주세요.');
@@ -1145,7 +1145,7 @@
             }
             
             // Get API key from Firebase server first, then input field, then localStorage
-            const keys = getApiKeys();
+            const keys = await getApiKeys();
             const apiKeyValue = keys.youtube || document.getElementById('apiKey').value.trim();
             
             if (!apiKeyValue) {
