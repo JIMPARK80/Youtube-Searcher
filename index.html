@@ -1193,9 +1193,9 @@
     <!-- Firebase SDK -->
     <script type="module">
         // Import Firebase
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         
         // Firebase configuration
         const firebaseConfig = {
@@ -1227,6 +1227,7 @@
         window.firebaseDoc = doc;
         window.firebaseGetDoc = getDoc;
         window.firebaseSetDoc = setDoc;
+        window.firebaseOnSnapshot = onSnapshot;
         
         console.log('✅ Firebase initialized successfully');
         console.log('✅ Firebase Auth initialized:', auth);
@@ -3170,6 +3171,99 @@
                 }
             });
             
+            // Real-time listener for 'news' query in Firebase
+            let newsDataListener = null;
+            
+            // Function to setup real-time listener for 'news' query
+            function setupNewsDataListener() {
+                try {
+                    const docRef = window.firebaseDoc(window.firebaseDb, 'searchCache', toDocId('news'));
+                    
+                    // Setup real-time listener
+                    newsDataListener = window.firebaseOnSnapshot(docRef, (snapshot) => {
+                        if (snapshot.exists()) {
+                            const data = snapshot.data();
+                            console.log('📢 Firebase 데이터 변경 감지 (news):', data);
+                            
+                            // Update the display if current search is 'news'
+                            const currentQuery = document.getElementById('searchInput')?.value?.trim().toLowerCase();
+                            if (currentQuery === 'news' || currentQuery === '') {
+                                console.log('🔄 news 데이터 자동 업데이트...');
+                                
+                                // Restore full structure from compressed Firebase data
+                                const restoredVideos = data.videos.map(v => ({
+                                    id: v.id,
+                                    snippet: {
+                                        title: v.title,
+                                        channelId: v.channelId,
+                                        channelTitle: v.channelTitle,
+                                        publishedAt: v.publishedAt,
+                                        thumbnails: {
+                                            maxres: { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` },
+                                            standard: { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` },
+                                            high: { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` },
+                                            medium: { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` },
+                                            default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
+                                        },
+                                        description: '',
+                                        tags: []
+                                    },
+                                    statistics: {
+                                        viewCount: v.viewCount || '0',
+                                        likeCount: v.likeCount || '0',
+                                        commentCount: '0'
+                                    },
+                                    contentDetails: {
+                                        duration: v.duration || 'PT0S'
+                                    },
+                                    serpData: v.serp ? {
+                                        channelSubscribers: v.serp.subs,
+                                        views: v.serp.views,
+                                        link: v.serp.link,
+                                        extracted_date_from_description: v.serp.extracted_date
+                                    } : null
+                                }));
+                                
+                                // Restore items with full structure
+                                const restoredItems = data.items.map((x, idx) => ({
+                                    raw: restoredVideos[idx],
+                                    vpd: x.vpd,
+                                    vclass: x.vclass,
+                                    cband: x.cband,
+                                    subs: x.subs
+                                }));
+                                
+                                allVideos = restoredVideos;
+                                allChannelMap = data.channels || {};
+                                allItems = restoredItems;
+                                
+                                // Update UI
+                                renderPage(1);
+                                
+                                console.log('✅ news 데이터 자동 업데이트 완료');
+                            }
+                        } else {
+                            console.log('📢 Firebase 문서가 존재하지 않음 (news)');
+                        }
+                    }, (error) => {
+                        console.error('❌ Firebase 리스너 오류:', error);
+                    });
+                    
+                    console.log('👂 Firebase 실시간 리스너 등록 완료 (news)');
+                } catch (error) {
+                    console.error('❌ Firebase 리스너 설정 실패:', error);
+                }
+            }
+            
+            // Function to cleanup real-time listener
+            function cleanupNewsDataListener() {
+                if (newsDataListener) {
+                    newsDataListener();
+                    newsDataListener = null;
+                    console.log('🛑 Firebase 실시간 리스너 해제');
+                }
+            }
+            
             // Function to perform default search without login requirement
             async function performDefaultSearch() {
                 const startTime = performance.now();
@@ -3187,6 +3281,9 @@
                 allVideos = [];
                 allItems = [];
                 allChannelMap = {};
+                
+                // Setup real-time listener for 'news' data
+                setupNewsDataListener();
 
                 // 0. Check static news data file first (fastest)
                 console.log('📄 정적 뉴스 데이터 파일 로드 시도...');
