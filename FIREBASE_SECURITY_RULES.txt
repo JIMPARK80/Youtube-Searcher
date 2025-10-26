@@ -18,6 +18,11 @@ service cloud.firestore {
       allow write: if true; // Anyone can write to cache (public caching)
     }
     
+    // User-specific data (e.g., favorites, recent searches, filter presets, username)
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
     // Optional: Restrict to authenticated users only
     // Uncomment the following rules if you want authentication:
     /*
