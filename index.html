@@ -1068,9 +1068,13 @@
         async function search() {
             const query = document.getElementById('searchInput').value.trim();
             
+            // Reset isDefaultSearch flag at the start of any manual search
+            const wasDefaultSearch = window.isDefaultSearch;
+            window.isDefaultSearch = false;
+            
             // Check if user is logged in (only for manual searches, not default search or 'news' query)
             const isNewsQuery = query.toLowerCase() === 'news';
-            if (!window.currentUser && !window.isDefaultSearch && !isNewsQuery) {
+            if (!window.currentUser && !wasDefaultSearch && !isNewsQuery) {
                 // Show login modal
                 const loginModal = document.getElementById('loginModal');
                 if (loginModal) {
