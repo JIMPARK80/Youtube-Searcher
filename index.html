@@ -3159,10 +3159,10 @@
                     userInfo.style.display = 'none';
                     window.currentUser = null;
                     
-                    // Automatically search for '뉴스' (news) when user is not logged in
-                    console.log('📰 로그인되지 않은 사용자에게 기본 검색 결과 표시 (뉴스)');
+                    // Automatically search for 'news' when user is not logged in
+                    console.log('📰 로그인되지 않은 사용자에게 기본 검색 결과 표시 (news)');
                     setTimeout(() => {
-                        document.getElementById('searchInput').value = '뉴스';
+                        document.getElementById('searchInput').value = 'news';
                         // Trigger the search function without login check
                         performDefaultSearch();
                     }, 500);
@@ -3177,7 +3177,7 @@
                 // Set flag to indicate this is a default search
                 window.isDefaultSearch = true;
                 
-                const query = '뉴스';
+                const query = 'news';
                 const resultsDiv = document.getElementById('results');
                 resultsDiv.innerHTML = '<div class="loading">⏳ 검색 중...</div>';
                 
