@@ -1121,8 +1121,11 @@
                 
                 console.log(`⏰ 캐시 데이터 연령: ${ageHours.toFixed(1)}시간 (만료: ${isExpired ? '예' : '아니오'})`);
                 
-                // If not expired OR if expired and not Google API mode, use cached data
-                if (!isExpired || (isExpired && currentSearchMode !== 'google')) {
+                // If SerpAPI data exists, replace with Google API data
+                if (firebaseData.dataSource === 'serpapi') {
+                    console.log('🔄 SerpAPI 데이터 발견 → Google API로 업데이트 진행');
+                    // Skip cache and continue to API call
+                } else if (!isExpired || (isExpired && currentSearchMode !== 'google')) {
                     console.log('✅ Firebase 캐시 사용 (만료 전 또는 SerpAPI 모드)');
                     
                     // Update search mode indicator based on data source
