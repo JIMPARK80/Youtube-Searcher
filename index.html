@@ -3158,8 +3158,144 @@
                     signupBtn.style.display = 'inline-block';
                     userInfo.style.display = 'none';
                     window.currentUser = null;
+                    
+                    // Automatically search for '영화' (movie) when user is not logged in
+                    console.log('🎬 로그인되지 않은 사용자에게 기본 검색 결과 표시 (영화)');
+                    setTimeout(() => {
+                        document.getElementById('searchInput').value = '영화';
+                        // Trigger the search function without login check
+                        performDefaultSearch();
+                    }, 500);
                 }
             });
+            
+            // Function to perform default search without login requirement
+            async function performDefaultSearch() {
+                const query = '영화';
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = '<div class="loading">⏳ 검색 중...</div>';
+                
+                // Reset pagination for new search
+                currentPage = 1;
+                allVideos = [];
+                allItems = [];
+                allChannelMap = {};
+
+                // 1. Check Firebase cloud cache first
+                console.log('📥 Firebase 클라우드 캐시 확인 중...');
+                const cachedData = await loadFromFirebase(query);
+                
+                if (cachedData && cachedData.videos && cachedData.videos.length > 0) {
+                    console.log('✅ Firebase 클라우드 캐시에서 데이터 로드:', cachedData.videos.length, '개');
+                    allVideos = cachedData.videos;
+                    allItems = cachedData.items || [];
+                    allChannelMap = cachedData.channels || {};
+                    
+                    // Update data source indicator
+                    if (cachedData.dataSource) {
+                        currentDataSource = cachedData.dataSource;
+                        updateDataSourceIndicator(currentDataSource);
+                    }
+                    
+                    renderPage(1);
+                    return;
+                }
+
+                // 2. Check localStorage cache
+                console.log('💾 localStorage 캐시 확인 중...');
+                const localCache = loadSearchData(query);
+                
+                if (localCache && localCache.videos && localCache.videos.length > 0) {
+                    console.log('✅ localStorage에서 데이터 로드:', localCache.videos.length, '개');
+                    allVideos = localCache.videos;
+                    allItems = localCache.items || [];
+                    allChannelMap = localCache.channels || {};
+                    
+                    // Sync to Firebase
+                    await saveToFirebase(query, allVideos, allChannelMap, allItems, localCache.dataSource || 'unknown');
+                    
+                    renderPage(1);
+                    return;
+                }
+
+                // 3. No cache found - perform API search
+                console.log('🔍 캐시 없음 - API 호출 진행');
+                
+                // Get API keys
+                const keys = getApiKeys();
+                const apiKeyValue = keys.youtube;
+                
+                if (!apiKeyValue) {
+                    resultsDiv.innerHTML = '<div class="error">❌ API 키가 설정되지 않았습니다.</div>';
+                    return;
+                }
+
+                try {
+                    // Try Google API first
+                    console.log('🌐 Google API 호출 중...');
+                    const response = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=100&q=${encodeURIComponent(query)}&key=${apiKeyValue}&type=video`);
+                    
+                    if (!response.ok) {
+                        if (response.status === 403) {
+                            throw new Error('API_QUOTA_EXCEEDED');
+                        }
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.items && data.items.length > 0) {
+                        const videoIds = data.items.map(item => item.id.videoId).join(',');
+                        
+                        const detailsResponse = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${apiKeyValue}`);
+                        const detailsData = await detailsResponse.json();
+                        
+                        const channelIds = [...new Set(detailsData.items.map(item => item.snippet.channelId))];
+                        const channelsResponse = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${channelIds.join(',')}&key=${apiKeyValue}`);
+                        const channelsData = await channelsResponse.json();
+                        
+                        allVideos = detailsData.items;
+                        allChannelMap = {};
+                        channelsData.items.forEach(channel => {
+                            allChannelMap[channel.id] = channel;
+                        });
+                        
+                        // Build items with custom metrics
+                        allItems = allVideos.map((video, index) => {
+                            const channel = allChannelMap[video.snippet.channelId];
+                            const ageDays = Math.max(1, Math.floor((Date.now() - new Date(video.snippet.publishedAt).getTime()) / (1000 * 60 * 60 * 24)));
+                            const viewCount = parseInt(video.statistics?.viewCount || 0);
+                            const vpd = viewCount / ageDays;
+                            const subs = parseInt(channel?.statistics?.subscriberCount || 0);
+                            
+                            let vclass, cband;
+                            if (vpd >= 10000) vclass = '📈 뜨거움';
+                            else if (vpd >= 1000) vclass = '📊 인기';
+                            else if (vpd >= 100) vclass = '📌 보통';
+                            else vclass = '📉 소수';
+                            
+                            if (subs >= 1000000) cband = '🔴 대형';
+                            else if (subs >= 100000) cband = '🟡 중형';
+                            else cband = '🟢 소형';
+                            
+                            return { vpd, vclass, cband, subs, index: index };
+                        });
+                        
+                        // Save to Firebase
+                        await saveToFirebase(query, allVideos, allChannelMap, allItems, 'google');
+                        
+                        currentDataSource = 'google';
+                        updateDataSourceIndicator('google');
+                        
+                        renderPage(1);
+                    } else {
+                        resultsDiv.innerHTML = '<div class="error">❌ 검색 결과가 없습니다.</div>';
+                    }
+                } catch (error) {
+                    console.error('❌ Google API 오류:', error);
+                    resultsDiv.innerHTML = '<div class="error">❌ 검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</div>';
+                }
+            }
             
             console.log('✅ 모든 이벤트 리스너 등록 완료');
         });
