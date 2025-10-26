@@ -185,14 +185,6 @@
         <div id="results"></div>
     </div>
 
-    <!-- API Usage Tracker -->
-    <div class="api-usage" id="apiUsage">
-        <div>📊 API 사용량</div>
-        <div class="usage-bar">
-            <div class="usage-fill" id="usageFill"></div>
-        </div>
-        <div class="usage-text" id="usageText">0 / 10,000 units</div>
-    </div>
 
     <!-- Firebase SDK -->
     <script type="module" src="js/firebase-config.js"></script>
@@ -448,56 +440,6 @@
             }
         }
 
-        // API Usage tracking functions (memory only)
-        function loadApiUsage() {
-            // Initialize API usage in memory only
-            apiUsage = { search: 0, videos: 0, channels: 0, total: 0, serpapi: 0 };
-            
-            // Force Google API to show as exhausted
-            apiUsage.total = 10000;
-            apiUsage.search = 5000; // Approximate distribution
-            apiUsage.videos = 3000;
-            apiUsage.channels = 2000;
-            
-            updateApiUsageDisplay();
-        }
-
-        function saveApiUsage() {
-            // No-op: API usage is tracked in memory only
-            console.log('📊 API 사용량 (메모리):', apiUsage);
-        }
-
-        function trackApiCall(type, units = 1) {
-            apiUsage[type] += units;
-            if (type !== 'serpapi') {
-                apiUsage.total += units;
-            }
-            saveApiUsage();
-            updateApiUsageDisplay();
-        }
-
-        function updateApiUsageDisplay() {
-            const usageFill = document.getElementById('usageFill');
-            const usageText = document.getElementById('usageText');
-            
-            // Google API is exhausted - show 100% usage
-            const percentage = 100;
-            usageFill.style.width = `${percentage}%`;
-            usageFill.style.background = 'linear-gradient(90deg, #ff6b6b 0%, #ee5a24 100%)'; // Red gradient for exhausted
-            
-            const googleStatus = '🔴 한도초과';
-            
-            // Show both Google API and SerpAPI usage
-            const serpapiStatus = apiUsage.serpapi >= 250 ? '🔴 한도초과' : 
-                                 apiUsage.serpapi >= 200 ? '🟠 위험' : 
-                                 apiUsage.serpapi >= 100 ? '🟡 주의' : '🟢 안전';
-            
-            usageText.textContent = `Google: 10,000/10K ${googleStatus} | SerpAPI: ${apiUsage.serpapi}/250 ${serpapiStatus}`;
-            
-            // Show breakdown on hover
-            const apiUsageDiv = document.getElementById('apiUsage');
-            apiUsageDiv.title = `Google API: 한도 초과 (10,000/10,000 units)\n검색: ${apiUsage.search} units\n비디오: ${apiUsage.videos} units\n채널: ${apiUsage.channels} units\n\nSerpAPI: ${apiUsage.serpapi}/250 calls`;
-        }
 
         // Global variables for pagination
         let allVideos = [];      // filled after API fetch
@@ -507,13 +449,6 @@
         let allChannelMap = {};
         let searchCache = {};   // Cache search results by query
         let currentSearchQuery = ''; // Track current search query
-        let apiUsage = {
-            search: 0,      // 100 units per call
-            videos: 0,      // 1 unit per call
-            channels: 0,    // 1 unit per call
-            total: 0,       // Total units used today
-            serpapi: 0      // SerpAPI calls (250 free/month)
-        };
         
         // SerpAPI configuration
         let currentSearchMode = 'google'; // 'google' or 'serpapi'
@@ -1620,9 +1555,6 @@
 
         
 
-                 // Load API usage on page load
-         loadApiUsage();
-         
          // Set initial search mode to SerpAPI since Google API is exhausted
          // Defer this call until DOM is fully loaded to avoid temporal dead zone issues
          window.addEventListener('DOMContentLoaded', function() {
