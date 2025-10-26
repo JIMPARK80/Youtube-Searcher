@@ -1323,7 +1323,7 @@
         }
 
         // Save search data to localStorage
-        function saveSearchData(query, videos, channels, items) {
+        function saveSearchData(query, videos, channels, items, dataSource = null) {
             const cacheKey = query.toLowerCase();
             const data = {
                 videos: videos,
@@ -1335,7 +1335,9 @@
             console.log(`💾 로컬 저장: ${query} (${items.length}개 항목)`);
             
             // Also save to Firebase cloud cache
-            saveToFirebase(query, videos, channels, items);
+            // dataSource is inferred from current search mode if not provided
+            const source = dataSource || (currentSearchMode === 'google' ? 'google' : 'serpapi');
+            saveToFirebase(query, videos, channels, items, source);
         }
         
         // Load from Firebase cloud cache
@@ -1375,7 +1377,7 @@
         }
         
         // Save to Firebase cloud cache
-        async function saveToFirebase(query, videos, channels, items) {
+        async function saveToFirebase(query, videos, channels, items, dataSource = 'google') {
             try {
                 if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseSetDoc) {
                     console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
@@ -1389,11 +1391,12 @@
                     channels: channels,
                     items: items,
                     timestamp: Date.now(),
-                    cacheVersion: '1.0'
+                    cacheVersion: '1.0',
+                    dataSource: dataSource  // 'google' or 'serpapi'
                 };
                 
                 await window.firebaseSetDoc(cacheRef, data);
-                console.log(`☁️ Firebase 캐시 저장 완료: ${query}`);
+                console.log(`☁️ Firebase 캐시 저장 완료: ${query} (${dataSource})`);
             } catch (error) {
                 console.error('❌ Firebase 캐시 저장 실패:', error);
             }
@@ -1873,12 +1876,18 @@
             // 1. Check Firebase cloud cache first
             const firebaseData = await loadFromFirebase(query);
             if (firebaseData) {
-                console.log('☁️ Firebase 캐시에서 로드');
-                allVideos = firebaseData.videos;
-                allChannelMap = firebaseData.channels;
-                allItems = firebaseData.items;
-                renderPage(1);
-                return;
+                // Google API 모드인데 SerpAPI 데이터가 있으면 업데이트
+                if (currentSearchMode === 'google' && firebaseData.dataSource === 'serpapi') {
+                    console.log('🔄 Google API 모드: SerpAPI 데이터 발견 → 업데이트 진행');
+                    // Firebase 캐시 무시하고 API 호출 계속 진행
+                } else {
+                    console.log('☁️ Firebase 캐시에서 로드');
+                    allVideos = firebaseData.videos;
+                    allChannelMap = firebaseData.channels;
+                    allItems = firebaseData.items;
+                    renderPage(1);
+                    return;
+                }
             }
             
             // 2. Check localStorage second
