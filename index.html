@@ -1525,21 +1525,22 @@
             pageItems.forEach(item => {
                 const video = item.raw;
                 const channel = allChannelMap[video.snippet.channelId];
-                // Try to get highest quality thumbnail available with fallback
+                // Try to get highest quality thumbnail available with multiple fallbacks
                 let thumbnail = video.snippet.thumbnails?.maxres || 
                                video.snippet.thumbnails?.standard || 
                                video.snippet.thumbnails?.high || 
                                video.snippet.thumbnails?.medium || 
                                video.snippet.thumbnails?.default;
                 
+                // Generate thumbnail URL with multiple fallback options
                 let thumbnailUrl = '';
                 if (thumbnail && thumbnail.url) {
                     thumbnailUrl = thumbnail.url;
                 } else if (video.id) {
-                    // Fallback to default YouTube thumbnail
-                    thumbnailUrl = `https://img.youtube.com/vi/${video.id}/default.jpg`;
+                    // Try different YouTube thumbnail qualities in order of preference
+                    thumbnailUrl = `https://img.youtube.com/vi/${video.id}/maxresdefault.jpg`;
                 } else {
-                    // Ultimate fallback
+                    // Ultimate fallback - placeholder image
                     thumbnailUrl = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzMzMzMzMyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuydtOuvuOyngCDsgqTtgqQ8L3RleHQ+PC9zdmc+';
                 }
                 
@@ -1550,7 +1551,10 @@
                 html += `
                     <div class="video-card" onclick="window.open('https://www.youtube.com/watch?v=${video.id}', '_blank')">
                         <div class="thumbnail-container">
-                            <img src="${thumbnailUrl}" alt="${video.snippet.title}" onerror="this.src='https://img.youtube.com/vi/${video.id}/default.jpg'">
+                            <img src="${thumbnailUrl}" 
+                                 alt="${video.snippet.title}" 
+                                 onerror="handleThumbnailError(this, '${video.id}')"
+                                 loading="lazy">
                             ${video.contentDetails?.duration && video.contentDetails.duration !== 'PT0S' ? `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
                             <div class="velocity-badge">${formatVelocity(item.vpd)}</div>
                             ${isSerpAPI ? '<div class="serp-badge">🔵 SerpAPI</div>' : ''}
@@ -1624,6 +1628,39 @@
          window.addEventListener('DOMContentLoaded', function() {
              updateSearchModeIndicator('serpapi');
          });
+
+        // Thumbnail error handling function
+        function handleThumbnailError(img, videoId) {
+            console.log(`🖼️ 썸네일 로드 실패, 대체 이미지 시도: ${videoId}`);
+            
+            // Try different YouTube thumbnail qualities in order
+            const fallbackUrls = [
+                `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+                `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                `https://img.youtube.com/vi/${videoId}/default.jpg`,
+                `https://img.youtube.com/vi/${videoId}/0.jpg`
+            ];
+            
+            // Check if we've already tried all fallbacks
+            if (!img.dataset.fallbackIndex) {
+                img.dataset.fallbackIndex = '0';
+            } else {
+                img.dataset.fallbackIndex = (parseInt(img.dataset.fallbackIndex) + 1).toString();
+            }
+            
+            const currentIndex = parseInt(img.dataset.fallbackIndex);
+            
+            if (currentIndex < fallbackUrls.length) {
+                // Try next fallback URL
+                img.src = fallbackUrls[currentIndex];
+            } else {
+                // All fallbacks failed, use placeholder
+                img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzMzMzMzMyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuydtOuvuOyngCDsgqTtgqQ8L3RleHQ+PC9zdmc+';
+                img.style.border = '2px dashed #ccc';
+                img.title = '썸네일을 불러올 수 없습니다';
+                console.log(`❌ 모든 썸네일 대체 시도 실패: ${videoId}`);
+            }
+        }
 
         // User-specific search keyword management
         async function saveUserLastSearchKeyword(userId, keyword) {
