@@ -684,7 +684,8 @@
             if (viewCountFilter && viewCountFilter !== 'all') {
                 const minViews = parseInt(viewCountFilter);
                 items = items.filter(item => {
-                    const views = parseInt(item.raw.statistics?.viewCount || 0);
+                    if (!item?.raw?.statistics) return false;
+                    const views = parseInt(item.raw.statistics.viewCount || 0);
                     return views >= minViews;
                 });
             }
@@ -716,7 +717,8 @@
             if (uploadDateFilter && uploadDateFilter !== 'all') {
                 const cutoffDate = getPublishedAfterDate(uploadDateFilter);
                 items = items.filter(item => {
-                    const publishedAt = item.raw.snippet?.publishedAt;
+                    if (!item?.raw?.snippet) return false;
+                    const publishedAt = item.raw.snippet.publishedAt;
                     if (!publishedAt) return false;
                     return publishedAt >= cutoffDate;
                 });
@@ -731,7 +733,8 @@
                     const minSeconds = parseInt(minStr);
                     const maxSeconds = parseInt(maxStr);
                     items = items.filter(item => {
-                        const duration = item.raw.contentDetails?.duration || '';
+                        if (!item?.raw?.contentDetails) return false;
+                        const duration = item.raw.contentDetails.duration || '';
                         const seconds = parseDurationToSeconds(duration);
                         return seconds >= minSeconds && seconds <= maxSeconds;
                     });
@@ -739,7 +742,8 @@
                     // Minimum filter (e.g., "3600" for 1hour+)
                     const minSeconds = parseInt(durationFilter);
                     items = items.filter(item => {
-                        const duration = item.raw.contentDetails?.duration || '';
+                        if (!item?.raw?.contentDetails) return false;
+                        const duration = item.raw.contentDetails.duration || '';
                         const seconds = parseDurationToSeconds(duration);
                         return seconds >= minSeconds;
                     });
@@ -1201,7 +1205,16 @@
                     
                     allVideos = restoredVideos;
                     allChannelMap = firebaseData.channels || {};
-                    allItems = firebaseData.items || [];
+                    
+                    // Map items by video id to ensure proper matching
+                    const videoById = new Map(restoredVideos.map(v => [v.id, v]));
+                    allItems = (firebaseData.items || []).map(item => ({
+                        raw: videoById.get(item.id), // Use id match instead of index
+                        vpd: item.vpd,
+                        vclass: item.vclass,
+                        cband: item.cband,
+                        subs: item.subs
+                    })).filter(item => item.raw); // Remove items without matching video
                     
                     renderPage(1);
                     return;
@@ -1488,7 +1501,8 @@
         // Render current page to #results
         function renderPage(page) {
             // Apply filters first
-            const filteredItems = applyAllFilters();
+            const filteredItems = applyAllFilters()
+                .filter(item => item && item.raw && item.raw.snippet); // Guard against undefined items
             
             currentPage = Math.min(Math.max(1, page), Math.ceil(filteredItems.length / pageSize));
             const start = (currentPage - 1) * pageSize;
