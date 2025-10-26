@@ -1638,22 +1638,34 @@
         
         async function loadUserLastSearchKeyword(userId) {
             try {
+                console.log('🔍 사용자 마지막 검색 키워드 로드 시도:', userId);
+                
                 if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseGetDoc) {
                     console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
                     return null;
                 }
                 
                 const userRef = window.firebaseDoc(window.firebaseDb, 'users', userId);
+                console.log('📄 Firebase 문서 참조 생성:', userRef);
+                
                 const userSnap = await window.firebaseGetDoc(userRef);
+                console.log('📊 Firebase 문서 스냅샷:', userSnap.exists() ? '존재함' : '존재하지 않음');
                 
                 if (userSnap.exists()) {
                     const userData = userSnap.data();
+                    console.log('👤 사용자 데이터:', userData);
+                    
                     const lastSearchKeyword = userData.lastSearchKeyword;
+                    console.log('🔑 마지막 검색 키워드 필드:', lastSearchKeyword);
                     
                     if (lastSearchKeyword) {
                         console.log(`📖 사용자 마지막 검색 키워드 로드: "${lastSearchKeyword}"`);
                         return lastSearchKeyword;
+                    } else {
+                        console.log('❌ 마지막 검색 키워드가 사용자 데이터에 없음');
                     }
+                } else {
+                    console.log('❌ 사용자 문서가 Firebase에 존재하지 않음');
                 }
                 
                 return null;
@@ -2169,7 +2181,11 @@
                     console.log('📰 로그인된 사용자 - 마지막 검색 키워드 복원 중...');
                     setTimeout(async () => {
                         const lastSearchKeyword = await loadUserLastSearchKeyword(user.uid);
+                        console.log('🔍 로드된 마지막 검색 키워드:', lastSearchKeyword);
+                        
                         const searchKeyword = lastSearchKeyword || 'news';
+                        console.log('🎯 사용할 검색 키워드:', searchKeyword);
+                        
                         document.getElementById('searchInput').value = searchKeyword;
                         
                         if (lastSearchKeyword) {
