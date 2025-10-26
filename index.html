@@ -1009,8 +1009,8 @@
             <button class="close-modal" id="closeModal">&times;</button>
             <h2>회원 가입</h2>
             <div class="form-group">
-                <label for="signupId">아이디</label>
-                <input type="text" id="signupId" placeholder="아이디를 입력하세요">
+                <label for="signupId">이메일</label>
+                <input type="email" id="signupId" placeholder="이메일을 입력하세요">
             </div>
             <div class="form-group">
                 <label for="signupPassword">비밀번호</label>
@@ -1114,6 +1114,7 @@
         // Import Firebase
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         
         // Firebase configuration
         const firebaseConfig = {
@@ -1128,6 +1129,17 @@
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app);
+        const googleProvider = new GoogleAuthProvider();
+        
+        // Make Firebase Auth functions available globally
+        window.firebaseAuth = auth;
+        window.signInWithPopup = signInWithPopup;
+        window.signOut = signOut;
+        window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.googleProvider = googleProvider;
         
         // Make Firebase functions available globally
         window.firebaseDb = db;
@@ -2738,13 +2750,13 @@
 
             // Submit signup form
             if (submitSignup) {
-                submitSignup.addEventListener('click', function() {
-                    const id = document.getElementById('signupId').value.trim();
+                submitSignup.addEventListener('click', async function() {
+                    const email = document.getElementById('signupId').value.trim();
                     const password = document.getElementById('signupPassword').value;
                     const passwordConfirm = document.getElementById('signupPasswordConfirm').value;
 
                     // Validation
-                    if (!id || !password || !passwordConfirm) {
+                    if (!email || !password || !passwordConfirm) {
                         alert('모든 필드를 입력해주세요.');
                         return;
                     }
@@ -2759,20 +2771,86 @@
                         return;
                     }
 
-                    // TODO: Implement actual signup logic here (Firebase Auth, etc.)
-                    console.log('가입 정보:', { id, password });
-                    alert('가입 기능은 구현 중입니다. (Firebase Auth 연동 필요)');
-                    closeSignupModal();
+                    // Firebase Email/Password Signup
+                    try {
+                        const userCredential = await window.createUserWithEmailAndPassword(window.firebaseAuth, email, password);
+                        console.log('✅ 회원가입 성공:', userCredential.user);
+                        alert('회원가입 성공! 환영합니다!');
+                        closeSignupModal();
+                    } catch (error) {
+                        console.error('❌ 회원가입 실패:', error);
+                        let errorMessage = '회원가입 실패: ';
+                        if (error.code === 'auth/email-already-in-use') {
+                            errorMessage += '이미 사용 중인 이메일입니다.';
+                        } else if (error.code === 'auth/weak-password') {
+                            errorMessage += '비밀번호가 너무 약합니다.';
+                        } else if (error.code === 'auth/invalid-email') {
+                            errorMessage += '유효하지 않은 이메일 주소입니다.';
+                        } else {
+                            errorMessage += error.message;
+                        }
+                        alert(errorMessage);
+                    }
                 });
             }
 
             // Login button handler
             if (loginBtn) {
-                loginBtn.addEventListener('click', function() {
+                loginBtn.addEventListener('click', async function() {
                     console.log('로그인 버튼 클릭됨');
-                    alert('로그인 기능은 구현 중입니다. (Firebase Auth 연동 필요)');
+                    try {
+                        // Google 로그인
+                        const result = await window.signInWithPopup(window.firebaseAuth, window.googleProvider);
+                        console.log('✅ Google 로그인 성공:', result.user);
+                        alert(`로그인 성공! 환영합니다, ${result.user.displayName}님!`);
+                    } catch (error) {
+                        console.error('❌ 로그인 실패:', error);
+                        alert(`로그인 실패: ${error.message}`);
+                    }
                 });
             }
+            
+            // Logout button handler
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', async function() {
+                    try {
+                        await window.signOut(window.firebaseAuth);
+                        console.log('✅ 로그아웃 성공');
+                        alert('로그아웃되었습니다.');
+                    } catch (error) {
+                        console.error('❌ 로그아웃 실패:', error);
+                    }
+                });
+            }
+            
+            // Firebase Auth state observer
+            window.onAuthStateChanged(window.firebaseAuth, (user) => {
+                const authSection = document.getElementById('authSection');
+                const loginBtn = document.getElementById('loginBtn');
+                const signupBtn = document.getElementById('signupBtn');
+                const userInfo = document.getElementById('userInfo');
+                const userName = document.getElementById('userName');
+                const userAvatar = document.getElementById('userAvatar');
+                
+                if (user) {
+                    // User is signed in
+                    console.log('✅ 사용자 로그인 중:', user.displayName);
+                    loginBtn.style.display = 'none';
+                    signupBtn.style.display = 'none';
+                    userInfo.style.display = 'flex';
+                    userName.textContent = user.displayName || user.email;
+                    userAvatar.src = user.photoURL || 'https://via.placeholder.com/32';
+                    window.currentUser = user;
+                } else {
+                    // User is signed out
+                    console.log('🔓 사용자 로그아웃됨');
+                    loginBtn.style.display = 'inline-block';
+                    signupBtn.style.display = 'inline-block';
+                    userInfo.style.display = 'none';
+                    window.currentUser = null;
+                }
+            });
             
             console.log('✅ 모든 이벤트 리스너 등록 완료');
         });
