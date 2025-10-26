@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JIm's YouTube 검색기</title>
+    <title>Jim's YouTube 검색기</title>
     <style>
         * {
             margin: 0;
@@ -2008,6 +2008,13 @@
             // 2. Check localStorage second
             if (loadSearchData(query)) {
                 console.log('📦 localStorage에서 검색 데이터 로드');
+                // Check if Firebase has this data, if not, save to Firebase
+                const firebaseCheck = await loadFromFirebase(query);
+                if (!firebaseCheck) {
+                    console.log('☁️ Firebase에 데이터가 없어 자동으로 Firebase에 저장합니다.');
+                    const source = currentSearchMode === 'google' ? 'google' : 'serpapi';
+                    saveToFirebase(query, allVideos, allChannelMap, allItems, source);
+                }
                 renderPage(1);
                 return;
             }
