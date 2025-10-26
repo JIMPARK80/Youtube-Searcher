@@ -139,13 +139,12 @@
                 <!-- Subscriber Count Filter -->
                 <div class="filter-group sub-filter">
                     <label>구독자 필터:</label>
-                    <div class="range-inputs">
-                        <input type="number" id="subMin" placeholder="최소" min="0" step="1000" class="range-input">
-                        <span class="range-separator">~</span>
-                        <input type="number" id="subMax" placeholder="최대" min="0" step="1000" class="range-input">
-                        <button type="button" id="subFilterApply" class="range-apply-btn">적용</button>
-                        <button type="button" id="subFilterClear" class="range-clear-btn">초기화</button>
-                    </div>
+                    <label><input type="radio" name="subCountFilter" value="all" checked> 전체</label>
+                    <label><input type="radio" name="subCountFilter" value="0-1000"> 1-1K</label>
+                    <label><input type="radio" name="subCountFilter" value="1000-10000"> 1K-10K</label>
+                    <label><input type="radio" name="subCountFilter" value="10000-100000"> 10K-100K</label>
+                    <label><input type="radio" name="subCountFilter" value="100000-1000000"> 100K-1M</label>
+                    <label><input type="radio" name="subCountFilter" value="1000000"> 1M+</label>
                 </div>
                  
                  <!-- Upload Date Filter -->
@@ -681,15 +680,25 @@
             }
             
             // Apply subscriber count filter (range-based)
-            const subMin = document.getElementById('subMin').value;
-            const subMax = document.getElementById('subMax').value;
-            if (subMin || subMax) {
-                const minSubs = subMin ? parseInt(subMin) : 0;
-                const maxSubs = subMax ? parseInt(subMax) : Infinity;
-                items = items.filter(item => {
-                    const subs = parseInt(item.subs || 0);
-                    return subs >= minSubs && subs <= maxSubs;
-                });
+            const subCountFilter = document.querySelector('input[name="subCountFilter"]:checked')?.value;
+            if (subCountFilter && subCountFilter !== 'all') {
+                if (subCountFilter.includes('-')) {
+                    // Range filter (e.g., "1000-10000")
+                    const [minStr, maxStr] = subCountFilter.split('-');
+                    const minSubs = parseInt(minStr);
+                    const maxSubs = parseInt(maxStr);
+                    items = items.filter(item => {
+                        const subs = parseInt(item.subs || 0);
+                        return subs >= minSubs && subs <= maxSubs;
+                    });
+                } else {
+                    // Minimum filter (e.g., "1000000" for 1M+)
+                    const minSubs = parseInt(subCountFilter);
+                    items = items.filter(item => {
+                        const subs = parseInt(item.subs || 0);
+                        return subs >= minSubs;
+                    });
+                }
             }
             
             // Apply upload date filter
@@ -1578,16 +1587,14 @@
                 const velocityFilterAll = document.querySelector('input[name="velocityFilter"][value="all"]');
                 const channelSizeAll = document.querySelector('input[name="channelSize"][value="all"]');
                 const sortBySelect = document.getElementById('sortBy');
-                
-                // Clear subscriber range inputs
-                document.getElementById('subMin').value = '';
-                document.getElementById('subMax').value = '';
+                const subCountAll = document.querySelector('input[name="subCountFilter"][value="all"]');
                 
                 if (uploadDateAll) uploadDateAll.checked = true;
                 // videoDuration filter removed
                 if (viewCountAll) viewCountAll.checked = true;
                 if (velocityFilterAll) velocityFilterAll.checked = true;
                 if (channelSizeAll) channelSizeAll.checked = true;
+                if (subCountAll) subCountAll.checked = true;
                 if (sortBySelect) sortBySelect.value = 'velocity';
                 
                 console.log('✅ 모든 필터 리셋 완료');
@@ -1680,19 +1687,13 @@
                 });
             });
 
-            // Subscriber range filter event listeners
-            document.getElementById('subFilterApply').addEventListener('click', () => {
-                const subMin = document.getElementById('subMin').value;
-                const subMax = document.getElementById('subMax').value;
-                console.log('🔍 구독자 범위 필터 적용:', `${subMin || '0'} ~ ${subMax || '∞'}`);
-                renderPage(1); // Reset to page 1 when filter changes
-            });
-
-            document.getElementById('subFilterClear').addEventListener('click', () => {
-                document.getElementById('subMin').value = '';
-                document.getElementById('subMax').value = '';
-                console.log('🔍 구독자 필터 초기화');
-                renderPage(1); // Reset to page 1 when filter changes
+            // Subscriber filter change event listeners
+            const subCountFilters = document.querySelectorAll('input[name="subCountFilter"]');
+            subCountFilters.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    console.log('🔍 구독자 필터 변경:', radio.value);
+                    renderPage(1); // Reset to page 1 when filter changes
+                });
             });
 
             // Upload date filter change event listeners
