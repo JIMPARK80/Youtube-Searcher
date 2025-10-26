@@ -873,6 +873,33 @@
         <div class="usage-text" id="usageText">0 / 10,000 units</div>
     </div>
 
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Import Firebase
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        
+        // Firebase configuration - replace with your config
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        
+        // Make Firebase functions available globally
+        window.firebaseDb = db;
+        window.firebaseDoc = doc;
+        window.firebaseGetDoc = getDoc;
+        window.firebaseSetDoc = setDoc;
+    </script>
+    
     <script>
         // API 키 초기화
         const apiKey = localStorage.getItem('youtubeApiKey');
@@ -1298,7 +1325,71 @@
                 timestamp: Date.now()
             };
             localStorage.setItem(`searchData_${cacheKey}`, JSON.stringify(data));
-            console.log(`💾 검색 데이터 저장: ${query} (${items.length}개 항목)`);
+            console.log(`💾 로컬 저장: ${query} (${items.length}개 항목)`);
+            
+            // Also save to Firebase cloud cache
+            saveToFirebase(query, videos, channels, items);
+        }
+        
+        // Load from Firebase cloud cache
+        async function loadFromFirebase(query) {
+            try {
+                if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseGetDoc) {
+                    console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
+                    return null;
+                }
+                
+                const cacheRef = window.firebaseDoc(window.firebaseDb, 'searchCache', query.toLowerCase());
+                const cacheSnap = await window.firebaseGetDoc(cacheRef);
+                
+                if (cacheSnap.exists()) {
+                    const data = cacheSnap.data();
+                    const age = Date.now() - data.timestamp;
+                    const ageHours = age / (1000 * 60 * 60);
+                    
+                    console.log(`☁️ Firebase 캐시 발견: ${ageHours.toFixed(1)}시간 전 데이터`);
+                    
+                    // 24시간 이내면 유효
+                    if (age < 24 * 60 * 60 * 1000) {
+                        console.log('✅ 유효한 Firebase 캐시 사용');
+                        return data;
+                    } else {
+                        console.log('⏰ Firebase 캐시 만료 (24시간 초과)');
+                    }
+                } else {
+                    console.log('📭 Firebase 캐시 없음');
+                }
+                
+                return null;
+            } catch (error) {
+                console.error('❌ Firebase 캐시 로드 실패:', error);
+                return null;
+            }
+        }
+        
+        // Save to Firebase cloud cache
+        async function saveToFirebase(query, videos, channels, items) {
+            try {
+                if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseSetDoc) {
+                    console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
+                    return;
+                }
+                
+                const cacheRef = window.firebaseDoc(window.firebaseDb, 'searchCache', query.toLowerCase());
+                const data = {
+                    query: query,
+                    videos: videos,
+                    channels: channels,
+                    items: items,
+                    timestamp: Date.now(),
+                    cacheVersion: '1.0'
+                };
+                
+                await window.firebaseSetDoc(cacheRef, data);
+                console.log(`☁️ Firebase 캐시 저장 완료: ${query}`);
+            } catch (error) {
+                console.error('❌ Firebase 캐시 저장 실패:', error);
+            }
         }
 
         function applyAllFilters() {
@@ -1772,14 +1863,25 @@
             allItems = [];
             allChannelMap = {};
 
-            // Check localStorage first
+            // 1. Check Firebase cloud cache first
+            const firebaseData = await loadFromFirebase(query);
+            if (firebaseData) {
+                console.log('☁️ Firebase 캐시에서 로드');
+                allVideos = firebaseData.videos;
+                allChannelMap = firebaseData.channels;
+                allItems = firebaseData.items;
+                renderPage(1);
+                return;
+            }
+            
+            // 2. Check localStorage second
             if (loadSearchData(query)) {
                 console.log('📦 localStorage에서 검색 데이터 로드');
                 renderPage(1);
                 return;
             }
 
-            // Check cache second
+            // 3. Check memory cache third
             const cacheKey = query.toLowerCase();
             if (searchCache[cacheKey]) {
                 console.log('📦 메모리 캐시에서 결과 로드');
