@@ -851,10 +851,13 @@
                  <div class="filter-group date-filter">
                      <label>업로드일자 필터:</label>
                      <label><input type="radio" name="uploadDateFilter" value="all" checked> 전체</label>
-                     <label><input type="radio" name="uploadDateFilter" value="1"> 1개월 이내</label>
-                     <label><input type="radio" name="uploadDateFilter" value="3"> 3개월 이내</label>
-                     <label><input type="radio" name="uploadDateFilter" value="6"> 6개월 이내</label>
-                     <label><input type="radio" name="uploadDateFilter" value="12"> 1년 이내</label>
+                     <label><input type="radio" name="uploadDateFilter" value="1"> 최근 1일</label>
+                     <label><input type="radio" name="uploadDateFilter" value="3"> 최근 3일</label>
+                     <label><input type="radio" name="uploadDateFilter" value="7"> 최근 7일</label>
+                     <label><input type="radio" name="uploadDateFilter" value="30"> 1개월 이내</label>
+                     <label><input type="radio" name="uploadDateFilter" value="90"> 3개월 이내</label>
+                     <label><input type="radio" name="uploadDateFilter" value="180"> 6개월 이내</label>
+                     <label><input type="radio" name="uploadDateFilter" value="365"> 1년 이내</label>
                  </div>
              </div>
 
@@ -1070,13 +1073,15 @@
             
             const now = new Date();
             let date = new Date();
-            const months = parseInt(period);
+            const value = parseInt(period);
 
-            console.log(`📅 기간 필터 계산: ${period}개월`);
-            console.log(`📅 현재 날짜: ${now.toISOString()}`);
+            console.log(`📅 기간 필터 계산: period=${period}, value=${value}`);
 
-            if (!isNaN(months) && months > 0) {
-                date.setMonth(now.getMonth() - months);
+            if (!isNaN(value) && value > 0) {
+                // All values are now in days (1, 3, 7, 30, 90, 180, 365)
+                date.setDate(now.getDate() - value);
+                console.log(`📅 일 단위 계산: ${value}일 전`);
+                console.log(`📅 현재 날짜: ${now.toISOString()}`);
                 console.log(`📅 계산된 컷오프 날짜: ${date.toISOString()}`);
             } else {
                 console.log(`📅 잘못된 기간 값: ${period}`);
@@ -1483,8 +1488,7 @@
             // Apply upload date filter
             const uploadDateFilter = document.querySelector('input[name="uploadDateFilter"]:checked')?.value;
             if (uploadDateFilter && uploadDateFilter !== 'all') {
-                const months = parseInt(uploadDateFilter);
-                const cutoffDate = getPublishedAfterDate(months.toString());
+                const cutoffDate = getPublishedAfterDate(uploadDateFilter);
                 items = items.filter(item => {
                     const publishedAt = item.raw.snippet?.publishedAt;
                     if (!publishedAt) return false;
