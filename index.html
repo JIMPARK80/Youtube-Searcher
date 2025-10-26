@@ -621,6 +621,50 @@
             gap: 8px;
         }
 
+        /* Filter Section Styles */
+        .filter-section {
+            margin: 15px 0;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group > label:first-child {
+            font-weight: 600;
+            color: white;
+            font-size: 14px;
+        }
+
+        .filter-group > label {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: all 0.3s;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .filter-group > label:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .filter-group input[type="radio"] {
+            cursor: pointer;
+            accent-color: #ff8c42;
+        }
 
         @media (max-width: 1200px) {
             .card-grid {
@@ -693,8 +737,17 @@
                 <input type="password" id="serpApiKey" style="display: none;" />
             </div>
 
-
-
+            <!-- View Count Filter -->
+            <div class="filter-section">
+                <div class="filter-group">
+                    <label>조회수 필터:</label>
+                    <label><input type="radio" name="viewCountFilter" value="all" checked> 전체</label>
+                    <label><input type="radio" name="viewCountFilter" value="1000"> 1K+</label>
+                    <label><input type="radio" name="viewCountFilter" value="10000"> 10K+</label>
+                    <label><input type="radio" name="viewCountFilter" value="100000"> 100K+</label>
+                    <label><input type="radio" name="viewCountFilter" value="1000000"> 1M+</label>
+                </div>
+            </div>
 
         <div class="pagination-section">
             <div class="result-summary" id="resultSummary">
@@ -1297,6 +1350,17 @@
         // 필터 없이 전체 데이터 반환 (정렬은 성장속도 기준)
         function applyAllFilters() {
             let items = [...allItems];
+            
+            // Apply view count filter
+            const viewCountFilter = document.querySelector('input[name="viewCountFilter"]:checked')?.value;
+            if (viewCountFilter && viewCountFilter !== 'all') {
+                const minViews = parseInt(viewCountFilter);
+                items = items.filter(item => {
+                    const views = parseInt(item.raw.statistics?.viewCount || 0);
+                    return views >= minViews;
+                });
+            }
+            
             // 성장속도 기준 정렬만 적용
             items.sort(sortVelocityThenSmallCreator);
             return items;
@@ -2244,6 +2308,15 @@
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'ArrowRight') renderPage(currentPage + 1);
                 if (e.key === 'ArrowLeft') renderPage(currentPage - 1);
+            });
+
+            // Filter change event listeners
+            const viewCountFilters = document.querySelectorAll('input[name="viewCountFilter"]');
+            viewCountFilters.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    console.log('🔍 조회수 필터 변경:', radio.value);
+                    renderPage(1); // Reset to page 1 when filter changes
+                });
             });
             
             console.log('✅ 모든 이벤트 리스너 등록 완료');
