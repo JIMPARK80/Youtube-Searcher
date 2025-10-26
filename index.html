@@ -1525,12 +1525,23 @@
             pageItems.forEach(item => {
                 const video = item.raw;
                 const channel = allChannelMap[video.snippet.channelId];
-                                 // Try to get highest quality thumbnail available
-                 let thumbnail = video.snippet.thumbnails.maxres || 
-                                video.snippet.thumbnails.standard || 
-                                video.snippet.thumbnails.high || 
-                                video.snippet.thumbnails.medium || 
-                                video.snippet.thumbnails.default;
+                // Try to get highest quality thumbnail available with fallback
+                let thumbnail = video.snippet.thumbnails?.maxres || 
+                               video.snippet.thumbnails?.standard || 
+                               video.snippet.thumbnails?.high || 
+                               video.snippet.thumbnails?.medium || 
+                               video.snippet.thumbnails?.default;
+                
+                let thumbnailUrl = '';
+                if (thumbnail && thumbnail.url) {
+                    thumbnailUrl = thumbnail.url;
+                } else if (video.id) {
+                    // Fallback to default YouTube thumbnail
+                    thumbnailUrl = `https://img.youtube.com/vi/${video.id}/default.jpg`;
+                } else {
+                    // Ultimate fallback
+                    thumbnailUrl = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzMzMzMzMyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuydtOuvuOyngCDsgqTtgqQ8L3RleHQ+PC9zdmc+';
+                }
                 
                 // Check if this is SerpAPI data
                 const isSerpAPI = video.serpData;
@@ -1539,7 +1550,7 @@
                 html += `
                     <div class="video-card" onclick="window.open('https://www.youtube.com/watch?v=${video.id}', '_blank')">
                         <div class="thumbnail-container">
-                            <img src="${thumbnail.url}" alt="${video.snippet.title}">
+                            <img src="${thumbnailUrl}" alt="${video.snippet.title}" onerror="this.src='https://img.youtube.com/vi/${video.id}/default.jpg'">
                             ${video.contentDetails?.duration && video.contentDetails.duration !== 'PT0S' ? `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
                             <div class="velocity-badge">${formatVelocity(item.vpd)}</div>
                             ${isSerpAPI ? '<div class="serp-badge">🔵 SerpAPI</div>' : ''}
