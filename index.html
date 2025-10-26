@@ -1434,25 +1434,51 @@
                     });
                     
                     // Parse published date safely (improved with relative date support)
+                    // Priority: 1) published_date field, 2) description parsing (for exact dates like "Sep 11, 2019")
                     let publishedAtISO = '';
                     try {
+                        // First, try to parse published_date field
                         if (v.published_date) {
                             const parsedDate = parseRelativeDate(v.published_date);
                             
                             if (parsedDate && !isNaN(parsedDate.getTime()) && parsedDate.getTime() > 0) {
                                 publishedAtISO = parsedDate.toISOString();
-                                console.log('✅ 날짜 파싱 성공:', v.title?.substring(0, 30), '→', publishedAtISO);
+                                console.log('✅ published_date 파싱 성공:', v.title?.substring(0, 30), '→', publishedAtISO);
                             } else {
-                                console.warn('⚠️ 날짜 파싱 실패:', v.published_date, 'for:', v.title?.substring(0, 30));
-                                publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-                                console.log('📅 기본 날짜 사용 (1주 전)');
+                                console.warn('⚠️ published_date 파싱 실패:', v.published_date, 'for:', v.title?.substring(0, 30));
                             }
-                        } else {
-                            console.warn('⚠️ No published_date for:', v.title?.substring(0, 30));
+                        }
+                        
+                        // If published_date parsing failed, try to extract from description
+                        if (!publishedAtISO && v.description) {
+                            console.log('📝 설명에서 날짜 추출 시도...');
+                            // Try to find dates like "Sep 11, 2019", "Sep. 11, 2019", "September 11, 2019"
+                            const datePatterns = [
+                                /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}/gi,
+                                /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.\s+\d{1,2},?\s+\d{4}/gi,
+                                /\d{4}년\s+\d{1,2}월\s+\d{1,2}일/gi  // Korean format: 2019년 9월 11일
+                            ];
+                            
+                            for (const pattern of datePatterns) {
+                                const matches = v.description.match(pattern);
+                                if (matches && matches.length > 0) {
+                                    const extractedDate = new Date(matches[0]);
+                                    if (!isNaN(extractedDate.getTime())) {
+                                        publishedAtISO = extractedDate.toISOString();
+                                        console.log('✅ 설명에서 날짜 추출 성공:', matches[0], '→', publishedAtISO);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // If still no date, use default (1 week ago)
+                        if (!publishedAtISO) {
+                            console.warn('⚠️ 날짜를 찾을 수 없음, 기본값 사용');
                             publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
                         }
                     } catch (e) {
-                        console.error('❌ Error parsing published_date:', v.published_date, e);
+                        console.error('❌ Error parsing published date:', e);
                         publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
                     }
                     
