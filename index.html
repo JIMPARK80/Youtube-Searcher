@@ -115,6 +115,9 @@
             
             <div class="search-mode-indicator" id="searchModeIndicator">
                 <span class="mode-text">현재 검색 모드: 🟢 Google API</span>
+                <div class="api-usage-info" id="apiUsageInfo" style="display: none;">
+                    <span class="usage-text">API 사용량: <span id="apiUsageCount">-</span> / <span id="apiUsageLimit">-</span></span>
+                </div>
             </div>
             
             <!-- API 키는 서버에서 자동으로 로드되므로 입력란 숨김 -->
@@ -1045,6 +1048,9 @@
                 currentSearchMode = 'google';
                 updateFilterStatusIndicators('google');
             }
+            
+            // Update API usage display
+            updateApiUsageDisplay();
         }
 
         // Update filter status indicators based on current search mode
@@ -1334,6 +1340,9 @@
                     // Google API is working - update mode indicator
                     console.log('✅ Google API 정상 작동');
                     updateSearchModeIndicator('google');
+                    
+                    // Increment API usage counter
+                    incrementApiUsage();
 
                     // Process Google API results
                     const videoIds = searchData.items.map(item => item.id.videoId).join(',');
@@ -1628,6 +1637,71 @@
          window.addEventListener('DOMContentLoaded', function() {
              updateSearchModeIndicator('serpapi');
          });
+
+        // API usage tracking and display
+        function updateApiUsageDisplay() {
+            const apiUsageInfo = document.getElementById('apiUsageInfo');
+            const apiUsageCount = document.getElementById('apiUsageCount');
+            const apiUsageLimit = document.getElementById('apiUsageLimit');
+            
+            if (currentSearchMode === 'google') {
+                // Show API usage info for Google API mode
+                apiUsageInfo.style.display = 'block';
+                
+                // Get usage from localStorage or Firebase
+                const usageData = getApiUsageData();
+                apiUsageCount.textContent = usageData.used || '0';
+                apiUsageLimit.textContent = usageData.limit || '10,000';
+                
+                // Color coding based on usage
+                const usagePercent = (usageData.used || 0) / (usageData.limit || 10000);
+                if (usagePercent > 0.9) {
+                    apiUsageInfo.style.color = '#ff4444'; // Red for high usage
+                } else if (usagePercent > 0.7) {
+                    apiUsageInfo.style.color = '#ffaa00'; // Orange for medium usage
+                } else {
+                    apiUsageInfo.style.color = '#44ff44'; // Green for low usage
+                }
+            } else {
+                // Hide API usage info for SerpAPI mode
+                apiUsageInfo.style.display = 'none';
+            }
+        }
+        
+        function getApiUsageData() {
+            // Try to get from localStorage first (for backward compatibility)
+            const stored = localStorage.getItem('apiUsage');
+            if (stored) {
+                try {
+                    return JSON.parse(stored);
+                } catch (e) {
+                    console.warn('Failed to parse API usage data from localStorage');
+                }
+            }
+            
+            // Default values
+            return {
+                used: 0,
+                limit: 10000,
+                lastReset: Date.now()
+            };
+        }
+        
+        function incrementApiUsage() {
+            if (currentSearchMode === 'google') {
+                const usageData = getApiUsageData();
+                usageData.used = (usageData.used || 0) + 1;
+                usageData.lastUpdate = Date.now();
+                
+                // Store in localStorage for now (could be moved to Firebase later)
+                localStorage.setItem('apiUsage', JSON.stringify(usageData));
+                
+                // Update display
+                updateApiUsageDisplay();
+                
+                console.log(`📊 API 사용량 증가: ${usageData.used}/${usageData.limit}`);
+            }
+        }
 
         // Thumbnail error handling function
         function handleThumbnailError(img, videoId) {
