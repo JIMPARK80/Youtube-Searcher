@@ -207,19 +207,20 @@
         const apiKeyInput = document.getElementById('apiKey');
         const serpApiKeyInput = document.getElementById('serpApiKey');
         
-        // Helper function to get API keys (Firebase server only)
+        // Helper function to get API keys (Firebase server first, then hardcoded fallback)
         function getApiKeys() {
-            // Use Firebase server keys only
+            // Use Firebase server keys first
             if (window.serverApiKeys) {
                 return {
                     youtube: window.serverApiKeys.youtube,
                     serpapi: window.serverApiKeys.serpapi
                 };
             }
-            // No fallback - Firebase keys required
+            
+            // Fallback to hardcoded keys in index.html
             return {
-                youtube: null,
-                serpapi: null
+                youtube: "AIzaSyDiaIw9ttZuh8V1oNtADBymAYseLopS5BY", // YouTube Data API v3
+                serpapi: null // SerpAPI key not available - will show error if needed
             };
         }
         
