@@ -1,0 +1,17 @@
+{
+  "lastUpdated": "2024-01-15T10:00:00Z",
+  "query": "뉴스",
+  "items": [
+    {
+      "id": "dummy1",
+      "title": "샘플 뉴스 제목 1",
+      "channelTitle": "뉴스 채널",
+      "publishedAt": "2024-01-15T09:00:00Z",
+      "thumbnail": "https://img.youtube.com/vi/default/hqdefault.jpg",
+      "viewCount": 50000,
+      "duration": "PT5M30S"
+    }
+  ],
+  "totalResults": 0,
+  "dataSource": "static"
+}

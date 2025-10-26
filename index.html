@@ -3187,6 +3187,72 @@
                 allItems = [];
                 allChannelMap = {};
 
+                // 0. Check static news data file first (fastest)
+                console.log('📄 정적 뉴스 데이터 파일 로드 시도...');
+                try {
+                    const newsFileStartTime = performance.now();
+                    const newsResponse = await fetch('news_data.json');
+                    if (newsResponse.ok) {
+                        const newsData = await newsResponse.json();
+                        const newsFileEndTime = performance.now();
+                        console.log(`⏱️ news_data.json 로드 시간: ${(newsFileEndTime - newsFileStartTime).toFixed(2)}ms`);
+                        
+                        if (newsData && newsData.items && newsData.items.length > 0) {
+                            console.log(`✅ news_data.json에서 ${newsData.items.length}개의 항목 로드`);
+                            
+                            // Convert news_data.json format to video format
+                            allVideos = newsData.items.map(item => ({
+                                id: item.id,
+                                snippet: {
+                                    title: item.title,
+                                    channelTitle: item.channelTitle,
+                                    channelId: item.channelId || 'dummy',
+                                    publishedAt: item.publishedAt,
+                                    thumbnails: {
+                                        maxres: { url: item.thumbnail },
+                                        standard: { url: item.thumbnail },
+                                        high: { url: item.thumbnail },
+                                        medium: { url: item.thumbnail },
+                                        default: { url: item.thumbnail }
+                                    }
+                                },
+                                statistics: {
+                                    viewCount: item.viewCount || '0',
+                                    likeCount: '0'
+                                },
+                                contentDetails: {
+                                    duration: item.duration || 'PT0S'
+                                }
+                            }));
+                            
+                            // Create items with metrics
+                            allItems = allVideos.map(video => {
+                                const vpd = viewVelocityPerDay(video);
+                                const vclass = classifyVelocity(vpd);
+                                return {
+                                    raw: video,
+                                    vpd: vpd,
+                                    vclass: vclass,
+                                    cband: 'Unknown',
+                                    subs: 0
+                                };
+                            });
+                            
+                            const renderStartTime = performance.now();
+                            renderPage(1);
+                            const renderEndTime = performance.now();
+                            console.log(`⏱️ renderPage 실행 시간: ${(renderEndTime - renderStartTime).toFixed(2)}ms`);
+                            
+                            const totalTime = performance.now() - startTime;
+                            console.log(`✅ 전체 수행 시간: ${totalTime.toFixed(2)}ms (정적 파일 사용)`);
+                            window.isDefaultSearch = false;
+                            return;
+                        }
+                    }
+                } catch (error) {
+                    console.log('⚠️ news_data.json 로드 실패:', error.message);
+                }
+
                 // 1. Check Firebase cloud cache first
                 console.log('📥 Firebase 클라우드 캐시 확인 중...');
                 const firebaseStartTime = performance.now();
