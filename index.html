@@ -1398,8 +1398,24 @@
                     dataSource: dataSource  // 'google' or 'serpapi'
                 };
                 
-                await window.firebaseSetDoc(cacheRef, data);
+                // 디버깅: 데이터 크기 확인
+                const dataSize = JSON.stringify(data).length;
+                console.log(`📊 저장할 데이터 크기: ${(dataSize / 1024).toFixed(2)} KB`);
+                
+                if (dataSize > 1000000) { // 1MB 초과
+                    console.warn(`⚠️ 데이터 크기가 너무 큽니다 (${(dataSize / 1024).toFixed(2)} KB)`);
+                }
+                
+                await window.firebaseSetDoc(cacheRef, data, { merge: true });
                 console.log(`☁️ Firebase 캐시 저장 완료: ${query} (${dataSource})`);
+                
+                // 디버깅: 저장 확인
+                const verifySnap = await window.firebaseGetDoc(cacheRef);
+                if (verifySnap.exists()) {
+                    console.log(`✅ 저장 확인: ${verifySnap.data().items.length}개 항목 저장됨`);
+                } else {
+                    console.error('❌ 저장 확인 실패: 문서가 생성되지 않음');
+                }
             } catch (error) {
                 console.error('❌ Firebase 캐시 저장 실패:', error);
             }
