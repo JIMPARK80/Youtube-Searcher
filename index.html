@@ -1805,7 +1805,7 @@
                     // Build search URL with filters
                     // Use default order for API, apply velocity sorting on client side
                     const apiOrder = sortBy === 'velocity' ? 'relevance' : sortBy;
-                    let searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(query)}&order=${apiOrder}&key=${apiKeyValue}`;
+                    let searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=100&q=${encodeURIComponent(query)}&order=${apiOrder}&key=${apiKeyValue}`;
                     
                     if (uploadDate) {
                         searchUrl += `&publishedAfter=${getPublishedAfterDate(uploadDate)}`;
