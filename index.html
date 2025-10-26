@@ -276,6 +276,18 @@
             gap: 3px;
         }
 
+        .stat-unavailable {
+            color: #999 !important;
+            opacity: 0.7;
+            font-style: italic;
+            font-size: 11px;
+        }
+
+        .stat-unavailable:hover {
+            opacity: 1;
+            color: #666 !important;
+        }
+
         .tags {
             display: flex;
             flex-wrap: wrap;
@@ -1033,6 +1045,44 @@
             return date.toISOString();
         }
 
+        // Parse relative date strings (e.g., "3 days ago")
+        function parseRelativeDate(relativeDateStr) {
+            if (!relativeDateStr) return null;
+            
+            const str = relativeDateStr.toLowerCase().trim();
+            const now = Date.now();
+            
+            // Parse relative time strings
+            if (str.includes('ago')) {
+                const matches = str.match(/(\d+)\s*(second|minute|hour|day|week|month|year)/);
+                if (matches) {
+                    const value = parseInt(matches[1]);
+                    const unit = matches[2];
+                    
+                    let milliseconds = 0;
+                    switch(unit) {
+                        case 'second': milliseconds = value * 1000; break;
+                        case 'minute': milliseconds = value * 60 * 1000; break;
+                        case 'hour': milliseconds = value * 60 * 60 * 1000; break;
+                        case 'day': milliseconds = value * 24 * 60 * 60 * 1000; break;
+                        case 'week': milliseconds = value * 7 * 24 * 60 * 60 * 1000; break;
+                        case 'month': milliseconds = value * 30 * 24 * 60 * 60 * 1000; break;
+                        case 'year': milliseconds = value * 365 * 24 * 60 * 60 * 1000; break;
+                    }
+                    
+                    return new Date(now - milliseconds);
+                }
+            }
+            
+            // Try parsing as absolute date
+            const parsedDate = new Date(relativeDateStr);
+            if (!isNaN(parsedDate.getTime())) {
+                return parsedDate;
+            }
+            
+            return null;
+        }
+
         // View Velocity functions
         function ageDays(publishedAt) {
             const now = Date.now();
@@ -1383,31 +1433,27 @@
                         durationType: typeof v.duration
                     });
                     
-                    // Parse published date safely
+                    // Parse published date safely (improved with relative date support)
                     let publishedAtISO = '';
                     try {
                         if (v.published_date) {
-                            const parsedDate = new Date(v.published_date);
-                            if (!isNaN(parsedDate.getTime()) && parsedDate.getTime() > 0) {
+                            const parsedDate = parseRelativeDate(v.published_date);
+                            
+                            if (parsedDate && !isNaN(parsedDate.getTime()) && parsedDate.getTime() > 0) {
                                 publishedAtISO = parsedDate.toISOString();
-                                console.log('✅ 유효한 날짜 파싱됨:', v.title, '→', publishedAtISO);
+                                console.log('✅ 날짜 파싱 성공:', v.title?.substring(0, 30), '→', publishedAtISO);
                             } else {
-                                console.warn('⚠️ Invalid published_date:', v.published_date, 'for video:', v.title);
-                                // Use a safe default date (1 week ago) if parsing fails
+                                console.warn('⚠️ 날짜 파싱 실패:', v.published_date, 'for:', v.title?.substring(0, 30));
                                 publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-                                console.log('📅 기본 날짜 사용 (1주 전):', publishedAtISO);
+                                console.log('📅 기본 날짜 사용 (1주 전)');
                             }
                         } else {
-                            // No published_date available, use a safe default
-                            console.warn('⚠️ No published_date for video:', v.title);
+                            console.warn('⚠️ No published_date for:', v.title?.substring(0, 30));
                             publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-                            console.log('📅 기본 날짜 사용 (1주 전):', publishedAtISO);
                         }
                     } catch (e) {
                         console.error('❌ Error parsing published_date:', v.published_date, e);
-                        // Use a safe default date if all else fails
                         publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-                        console.log('📅 기본 날짜 사용 (1주 전):', publishedAtISO);
                     }
                     
                     // Ensure we never have an empty string
@@ -1416,68 +1462,98 @@
                         publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
                     }
                     
-                    // Extract channel subscriber count from SerpAPI data
-                    // SerpAPI provides subscribers as a number or string like "1.5M subscribers"
+                    // Extract channel subscriber count from SerpAPI data (improved)
                     let channelSubscriberCount = '0';
+                    let subscriberDataAvailable = false;
+                    
                     if (v.channel?.subscribers) {
+                        subscriberDataAvailable = true;
+                        
                         if (typeof v.channel.subscribers === 'number') {
                             channelSubscriberCount = v.channel.subscribers.toString();
                         } else if (typeof v.channel.subscribers === 'string') {
-                            // Parse strings like "1.5M subscribers" or "150K subscribers"
                             const subStr = v.channel.subscribers.toLowerCase().trim();
                             let mult = 1;
+                            
                             if (subStr.includes('m')) {
                                 mult = 1000000;
-                                channelSubscriberCount = (parseFloat(subStr) * mult).toString();
+                                const num = parseFloat(subStr);
+                                if (!isNaN(num)) {
+                                    channelSubscriberCount = Math.floor(num * mult).toString();
+                                }
                             } else if (subStr.includes('k')) {
                                 mult = 1000;
-                                channelSubscriberCount = (parseFloat(subStr) * mult).toString();
+                                const num = parseFloat(subStr);
+                                if (!isNaN(num)) {
+                                    channelSubscriberCount = Math.floor(num * mult).toString();
+                                }
                             } else {
-                                // Try to extract numbers from string
                                 const numMatch = subStr.match(/[\d.]+/);
                                 if (numMatch) {
-                                    channelSubscriberCount = numMatch[0];
+                                    const num = parseFloat(numMatch[0]);
+                                    if (!isNaN(num)) {
+                                        channelSubscriberCount = Math.floor(num).toString();
+                                    }
                                 }
                             }
                         }
                     }
                     
-                    // Parse views - handle both number and string formats
+                    // Parse views - handle both number and string formats (improved)
                     let viewCount = '0';
                     if (v.views !== undefined && v.views !== null) {
                         if (typeof v.views === 'number') {
                             viewCount = v.views.toString();
                         } else if (typeof v.views === 'string') {
-                            // Parse strings like "1.5M views" or "150K views"
                             const viewStr = v.views.toLowerCase().trim();
+                            
                             if (viewStr.includes('m')) {
-                                viewCount = (parseFloat(viewStr) * 1000000).toString();
+                                const num = parseFloat(viewStr);
+                                if (!isNaN(num)) {
+                                    viewCount = Math.floor(num * 1000000).toString();
+                                }
                             } else if (viewStr.includes('k')) {
-                                viewCount = (parseFloat(viewStr) * 1000).toString();
+                                const num = parseFloat(viewStr);
+                                if (!isNaN(num)) {
+                                    viewCount = Math.floor(num * 1000).toString();
+                                }
                             } else {
                                 const numMatch = viewStr.match(/[\d.]+/);
                                 if (numMatch) {
-                                    viewCount = numMatch[0];
+                                    const num = parseFloat(numMatch[0]);
+                                    if (!isNaN(num)) {
+                                        viewCount = Math.floor(num).toString();
+                                    }
                                 }
                             }
                         }
                     }
                     
-                    // Parse likes similarly
+                    // Parse likes similarly (improved)
                     let likeCount = '0';
                     if (v.likes !== undefined && v.likes !== null) {
                         if (typeof v.likes === 'number') {
                             likeCount = v.likes.toString();
                         } else if (typeof v.likes === 'string') {
                             const likeStr = v.likes.toLowerCase().trim();
+                            
                             if (likeStr.includes('m')) {
-                                likeCount = (parseFloat(likeStr) * 1000000).toString();
+                                const num = parseFloat(likeStr);
+                                if (!isNaN(num)) {
+                                    likeCount = Math.floor(num * 1000000).toString();
+                                }
                             } else if (likeStr.includes('k')) {
-                                likeCount = (parseFloat(likeStr) * 1000).toString();
+                                const num = parseFloat(likeStr);
+                                if (!isNaN(num)) {
+                                    likeCount = Math.floor(num * 1000).toString();
+                                }
                             } else {
                                 const numMatch = likeStr.match(/[\d.]+/);
                                 if (numMatch) {
-                                    likeCount = numMatch[0];
+                                    const num = parseFloat(numMatch[0]);
+                                    if (!isNaN(num)) {
+                                        likeCount = Math.floor(num).toString();
+                                    }
                                 }
                             }
                         }
@@ -1521,6 +1597,7 @@
                         serpData: {
                             channel: v.channel,
                             channelSubscribers: channelSubscriberCount,
+                            subscriberDataAvailable: subscriberDataAvailable,
                             views: viewCount,
                             published_date: v.published_date,
                             description: v.description,
@@ -1914,8 +1991,11 @@
                                 <div class="stat-item">👁 ${formatNumber(parseInt(video.statistics.viewCount))}</div>
                                 ${video.statistics.likeCount && video.statistics.likeCount !== '0' ? `<div class="stat-item">👍 ${formatNumber(parseInt(video.statistics.likeCount))}</div>` : ''}
                                 ${video.statistics.commentCount && video.statistics.commentCount !== '0' ? `<div class="stat-item">💬 ${formatNumber(parseInt(video.statistics.commentCount))}</div>` : ''}
-                                ${isSerpAPI && serpData.channelSubscribers ? `<div class="stat-item">👥 ${formatNumber(parseInt(serpData.channelSubscribers))}</div>` : ''}
-                                ${!isSerpAPI && channel?.statistics?.subscriberCount ? `<div class="stat-item">👥 ${formatNumber(parseInt(channel.statistics.subscriberCount))}</div>` : ''}
+                                ${isSerpAPI ? 
+                                    (serpData.subscriberDataAvailable && serpData.channelSubscribers !== '0' ? 
+                                        `<div class="stat-item">👥 ${formatNumber(parseInt(serpData.channelSubscribers))}</div>` : 
+                                        `<div class="stat-item stat-unavailable" title="SerpAPI에서 구독자 데이터를 제공하지 않습니다">👥 비공개</div>`) 
+                                    : (channel?.statistics?.subscriberCount ? `<div class="stat-item">👥 ${formatNumber(parseInt(channel.statistics.subscriberCount))}</div>` : '')}
                             </div>
                             ${isSerpAPI ? `
                             <div class="serp-stats">
