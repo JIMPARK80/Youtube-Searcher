@@ -136,15 +136,17 @@
                     <label><input type="radio" name="viewCountFilter" value="10000000"> 10M+</label>
                 </div>
                 
-                                 <!-- Subscriber Count Filter -->
-                 <div class="filter-group sub-filter">
-                     <label>구독자 필터:</label>
-                     <label><input type="radio" name="subCountFilter" value="all" checked> 전체</label>
-                     <label><input type="radio" name="subCountFilter" value="1000"> 1K+</label>
-                     <label><input type="radio" name="subCountFilter" value="10000"> 10K+</label>
-                     <label><input type="radio" name="subCountFilter" value="100000"> 100K+</label>
-                     <label><input type="radio" name="subCountFilter" value="1000000"> 1M+</label>
-                 </div>
+                <!-- Subscriber Count Filter -->
+                <div class="filter-group sub-filter">
+                    <label>구독자 필터:</label>
+                    <div class="range-inputs">
+                        <input type="number" id="subMin" placeholder="최소" min="0" step="1000" class="range-input">
+                        <span class="range-separator">~</span>
+                        <input type="number" id="subMax" placeholder="최대" min="0" step="1000" class="range-input">
+                        <button type="button" id="subFilterApply" class="range-apply-btn">적용</button>
+                        <button type="button" id="subFilterClear" class="range-clear-btn">초기화</button>
+                    </div>
+                </div>
                  
                  <!-- Upload Date Filter -->
                  <div class="filter-group date-filter">
@@ -678,13 +680,15 @@
                 });
             }
             
-            // Apply subscriber count filter
-            const subCountFilter = document.querySelector('input[name="subCountFilter"]:checked')?.value;
-            if (subCountFilter && subCountFilter !== 'all') {
-                const minSubs = parseInt(subCountFilter);
+            // Apply subscriber count filter (range-based)
+            const subMin = document.getElementById('subMin').value;
+            const subMax = document.getElementById('subMax').value;
+            if (subMin || subMax) {
+                const minSubs = subMin ? parseInt(subMin) : 0;
+                const maxSubs = subMax ? parseInt(subMax) : Infinity;
                 items = items.filter(item => {
                     const subs = parseInt(item.subs || 0);
-                    return subs >= minSubs;
+                    return subs >= minSubs && subs <= maxSubs;
                 });
             }
             
@@ -1575,6 +1579,10 @@
                 const channelSizeAll = document.querySelector('input[name="channelSize"][value="all"]');
                 const sortBySelect = document.getElementById('sortBy');
                 
+                // Clear subscriber range inputs
+                document.getElementById('subMin').value = '';
+                document.getElementById('subMax').value = '';
+                
                 if (uploadDateAll) uploadDateAll.checked = true;
                 // videoDuration filter removed
                 if (viewCountAll) viewCountAll.checked = true;
@@ -1672,13 +1680,19 @@
                 });
             });
 
-            // Subscriber filter change event listeners
-            const subCountFilters = document.querySelectorAll('input[name="subCountFilter"]');
-            subCountFilters.forEach(radio => {
-                radio.addEventListener('change', () => {
-                    console.log('🔍 구독자 필터 변경:', radio.value);
-                    renderPage(1); // Reset to page 1 when filter changes
-                });
+            // Subscriber range filter event listeners
+            document.getElementById('subFilterApply').addEventListener('click', () => {
+                const subMin = document.getElementById('subMin').value;
+                const subMax = document.getElementById('subMax').value;
+                console.log('🔍 구독자 범위 필터 적용:', `${subMin || '0'} ~ ${subMax || '∞'}`);
+                renderPage(1); // Reset to page 1 when filter changes
+            });
+
+            document.getElementById('subFilterClear').addEventListener('click', () => {
+                document.getElementById('subMin').value = '';
+                document.getElementById('subMax').value = '';
+                console.log('🔍 구독자 필터 초기화');
+                renderPage(1); // Reset to page 1 when filter changes
             });
 
             // Upload date filter change event listeners
