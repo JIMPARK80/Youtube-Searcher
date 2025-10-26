@@ -1351,12 +1351,15 @@
                 const cacheRef = window.firebaseDoc(window.firebaseDb, 'searchCache', query.toLowerCase());
                 const cacheSnap = await window.firebaseGetDoc(cacheRef);
                 
+                console.log(`🔍 Firebase 캐시 확인 중: 검색어="${query}" (소문자: "${query.toLowerCase()}")`);
+                
                 if (cacheSnap.exists()) {
                     const data = cacheSnap.data();
                     const age = Date.now() - data.timestamp;
                     const ageHours = age / (1000 * 60 * 60);
                     
                     console.log(`☁️ Firebase 캐시 발견: ${ageHours.toFixed(1)}시간 전 데이터`);
+                    console.log(`📊 캐시 정보: ${data.items?.length || 0}개 항목, 소스: ${data.dataSource || 'unknown'}`);
                     
                     // 24시간 이내면 유효
                     if (age < 24 * 60 * 60 * 1000) {
@@ -1366,7 +1369,7 @@
                         console.log('⏰ Firebase 캐시 만료 (24시간 초과)');
                     }
                 } else {
-                    console.log('📭 Firebase 캐시 없음');
+                    console.log(`📭 Firebase 캐시 없음 (문서 ID: "${query.toLowerCase()}")`);
                 }
                 
                 return null;
