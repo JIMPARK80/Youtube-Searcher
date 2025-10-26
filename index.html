@@ -1957,6 +1957,14 @@
                     // Firebase 캐시 무시하고 API 호출 계속 진행
                 } else {
                     console.log('☁️ Firebase 캐시에서 로드');
+                    console.log(`📊 데이터 출처: ${firebaseData.dataSource || 'unknown'}`);
+                    
+                    // Update search mode indicator based on data source
+                    if (firebaseData.dataSource === 'serpapi') {
+                        updateSearchModeIndicator('serpapi');
+                    } else {
+                        updateSearchModeIndicator('google');
+                    }
                     
                     // Restore full structure from compressed Firebase data
                     const restoredVideos = firebaseData.videos.map(v => ({
