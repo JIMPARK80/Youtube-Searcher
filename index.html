@@ -998,7 +998,7 @@
         <button class="auth-btn signup-btn" id="signupBtn">가입하기</button>
         <div class="user-info" id="userInfo" style="display: none;">
             <img id="userAvatar" class="user-avatar" src="" alt="User Avatar">
-            <span class="user-name" id="userName"></span>
+            <span class="user-name" id="userName" style="cursor: pointer;" title="클릭하여 프로필 수정"></span>
             <button class="logout-btn" id="logoutBtn">로그아웃</button>
         </div>
     </div>
@@ -1047,6 +1047,26 @@
             <div class="form-buttons">
                 <button class="submit-btn" id="submitSignup">가입하기</button>
                 <button class="cancel-btn" id="cancelSignup">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Edit Modal -->
+    <div class="signup-modal" id="profileEditModal">
+        <div class="signup-form">
+            <button class="close-modal" id="closeProfileEditModal">&times;</button>
+            <h2>프로필 수정</h2>
+            <div class="form-group">
+                <label for="editUsername">아이디</label>
+                <input type="text" id="editUsername" placeholder="아이디를 입력하세요">
+            </div>
+            <div class="form-group">
+                <label for="editEmail">이메일</label>
+                <input type="email" id="editEmail" placeholder="이메일을 입력하세요" readonly style="background: #f0f0f0;">
+            </div>
+            <div class="form-buttons">
+                <button class="submit-btn" id="submitProfileEdit">수정하기</button>
+                <button class="cancel-btn" id="cancelProfileEdit">취소</button>
             </div>
         </div>
     </div>
@@ -2921,6 +2941,103 @@
                         alert('로그아웃되었습니다.');
                     } catch (error) {
                         console.error('❌ 로그아웃 실패:', error);
+                    }
+                });
+            }
+
+            // Profile Edit Modal Logic
+            const profileEditModal = document.getElementById('profileEditModal');
+            const closeProfileEditModalBtn = document.getElementById('closeProfileEditModal');
+            const cancelProfileEdit = document.getElementById('cancelProfileEdit');
+            const submitProfileEdit = document.getElementById('submitProfileEdit');
+            const editUsername = document.getElementById('editUsername');
+            const editEmail = document.getElementById('editEmail');
+
+            // Open profile edit modal when clicking on username
+            const userName = document.getElementById('userName');
+            if (userName) {
+                userName.addEventListener('click', async function() {
+                    if (window.currentUser) {
+                        // Load current user data
+                        try {
+                            const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', window.currentUser.uid);
+                            const userDocSnap = await window.firebaseGetDoc(userDocRef);
+                            if (userDocSnap.exists()) {
+                                const userData = userDocSnap.data();
+                                editUsername.value = userData.username || '';
+                                editEmail.value = window.currentUser.email || '';
+                            } else {
+                                editUsername.value = '';
+                                editEmail.value = window.currentUser.email || '';
+                            }
+                        } catch (error) {
+                            console.warn('⚠️ 사용자 정보 로드 실패:', error);
+                            editUsername.value = '';
+                            editEmail.value = window.currentUser.email || '';
+                        }
+                        
+                        profileEditModal.classList.add('active');
+                    }
+                });
+            }
+
+            // Close profile edit modal
+            function closeProfileEditModalFunc() {
+                profileEditModal.classList.remove('active');
+                editUsername.value = '';
+                editEmail.value = '';
+            }
+
+            if (closeProfileEditModalBtn) {
+                closeProfileEditModalBtn.addEventListener('click', closeProfileEditModalFunc);
+            }
+
+            if (cancelProfileEdit) {
+                cancelProfileEdit.addEventListener('click', closeProfileEditModalFunc);
+            }
+
+            // Close modal when clicking outside
+            if (profileEditModal) {
+                profileEditModal.addEventListener('click', function(e) {
+                    if (e.target === profileEditModal) {
+                        closeProfileEditModalFunc();
+                    }
+                });
+            }
+
+            // Submit profile edit
+            if (submitProfileEdit) {
+                submitProfileEdit.addEventListener('click', async function() {
+                    const newUsername = editUsername.value.trim();
+
+                    // Validation
+                    if (!newUsername) {
+                        alert('아이디를 입력해주세요.');
+                        return;
+                    }
+
+                    if (!window.currentUser) {
+                        alert('로그인이 필요합니다.');
+                        return;
+                    }
+
+                    // Update username in Firestore
+                    try {
+                        const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', window.currentUser.uid);
+                        await window.firebaseSetDoc(userDocRef, {
+                            username: newUsername,
+                            updatedAt: Date.now()
+                        }, { merge: true });
+                        console.log('✅ 프로필 수정 완료:', newUsername);
+                        
+                        // Update UI
+                        document.getElementById('userName').textContent = newUsername;
+                        
+                        alert('프로필이 수정되었습니다!');
+                        closeProfileEditModalFunc();
+                    } catch (error) {
+                        console.error('❌ 프로필 수정 실패:', error);
+                        alert('프로필 수정 실패: ' + error.message);
                     }
                 });
             }
