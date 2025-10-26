@@ -2913,7 +2913,20 @@
                     signupBtn.style.display = 'none';
                     userInfo.style.display = 'flex';
                     userName.textContent = user.displayName || user.email;
-                    userAvatar.src = user.photoURL || 'https://via.placeholder.com/32';
+                    
+                    // Set avatar with error handling
+                    if (userAvatar) {
+                        userAvatar.onerror = function() {
+                            // If avatar fails to load, use a data URI or hide the image
+                            this.style.display = 'none';
+                        };
+                        if (user.photoURL) {
+                            userAvatar.src = user.photoURL;
+                        } else {
+                            // Use a simple data URI as fallback
+                            userAvatar.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiM2NjdlZWEiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1zaXplPSIxNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj7wn5COPC90ZXh0Pjwvc3ZnPg==';
+                        }
+                    }
                     window.currentUser = user;
                 } else {
                     // User is signed out
