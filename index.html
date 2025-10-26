@@ -1953,7 +1953,9 @@
                             channelId: v.channelId,
                             channelTitle: v.channelTitle,
                             publishedAt: v.publishedAt,
-                            thumbnails: {},
+                            thumbnails: {
+                                default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
+                            },
                             description: '',
                             tags: []
                         },
