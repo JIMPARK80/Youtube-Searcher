@@ -1436,7 +1436,9 @@
                         published_date_type: typeof v.published_date,
                         duration: v.duration,
                         hasDuration: !!v.duration,
-                        durationType: typeof v.duration
+                        durationType: typeof v.duration,
+                        channel: v.channel,
+                        channel_subscribers: v.channel?.subscribers
                     });
                     
                     // Parse published date safely (improved with relative date support)
@@ -1591,17 +1593,20 @@
                         }
                     }
                     
-                    console.log('🔍 SerpAPI 데이터 추출:', {
-                        title: v.title,
-                        channelName: v.channel?.name,
-                        subscribers: v.channel?.subscribers,
-                        parsedSubscribers: channelSubscriberCount,
-                        views: v.views,
-                        parsedViews: viewCount,
-                        likes: v.likes,
-                        parsedLikes: likeCount,
-                        published_date: v.published_date
-                    });
+                                         console.log('🔍 SerpAPI 데이터 추출:', {
+                         title: v.title,
+                         channelName: v.channel?.name,
+                         channelId: v.channel?.id,
+                         subscribers: v.channel?.subscribers,
+                         subscriberDataAvailable: subscriberDataAvailable,
+                         parsedSubscribers: channelSubscriberCount,
+                         views: v.views,
+                         parsedViews: viewCount,
+                         likes: v.likes,
+                         parsedLikes: likeCount,
+                         published_date: v.published_date,
+                         fullChannelObject: v.channel
+                     });
                     
                     return {
                         id: videoId,
