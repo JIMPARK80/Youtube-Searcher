@@ -2185,8 +2185,10 @@
         }
 
         async function search() {
-            // Check if user is logged in
-            if (!window.currentUser) {
+            const query = document.getElementById('searchInput').value.trim();
+            
+            // Check if user is logged in (only for manual searches, not default search)
+            if (!window.currentUser && !window.isDefaultSearch) {
                 // Show login modal
                 const loginModal = document.getElementById('loginModal');
                 if (loginModal) {
@@ -2195,8 +2197,6 @@
                 }
                 return;
             }
-            
-            const query = document.getElementById('searchInput').value.trim();
             
             if (!query) {
                 alert('검색어를 입력해주세요!');
@@ -3174,6 +3174,9 @@
                 const startTime = performance.now();
                 console.log('⏱️ performDefaultSearch 시작');
                 
+                // Set flag to indicate this is a default search
+                window.isDefaultSearch = true;
+                
                 const query = '뉴스';
                 const resultsDiv = document.getElementById('results');
                 resultsDiv.innerHTML = '<div class="loading">⏳ 검색 중...</div>';
@@ -3210,6 +3213,7 @@
                     
                     const totalTime = performance.now() - startTime;
                     console.log(`✅ 전체 수행 시간: ${totalTime.toFixed(2)}ms`);
+                    window.isDefaultSearch = false;
                     return;
                 }
 
@@ -3233,6 +3237,7 @@
                     console.log(`⏱️ saveToFirebase 시간: ${(saveEndTime - saveStartTime).toFixed(2)}ms`);
                     
                     renderPage(1);
+                    window.isDefaultSearch = false;
                     return;
                 }
 
@@ -3245,6 +3250,7 @@
                 
                 if (!apiKeyValue) {
                     resultsDiv.innerHTML = '<div class="error">❌ API 키가 설정되지 않았습니다.</div>';
+                    window.isDefaultSearch = false;
                     return;
                 }
 
@@ -3321,6 +3327,8 @@
                 } catch (error) {
                     console.error('❌ Google API 오류:', error);
                     resultsDiv.innerHTML = '<div class="error">❌ 검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</div>';
+                } finally {
+                    window.isDefaultSearch = false;
                 }
                 
                 const totalTime = performance.now() - startTime;
