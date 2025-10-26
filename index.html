@@ -3159,10 +3159,10 @@
                     userInfo.style.display = 'none';
                     window.currentUser = null;
                     
-                    // Automatically search for '영화' (movie) when user is not logged in
-                    console.log('🎬 로그인되지 않은 사용자에게 기본 검색 결과 표시 (영화)');
+                    // Automatically search for '뉴스' (news) when user is not logged in
+                    console.log('📰 로그인되지 않은 사용자에게 기본 검색 결과 표시 (뉴스)');
                     setTimeout(() => {
-                        document.getElementById('searchInput').value = '영화';
+                        document.getElementById('searchInput').value = '뉴스';
                         // Trigger the search function without login check
                         performDefaultSearch();
                     }, 500);
@@ -3174,7 +3174,7 @@
                 const startTime = performance.now();
                 console.log('⏱️ performDefaultSearch 시작');
                 
-                const query = '영화';
+                const query = '뉴스';
                 const resultsDiv = document.getElementById('results');
                 resultsDiv.innerHTML = '<div class="loading">⏳ 검색 중...</div>';
                 
