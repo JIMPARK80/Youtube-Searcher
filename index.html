@@ -5,18 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jim's YouTube 검색기</title>
     <link rel="stylesheet" href="css/styles.css">
-    
-    <!-- Firebase SDK - 동기 로딩 -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    
-    <!-- 로컬 파일 프로토콜 감지 및 경고 -->
-    <script>
-        if (window.location.protocol === 'file:') {
-            alert('⚠️ HTTP 서버가 필요합니다!\n\npython -m http.server 8000\n\n명령어로 로컬 서버를 실행한 후 http://localhost:8000 으로 접속하세요.');
-        }
-    </script>
 </head>
 <body>
     <!-- Auth Section -->
@@ -128,9 +116,10 @@
             <div class="search-mode-indicator" id="searchModeIndicator">
                 <span class="mode-text">현재 검색 모드: 🟢 Google API</span>
             </div>
-
+            
             <!-- API 키는 서버에서 자동으로 로드되므로 입력란 숨김 -->
             <div class="api-key-section" id="apiKeySection" style="display: none;">
+                <!-- Hidden inputs for backward compatibility -->
                 <input type="password" id="apiKey" style="display: none;" />
                 <input type="password" id="serpApiKey" style="display: none;" />
             </div>
@@ -182,21 +171,6 @@
                 </div>
             </div>
 
-            <!-- Sort Options -->
-            <div class="filter-group sort-filter">
-                <label for="sortSelect">정렬:</label>
-                <select id="sortSelect">
-                    <option value="vpd_desc">일평균 조회수 높은순</option>
-                    <option value="vpd_asc">일평균 조회수 낮은순</option>
-                    <option value="view_desc">조회수 높은순</option>
-                    <option value="view_asc">조회수 낮은순</option>
-                    <option value="date_desc">최신순</option>
-                    <option value="date_asc">오래된순</option>
-                </select>
-            </div>
-        </div>
-
-        <!-- Pagination Section -->
         <div class="pagination-section">
             <div class="result-summary" id="resultSummary">
                 검색 결과: <span id="totalCount">0</span>개
@@ -208,34 +182,2222 @@
             </div>
         </div>
 
-        <!-- Results Container -->
-        <div id="results" class="results-container">
-            <div class="loading">⏳ 검색 중...</div>
-        </div>
+        <div id="results"></div>
     </div>
 
-    <!-- 전역 함수 (비밀번호 토글) -->
+
+    <!-- Firebase SDK -->
+    <script type="module" src="js/firebase-config.js"></script>
+    
     <script>
+        // Password toggle function
         function togglePassword(inputId, toggleId) {
-            const input = document.getElementById(inputId);
-            const toggle = document.getElementById(toggleId);
+            const passwordInput = document.getElementById(inputId);
+            const toggleText = document.getElementById(toggleId);
             
-            if (input.type === 'password') {
-                input.type = 'text';
-                toggle.textContent = '숨기기';
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleText.textContent = '숨기기';
             } else {
-                input.type = 'password';
-                toggle.textContent = '보기';
+                passwordInput.type = 'password';
+                toggleText.textContent = '보기';
+            }
+        }
+
+        // API 키 초기화 - Firebase 서버에서 우선적으로 로드
+        let apiKey = null;
+        let serpApiKey = null;
+        const apiKeyInput = document.getElementById('apiKey');
+        const serpApiKeyInput = document.getElementById('serpApiKey');
+        
+        // Helper function to get API keys (Firebase server only)
+        async function getApiKeys() {
+            // Try to load API keys from Firebase if not already loaded
+            if (!window.serverApiKeys && window.loadApiKeysFromFirebase) {
+                console.log('🔄 Firebase에서 API 키 로드 시도 중...');
+                await window.loadApiKeysFromFirebase();
+            }
+            
+            // Check if API keys are available
+            if (window.serverApiKeys && window.serverApiKeys.youtube) {
+                console.log('✅ Firebase에서 API 키 로드 성공');
+                return {
+                    youtube: window.serverApiKeys.youtube,
+                    serpapi: window.serverApiKeys.serpapi
+                };
+            }
+            
+            // Firebase 로딩 실패 시 에러 표시
+            console.error('❌ Firebase API 키 로드 실패');
+            alert('API 키를 Firebase에서 가져올 수 없습니다. 서버 환경에서 실행해주세요.');
+            return {
+                youtube: null,
+                serpapi: null
+            };
+        }
+        
+                 // Wait for Firebase to load, then initialize
+         setTimeout(async () => {
+             const keys = await getApiKeys();
+             apiKey = keys.youtube;
+             serpApiKey = keys.serpapi;
+             
+             // API keys are loaded from Firebase server
+             // No need to update UI elements as they are hidden
+             
+                  }, 500); // Wait for Firebase initialization
+
+        // API 키 UI 관련 이벤트 리스너 제거됨 - 서버에서 자동 로드
+
+        document.getElementById('searchBtn').addEventListener('click', search);
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                search();
+            }
+        });
+
+
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+
+        function formatDuration(duration) {
+            if (!duration) return '0:00';
+            
+            const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+            if (!match) return '0:00';
+            
+            const hours = (match[1] || '').replace('H', '');
+            const minutes = (match[2] || '').replace('M', '');
+            const seconds = (match[3] || '').replace('S', '');
+            
+            let result = '';
+            if (hours) result += hours + ':';
+            result += (minutes || '0').padStart(2, '0') + ':';
+            result += (seconds || '0').padStart(2, '0');
+            return result;
+        }
+
+        function parseDurationToSeconds(duration) {
+            if (!duration) return 0;
+            
+            const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+            if (!match) return 0;
+            
+            const hours = parseInt((match[1] || '').replace('H', '')) || 0;
+            const minutes = parseInt((match[2] || '').replace('M', '')) || 0;
+            const seconds = parseInt((match[3] || '').replace('S', '')) || 0;
+            return hours * 3600 + minutes * 60 + seconds;
+        }
+
+        function getPublishedAfterDate(period) {
+            if (!period) return '';
+            
+            const now = new Date();
+            let date = new Date();
+            const value = parseInt(period);
+
+            console.log(`📅 기간 필터 계산: period=${period}, value=${value}`);
+
+            if (!isNaN(value) && value > 0) {
+                // All values are now in days (1, 3, 7, 30, 90, 180, 365)
+                date.setDate(now.getDate() - value);
+                console.log(`📅 일 단위 계산: ${value}일 전`);
+                console.log(`📅 현재 날짜: ${now.toISOString()}`);
+                console.log(`📅 계산된 컷오프 날짜: ${date.toISOString()}`);
+            } else {
+                console.log(`📅 잘못된 기간 값: ${period}`);
+                return '';
+            }
+
+            return date.toISOString();
+        }
+
+        // Parse relative date strings (e.g., "3 days ago")
+        function parseRelativeDate(relativeDateStr) {
+            if (!relativeDateStr) return null;
+            
+            const str = relativeDateStr.toLowerCase().trim();
+            const now = Date.now();
+            
+            // Parse relative time strings
+            if (str.includes('ago')) {
+                const matches = str.match(/(\d+)\s*(second|minute|hour|day|week|month|year)/);
+                if (matches) {
+                    const value = parseInt(matches[1]);
+                    const unit = matches[2];
+                    
+                    let milliseconds = 0;
+                    switch(unit) {
+                        case 'second': milliseconds = value * 1000; break;
+                        case 'minute': milliseconds = value * 60 * 1000; break;
+                        case 'hour': milliseconds = value * 60 * 60 * 1000; break;
+                        case 'day': milliseconds = value * 24 * 60 * 60 * 1000; break;
+                        case 'week': milliseconds = value * 7 * 24 * 60 * 60 * 1000; break;
+                        case 'month': milliseconds = value * 30 * 24 * 60 * 60 * 1000; break;
+                        case 'year': milliseconds = value * 365 * 24 * 60 * 60 * 1000; break;
+                    }
+                    
+                    return new Date(now - milliseconds);
+                }
+            }
+            
+            // Try parsing as absolute date
+            const parsedDate = new Date(relativeDateStr);
+            if (!isNaN(parsedDate.getTime())) {
+                return parsedDate;
+            }
+            
+            return null;
+        }
+
+        // View Velocity functions
+        function ageDays(publishedAt) {
+            const now = Date.now();
+            const publishedTime = Date.parse(publishedAt);
+            
+            // Check if date parsing was successful
+            if (isNaN(publishedTime)) {
+                console.warn('Invalid publishedAt date:', publishedAt);
+                return 0.25; // Return minimum age to avoid division by zero
+            }
+            
+            const ageMs = Math.max(1, now - publishedTime); // guard
+            const d = ageMs / (1000 * 60 * 60 * 24);
+            return d;
+        }
+
+        function viewVelocityPerDay(video) {
+            const views = Number(video.statistics?.viewCount || 0);
+            const days = ageDays(video.snippet.publishedAt);
+
+            // Handle ultra-fresh videos fairly: show per-hour if < 1 day, but normalize to per-day for ranking
+            const perDay = views / Math.max(0.25, days); // clamp min 0.25 day to avoid infinity spikes
+            return perDay; // numeric, e.g., 25340.7
+        }
+
+        function formatVelocity(vpd) {
+            if (vpd >= 1_000_000) return `+${(vpd/1_000_000).toFixed(1)}M/day`;
+            if (vpd >= 1_000)     return `+${(vpd/1_000).toFixed(1)}K/day`;
+            return `+${Math.round(vpd)}/day`;
+        }
+
+        function formatDate(dateString) {
+            if (!dateString || dateString === '') {
+                console.warn('빈 날짜 문자열:', dateString);
+                return '날짜 없음';
+            }
+            
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) {
+                console.warn('잘못된 날짜 형식:', dateString);
+                return '날짜 없음'; // '날짜 오류' 대신 '날짜 없음'으로 변경
+            }
+            
+            const now = new Date();
+            const diffTime = Math.abs(now - date);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 1) return '1일 전';
+            if (diffDays < 7) return `${diffDays}일 전`;
+            if (diffDays < 30) return `${Math.floor(diffDays / 7)}주 전`;
+            if (diffDays < 365) return `${Math.floor(diffDays / 30)}개월 전`;
+            return `${Math.floor(diffDays / 365)}년 전`;
+        }
+
+        function classifyVelocity(vpd) {
+            if (vpd >= 50_000) return 'recent-surge'; // 최근 급상승
+            if (vpd >= 5_000)  return 'normal';       // 보통
+            return 'slow';                            // 느린 성장
+        }
+
+        function channelSizeBand(channel) {
+            const sub = Number(channel?.statistics?.subscriberCount ?? NaN);
+            if (Number.isNaN(sub)) return 'hidden'; // 구독자 미공개
+            if (sub < 10_000)      return 'small';  // <10K
+            if (sub < 100_000)     return 'mid';    // 10K–100K
+            return 'large';                          // 100K+
+        }
+
+        function sortVelocityThenSmallCreator(a, b) {
+            const d = b.vpd - a.vpd;
+            if (d !== 0) return d;
+            return (a.subs || Infinity) - (b.subs || Infinity);
+        }
+
+        function getChannelSizeEmoji(cband) {
+            switch(cband) {
+                case 'small': return '🌱';
+                case 'mid': return '🌿';
+                case 'large': return '🌳';
+                case 'hidden': return '❓';
+                default: return '';
+            }
+        }
+
+
+        // Global variables for pagination
+        let allVideos = [];      // filled after API fetch
+        let allItems = [];       // enriched with velocity and channel data
+        const pageSize = 8;      // items per page (4×2 grid)
+        let currentPage = 1;     // 1-based
+        let allChannelMap = {};
+        let searchCache = {};   // Cache search results by query
+        let currentSearchQuery = ''; // Track current search query
+        
+        // SerpAPI configuration
+        let currentSearchMode = 'google'; // 'google' or 'serpapi'
+
+        
+
+        // Load search data from Firebase cloud cache only
+        async function loadSearchData(query) {
+            const firebaseData = await loadFromFirebase(query);
+            if (firebaseData) {
+                // Restore full structure from compressed Firebase data
+                const restoredVideos = firebaseData.videos.map(v => ({
+                    id: v.id,
+                    snippet: {
+                        title: v.title,
+                        channelId: v.channelId,
+                        channelTitle: v.channelTitle,
+                        publishedAt: v.publishedAt,
+                        thumbnails: {
+                            maxres: { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` },
+                            standard: { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` },
+                            high: { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` },
+                            medium: { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` },
+                            default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
+                        }
+                    },
+                    statistics: {
+                        viewCount: v.viewCount,
+                        likeCount: v.likeCount
+                    },
+                    contentDetails: {
+                        duration: v.duration
+                    },
+                    serpData: v.serp
+                }));
+                
+                allVideos = restoredVideos;
+                allChannelMap = firebaseData.channels || {};
+                allItems = firebaseData.items || [];
+                
+                console.log(`📦 Firebase에서 로드된 검색 데이터: ${query} (${allItems.length}개 항목)`);
+                return true;
+            }
+            return false;
+        }
+
+        // Save search data to Firebase cloud cache only
+        function saveSearchData(query, videos, channels, items, dataSource = null) {
+            // dataSource is inferred from current search mode if not provided
+            const source = dataSource || (currentSearchMode === 'google' ? 'google' : 'serpapi');
+            saveToFirebase(query, videos, channels, items, source);
+        }
+        
+        // Load from Firebase cloud cache
+        async function loadFromFirebase(query) {
+            try {
+                if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseGetDoc) {
+                    console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
+                    return null;
+                }
+                
+                // Sanitize document ID
+                const docId = window.toDocId(query);
+                console.log(`🔍 Firebase 캐시 확인 중: 검색어="${query}" -> 문서 ID: "${docId}"`);
+                
+                const cacheRef = window.firebaseDoc(window.firebaseDb, 'searchCache', docId);
+                const cacheSnap = await window.firebaseGetDoc(cacheRef);
+                
+                if (cacheSnap.exists()) {
+                    const data = cacheSnap.data();
+                    const age = Date.now() - data.timestamp;
+                    const ageHours = age / (1000 * 60 * 60);
+                    
+                    console.log(`☁️ Firebase 캐시 발견: ${ageHours.toFixed(1)}시간 전 데이터`);
+                    console.log(`📊 캐시 정보: ${data.items?.length || 0}개 항목, 소스: ${data.dataSource || 'unknown'}`);
+                    
+                    // 24시간 이내면 유효
+                    if (age < 24 * 60 * 60 * 1000) {
+                        console.log('✅ 유효한 Firebase 캐시 사용');
+                        return data;
+                    } else {
+                        console.log('⏰ Firebase 캐시 만료 (24시간 초과)');
+                    }
+                } else {
+                    console.log(`📭 Firebase 캐시 없음 (문서 ID: "${query.toLowerCase()}")`);
+                }
+                
+                return null;
+            } catch (error) {
+                console.error('❌ Firebase 캐시 로드 실패:', error);
+                return null;
             }
         }
         
-        // Firebase SDK 로드 완료 후 main.js 로드
-        window.addEventListener('load', function() {
-            const script = document.createElement('script');
-            script.type = 'module';
-            script.src = 'js/main.js';
-            document.body.appendChild(script);
+        // Save to Firebase cloud cache
+        async function saveToFirebase(query, videos, channels, items, dataSource = 'google') {
+            try {
+                if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseSetDoc) {
+                    console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
+                    return;
+                }
+                
+                // Sanitize document ID
+                const docId = window.toDocId(query);
+                console.log(`📝 문서 ID: "${query}" -> "${docId}"`);
+                
+                const cacheRef = window.firebaseDoc(window.firebaseDb, 'searchCache', docId);
+                
+                // Shrink data to prevent payload size issues
+                const shrinkVideo = v => ({
+                    id: v.id,
+                    title: v.snippet?.title,
+                    channelId: v.snippet?.channelId,
+                    channelTitle: v.snippet?.channelTitle,
+                    publishedAt: v.snippet?.publishedAt,
+                    viewCount: v.statistics?.viewCount ?? null,
+                    likeCount: v.statistics?.likeCount ?? null,
+                    duration: v.contentDetails?.duration ?? null,
+                    serp: v.serpData ? {
+                        subs: v.serpData.channelSubscribers ?? null,
+                        views: v.serpData.views ?? null,
+                        link: v.serpData.link ?? null,
+                        extracted_date: v.serpData.extracted_date_from_description ?? null
+                    } : null
+                });
+                
+                const shrinkItem = x => ({
+                    id: x?.raw?.id,
+                    vpd: x.vpd,
+                    vclass: x.vclass,
+                    cband: x.cband,
+                    subs: x.subs
+                });
+                
+                const data = {
+                    query: query,
+                    videos: (videos || []).map(shrinkVideo),
+                    channels: channels || {},
+                    items: (items || []).map(shrinkItem),
+                    timestamp: Date.now(),
+                    cacheVersion: '1.1',
+                    dataSource: dataSource  // 'google' or 'serpapi'
+                };
+                
+                // 디버깅: 데이터 크기 확인
+                const dataSize = JSON.stringify(data).length;
+                console.log(`📊 저장할 데이터 크기: ${(dataSize / 1024).toFixed(2)} KB`);
+                
+                if (dataSize > 1000000) { // 1MB 초과
+                    console.warn(`⚠️ 데이터 크기가 너무 큽니다 (${(dataSize / 1024).toFixed(2)} KB)`);
+                }
+                
+                await window.firebaseSetDoc(cacheRef, data, { merge: true });
+                console.log(`☁️ Firebase 캐시 저장 완료: ${query} (${dataSource})`);
+                
+                // 디버깅: 저장 확인
+                const verifySnap = await window.firebaseGetDoc(cacheRef);
+                if (verifySnap.exists()) {
+                    console.log(`✅ 저장 확인: ${verifySnap.data().items.length}개 항목 저장됨`);
+                } else {
+                    console.error('❌ 저장 확인 실패: 문서가 생성되지 않음');
+                }
+            } catch (error) {
+                console.error('❌ Firebase 캐시 저장 실패:', error);
+            }
+        }
+
+        // 필터 없이 전체 데이터 반환 (정렬은 성장속도 기준)
+        function applyAllFilters() {
+            let items = [...allItems];
+            
+            // Apply view count filter
+            const viewCountFilter = document.querySelector('input[name="viewCountFilter"]:checked')?.value;
+            if (viewCountFilter && viewCountFilter !== 'all') {
+                const minViews = parseInt(viewCountFilter);
+                items = items.filter(item => {
+                    if (!item?.raw?.statistics) return false;
+                    const views = parseInt(item.raw.statistics.viewCount || 0);
+                    return views >= minViews;
+                });
+            }
+            
+            // Apply subscriber count filter (range-based)
+            const subCountFilter = document.querySelector('input[name="subCountFilter"]:checked')?.value;
+            if (subCountFilter && subCountFilter !== 'all') {
+                if (subCountFilter.includes('-')) {
+                    // Range filter (e.g., "1000-10000")
+                    const [minStr, maxStr] = subCountFilter.split('-');
+                    const minSubs = parseInt(minStr);
+                    const maxSubs = parseInt(maxStr);
+                    items = items.filter(item => {
+                        const subs = parseInt(item.subs || 0);
+                        return subs >= minSubs && subs <= maxSubs;
+                    });
+                } else {
+                    // Minimum filter (e.g., "1000000" for 1M+)
+                    const minSubs = parseInt(subCountFilter);
+                    items = items.filter(item => {
+                        const subs = parseInt(item.subs || 0);
+                        return subs >= minSubs;
+                    });
+                }
+            }
+            
+            // Apply upload date filter
+            const uploadDateFilter = document.querySelector('input[name="uploadDateFilter"]:checked')?.value;
+            if (uploadDateFilter && uploadDateFilter !== 'all') {
+                const cutoffDate = getPublishedAfterDate(uploadDateFilter);
+                items = items.filter(item => {
+                    if (!item?.raw?.snippet) return false;
+                    const publishedAt = item.raw.snippet.publishedAt;
+                    if (!publishedAt) return false;
+                    return publishedAt >= cutoffDate;
+                });
+            }
+            
+            // Apply video duration filter
+            const durationFilter = document.querySelector('input[name="durationFilter"]:checked')?.value;
+            if (durationFilter && durationFilter !== 'all') {
+                if (durationFilter.includes('-')) {
+                    // Range filter (e.g., "60-600")
+                    const [minStr, maxStr] = durationFilter.split('-');
+                    const minSeconds = parseInt(minStr);
+                    const maxSeconds = parseInt(maxStr);
+                    items = items.filter(item => {
+                        if (!item?.raw?.contentDetails) return false;
+                        const duration = item.raw.contentDetails.duration || '';
+                        const seconds = parseDurationToSeconds(duration);
+                        return seconds >= minSeconds && seconds <= maxSeconds;
+                    });
+                } else {
+                    // Minimum filter (e.g., "3600" for 1hour+)
+                    const minSeconds = parseInt(durationFilter);
+                    items = items.filter(item => {
+                        if (!item?.raw?.contentDetails) return false;
+                        const duration = item.raw.contentDetails.duration || '';
+                        const seconds = parseDurationToSeconds(duration);
+                        return seconds >= minSeconds;
+                    });
+                }
+            }
+            
+            // 성장속도 기준 정렬만 적용
+            items.sort(sortVelocityThenSmallCreator);
+            return items;
+        }
+
+        // SerpAPI search function
+        async function searchWithSerpAPI(query) {
+            try {
+                console.log('🔄 SerpAPI로 검색 중...');
+                // Get SerpAPI key from Firebase server first
+                const keys = await getApiKeys();
+                const serpApiKey = keys.serpapi;
+                if (!serpApiKey) {
+                    throw new Error('SerpAPI 키가 설정되지 않았습니다. API 키 설정에서 SerpAPI 키를 입력해주세요.');
+                }
+                
+                const serpUrl = `https://serpapi.com/search.json?engine=youtube&search_query=${encodeURIComponent(query)}&api_key=${serpApiKey}`;
+                
+                // Use CORS proxy to avoid CORS issues
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(serpUrl)}`;
+                const res = await fetch(proxyUrl);
+                const data = await res.json();
+
+                if (!data.video_results || data.video_results.length === 0) {
+                    throw new Error('SerpAPI에서 검색 결과를 찾을 수 없습니다.');
+                }
+
+                // Track SerpAPI usage
+                // trackApiCall('serpapi', 1);
+
+                // Convert SerpAPI format to our format
+                const videos = data.video_results.map(v => {
+                    const videoId = v.link.split('v=')[1]?.split('&')[0] || '';
+                    
+                    // Debug: Log SerpAPI data
+                    console.log('🔍 SerpAPI 비디오 데이터:', {
+                        title: v.title,
+                        published_date: v.published_date,
+                        published_date_type: typeof v.published_date,
+                        duration: v.duration,
+                        hasDuration: !!v.duration,
+                        durationType: typeof v.duration,
+                        channel: v.channel,
+                        channel_subscribers: v.channel?.subscribers
+                    });
+                    
+                    // Parse published date safely (improved with relative date support)
+                    // Priority: 1) published_date field, 2) description parsing (for exact dates like "Sep 11, 2019")
+                    let publishedAtISO = '';
+                    try {
+                        // First, try to parse published_date field
+                        if (v.published_date) {
+                            const parsedDate = parseRelativeDate(v.published_date);
+                            
+                            if (parsedDate && !isNaN(parsedDate.getTime()) && parsedDate.getTime() > 0) {
+                                publishedAtISO = parsedDate.toISOString();
+                                console.log('✅ published_date 파싱 성공:', v.title?.substring(0, 30), '→', publishedAtISO);
+                            } else {
+                                console.warn('⚠️ published_date 파싱 실패:', v.published_date, 'for:', v.title?.substring(0, 30));
+                            }
+                        }
+                        
+                        // If published_date parsing failed, try to extract from description
+                        if (!publishedAtISO && v.description) {
+                            console.log('📝 설명에서 날짜 추출 시도...');
+                            // Try to find dates like "Sep 11, 2019", "Sep. 11, 2019", "September 11, 2019"
+                            const datePatterns = [
+                                /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}/gi,
+                                /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.\s+\d{1,2},?\s+\d{4}/gi,
+                                /\d{4}년\s+\d{1,2}월\s+\d{1,2}일/gi  // Korean format: 2019년 9월 11일
+                            ];
+                            
+                            for (const pattern of datePatterns) {
+                                const matches = v.description.match(pattern);
+                                if (matches && matches.length > 0) {
+                                    const extractedDate = new Date(matches[0]);
+                                    if (!isNaN(extractedDate.getTime())) {
+                                        publishedAtISO = extractedDate.toISOString();
+                                        console.log('✅ 설명에서 날짜 추출 성공:', matches[0], '→', publishedAtISO);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // If still no date, use default (1 week ago)
+                        if (!publishedAtISO) {
+                            console.warn('⚠️ 날짜를 찾을 수 없음, 기본값 사용');
+                            publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                        }
+                    } catch (e) {
+                        console.error('❌ Error parsing published date:', e);
+                        publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                    }
+                    
+                    // Ensure we never have an empty string
+                    if (!publishedAtISO || publishedAtISO === '') {
+                        console.error('❌ publishedAtISO is still empty for video:', v.title);
+                        publishedAtISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                    }
+                    
+                    // Extract channel subscriber count from SerpAPI data (improved)
+                    let channelSubscriberCount = '0';
+                    let subscriberDataAvailable = false;
+                    
+                    if (v.channel?.subscribers) {
+                        subscriberDataAvailable = true;
+                        
+                        if (typeof v.channel.subscribers === 'number') {
+                            channelSubscriberCount = v.channel.subscribers.toString();
+                        } else if (typeof v.channel.subscribers === 'string') {
+                            const subStr = v.channel.subscribers.toLowerCase().trim();
+                            let mult = 1;
+                            
+                            if (subStr.includes('m')) {
+                                mult = 1000000;
+                                const num = parseFloat(subStr);
+                                if (!isNaN(num)) {
+                                    channelSubscriberCount = Math.floor(num * mult).toString();
+                                }
+                            } else if (subStr.includes('k')) {
+                                mult = 1000;
+                                const num = parseFloat(subStr);
+                                if (!isNaN(num)) {
+                                    channelSubscriberCount = Math.floor(num * mult).toString();
+                                }
+                            } else {
+                                const numMatch = subStr.match(/[\d.]+/);
+                                if (numMatch) {
+                                    const num = parseFloat(numMatch[0]);
+                                    if (!isNaN(num)) {
+                                        channelSubscriberCount = Math.floor(num).toString();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Parse views - handle both number and string formats (improved)
+                    let viewCount = '0';
+                    if (v.views !== undefined && v.views !== null) {
+                        if (typeof v.views === 'number') {
+                            viewCount = v.views.toString();
+                        } else if (typeof v.views === 'string') {
+                            const viewStr = v.views.toLowerCase().trim();
+                            
+                            if (viewStr.includes('m')) {
+                                const num = parseFloat(viewStr);
+                                if (!isNaN(num)) {
+                                    viewCount = Math.floor(num * 1000000).toString();
+                                }
+                            } else if (viewStr.includes('k')) {
+                                const num = parseFloat(viewStr);
+                                if (!isNaN(num)) {
+                                    viewCount = Math.floor(num * 1000).toString();
+                                }
+                            } else {
+                                const numMatch = viewStr.match(/[\d.]+/);
+                                if (numMatch) {
+                                    const num = parseFloat(numMatch[0]);
+                                    if (!isNaN(num)) {
+                                        viewCount = Math.floor(num).toString();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Parse likes similarly (improved)
+                    let likeCount = '0';
+                    if (v.likes !== undefined && v.likes !== null) {
+                        if (typeof v.likes === 'number') {
+                            likeCount = v.likes.toString();
+                        } else if (typeof v.likes === 'string') {
+                            const likeStr = v.likes.toLowerCase().trim();
+                            
+                            if (likeStr.includes('m')) {
+                                const num = parseFloat(likeStr);
+                                if (!isNaN(num)) {
+                                    likeCount = Math.floor(num * 1000000).toString();
+                                }
+                            } else if (likeStr.includes('k')) {
+                                const num = parseFloat(likeStr);
+                                if (!isNaN(num)) {
+                                    likeCount = Math.floor(num * 1000).toString();
+                                }
+                            } else {
+                                const numMatch = likeStr.match(/[\d.]+/);
+                                if (numMatch) {
+                                    const num = parseFloat(numMatch[0]);
+                                    if (!isNaN(num)) {
+                                        likeCount = Math.floor(num).toString();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                                         console.log('🔍 SerpAPI 데이터 추출:', {
+                         title: v.title,
+                         channelName: v.channel?.name,
+                         channelId: v.channel?.id,
+                         subscribers: v.channel?.subscribers,
+                         subscriberDataAvailable: subscriberDataAvailable,
+                         parsedSubscribers: channelSubscriberCount,
+                         views: v.views,
+                         parsedViews: viewCount,
+                         likes: v.likes,
+                         parsedLikes: likeCount,
+                         published_date: v.published_date,
+                         fullChannelObject: v.channel
+                     });
+                    
+                                         return {
+                         id: videoId,
+                         snippet: {
+                             title: v.title,
+                             channelTitle: v.channel?.name || 'Unknown Channel',
+                             channelId: v.channel?.id || '',
+                             publishedAt: publishedAtISO,
+                             description: v.description || '',
+                             thumbnails: {
+                                 maxres: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` },
+                                 standard: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/sddefault.jpg` },
+                                 high: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` },
+                                 medium: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` },
+                                 default: { url: v.thumbnail?.static || `https://img.youtube.com/vi/${videoId}/default.jpg` }
+                             }
+                         },
+                        statistics: {
+                            viewCount: viewCount,
+                            likeCount: likeCount,
+                            commentCount: v.comments || '0'
+                        },
+                        contentDetails: {
+                            duration: v.duration || 'PT0S' // SerpAPI may provide duration in some cases
+                        },
+                                                 // Additional SerpAPI data
+                        serpData: {
+                            channel: v.channel,
+                            channelSubscribers: channelSubscriberCount,
+                            subscriberDataAvailable: subscriberDataAvailable,
+                            views: viewCount,
+                            published_date: v.published_date,
+                            original_published_date: v.published_date, // 원본 날짜 저장
+                            extracted_date_from_description: publishedAtISO, // 추출된 날짜 저장
+                            description: v.description,
+                            likes: likeCount,
+                            comments: v.comments,
+                            duration: v.duration,
+                            thumbnail: v.thumbnail,
+                            link: v.link
+                        }
+                    };
+                });
+
+                return videos;
+
+            } catch (error) {
+                console.error('SerpAPI 오류:', error);
+                throw new Error(`SerpAPI 검색 실패: ${error.message}`);
+            }
+        }
+
+        // Update search mode indicator
+        function updateSearchModeIndicator(mode) {
+            const indicator = document.getElementById('searchModeIndicator');
+            if (!indicator) {
+                console.log('⚠️ Search mode indicator not found, skipping update');
+                return;
+            }
+            
+            const modeText = indicator.querySelector('.mode-text');
+            if (!modeText) {
+                console.log('⚠️ Mode text element not found, skipping update');
+                return;
+            }
+            
+            if (mode === 'serpapi') {
+                indicator.classList.add('serpapi');
+                modeText.innerHTML = '현재 검색 모드: 🔵 SerpAPI (Google API 한도초과)';
+                currentSearchMode = 'serpapi';
+                updateFilterStatusIndicators('serpapi');
+            } else {
+                indicator.classList.remove('serpapi');
+                modeText.innerHTML = '현재 검색 모드: 🟢 Google API';
+                currentSearchMode = 'google';
+                updateFilterStatusIndicators('google');
+            }
+        }
+
+        // Update filter status indicators based on current search mode
+        function updateFilterStatusIndicators(mode) {
+            const uploadDateStatus = document.getElementById('uploadDateFilterStatus');
+            const durationStatus = document.getElementById('durationFilterStatus');
+            const viewCountStatus = document.getElementById('viewCountFilterStatus');
+            const velocityStatus = document.getElementById('velocityFilterStatus');
+            const channelSizeStatus = document.getElementById('channelSizeFilterStatus');
+            
+            if (mode === 'serpapi') {
+                // SerpAPI mode - show what's available vs unavailable
+                if (uploadDateStatus) {
+                    uploadDateStatus.textContent = '✅ 가능';
+                    uploadDateStatus.className = 'filter-status available';
+                    uploadDateStatus.title = 'SerpAPI는 업로드 날짜 데이터를 제공합니다';
+                }
+                
+                if (viewCountStatus) {
+                    viewCountStatus.textContent = '✅ 가능';
+                    viewCountStatus.className = 'filter-status available';
+                    viewCountStatus.title = 'SerpAPI는 조회수 데이터를 제공합니다';
+                }
+                
+                if (velocityStatus) {
+                    velocityStatus.textContent = '✅ 가능';
+                    velocityStatus.className = 'filter-status available';
+                    velocityStatus.title = 'SerpAPI는 조회수와 날짜로 성장속도를 계산합니다';
+                }
+                
+                if (durationStatus) {
+                    durationStatus.textContent = '❌ 불가능';
+                    durationStatus.className = 'filter-status unavailable';
+                    durationStatus.title = 'SerpAPI는 비디오 길이 데이터를 제공하지 않습니다';
+                }
+                
+                if (channelSizeStatus) {
+                    channelSizeStatus.textContent = '❌ 불가능';
+                    channelSizeStatus.className = 'filter-status unavailable';
+                    channelSizeStatus.title = 'SerpAPI는 채널 구독자 정보를 제한적으로 제공합니다';
+                }
+            } else {
+                // Google API mode - all filters available
+                if (uploadDateStatus) {
+                    uploadDateStatus.textContent = '✅ 가능';
+                    uploadDateStatus.className = 'filter-status available';
+                    uploadDateStatus.title = 'Google API는 모든 업로드 날짜 데이터를 제공합니다';
+                }
+                
+                if (viewCountStatus) {
+                    viewCountStatus.textContent = '✅ 가능';
+                    viewCountStatus.className = 'filter-status available';
+                    viewCountStatus.title = 'Google API는 모든 조회수 데이터를 제공합니다';
+                }
+                
+                if (velocityStatus) {
+                    velocityStatus.textContent = '✅ 가능';
+                    velocityStatus.className = 'filter-status available';
+                    velocityStatus.title = 'Google API는 모든 데이터로 성장속도를 계산합니다';
+                }
+                
+                if (durationStatus) {
+                    durationStatus.textContent = '✅ 가능';
+                    durationStatus.className = 'filter-status available';
+                    durationStatus.title = 'Google API는 모든 비디오 길이 데이터를 제공합니다';
+                }
+                
+                if (channelSizeStatus) {
+                    channelSizeStatus.textContent = '✅ 가능';
+                    channelSizeStatus.className = 'filter-status available';
+                    channelSizeStatus.title = 'Google API는 채널 구독자 수를 제공합니다';
+                }
+            }
+        }
+
+        async function search() {
+            const query = document.getElementById('searchInput').value.trim();
+            
+            // Reset isDefaultSearch flag at the start of any manual search
+            const wasDefaultSearch = window.isDefaultSearch;
+            window.isDefaultSearch = false;
+            
+            // Check if user is logged in (only for manual searches, not default search or 'news' query)
+            const isNewsQuery = query.toLowerCase() === 'news';
+            if (!window.currentUser && !wasDefaultSearch && !isNewsQuery) {
+                // Show login modal
+                const loginModal = document.getElementById('loginModal');
+                if (loginModal) {
+                    loginModal.classList.add('active');
+                    alert('검색하려면 로그인이 필요합니다.');
+                }
+                return;
+            }
+            
+            if (!query) {
+                alert('검색어를 입력해주세요!');
+                return;
+            }
+            
+            // Get API key from Firebase server first, then input field, then localStorage
+            const keys = await getApiKeys();
+            const apiKeyValue = keys.youtube || document.getElementById('apiKey').value.trim();
+            
+            if (!apiKeyValue) {
+                alert('API 키를 입력해주세요! 서버에 API 키가 저장되어 있지 않습니다.');
+                return;
+            }
+
+            currentSearchQuery = query;
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="loading">⏳ 검색 중...</div>';
+            
+            // Save user's last search keyword if logged in and not a default search
+            if (window.currentUser && !window.isDefaultSearch && query !== 'news') {
+                saveUserLastSearchKeyword(window.currentUser.uid, query);
+            }
+            
+            // Reset pagination for new search
+            currentPage = 1;
+            allVideos = [];
+            allItems = [];
+            allChannelMap = {};
+
+            // 1. Check Firebase cloud cache first
+            const firebaseData = await loadFromFirebase(query);
+            if (firebaseData) {
+                console.log('☁️ Firebase 캐시 발견');
+                console.log(`📊 데이터 출처: ${firebaseData.dataSource || 'unknown'}`);
+                
+                // Check if data is older than 24 hours
+                const age = Date.now() - firebaseData.timestamp;
+                const ageHours = age / (1000 * 60 * 60);
+                const isExpired = ageHours >= 24;
+                
+                console.log(`⏰ 캐시 데이터 연령: ${ageHours.toFixed(1)}시간 (만료: ${isExpired ? '예' : '아니오'})`);
+                
+                // SerpAPI 모드에서 Google 데이터가 있으면 업데이트 안함
+                if (firebaseData.dataSource === 'google' && currentSearchMode === 'serpapi') {
+                    console.log('✅ SerpAPI 모드: Google 데이터 사용 (업데이트 안함)');
+                    
+                    // Update search mode indicator
+                    updateSearchModeIndicator('google');
+                    
+                    // Restore full structure from compressed Firebase data
+                    const restoredVideos = firebaseData.videos.map(v => ({
+                        id: v.id,
+                        snippet: {
+                            title: v.title,
+                            channelId: v.channelId,
+                            channelTitle: v.channelTitle,
+                            publishedAt: v.publishedAt,
+                            thumbnails: {
+                                maxres: { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` },
+                                standard: { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` },
+                                high: { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` },
+                                medium: { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` },
+                                default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
+                            }
+                        },
+                        statistics: {
+                            viewCount: v.viewCount,
+                            likeCount: v.likeCount
+                        },
+                        contentDetails: {
+                            duration: v.duration
+                        },
+                        serpData: v.serp
+                    }));
+                    
+                    allVideos = restoredVideos;
+                    allChannelMap = firebaseData.channels || {};
+                    
+                    // Map items by video id to ensure proper matching
+                    const videoById = new Map(restoredVideos.map(v => [v.id, v]));
+                    allItems = (firebaseData.items || []).map(item => ({
+                        raw: videoById.get(item.id), // Use id match instead of index
+                        vpd: item.vpd,
+                        vclass: item.vclass,
+                        cband: item.cband,
+                        subs: item.subs
+                    })).filter(item => item.raw); // Remove items without matching video
+                    
+                    renderPage(1);
+                    return;
+                }
+                
+                // If SerpAPI data exists, replace with Google API data
+                if (firebaseData.dataSource === 'serpapi') {
+                    console.log('🔄 SerpAPI 데이터 발견 → Google API로 업데이트 진행');
+                    // Skip cache and continue to API call
+                } else if (!isExpired || (isExpired && currentSearchMode !== 'google')) {
+                    console.log('✅ Firebase 캐시 사용 (만료 전 또는 SerpAPI 모드)');
+                    
+                    // Update search mode indicator based on data source
+                    if (firebaseData.dataSource === 'serpapi') {
+                        updateSearchModeIndicator('serpapi');
+                    } else {
+                        updateSearchModeIndicator('google');
+                    }
+                    
+                    // Restore full structure from compressed Firebase data
+                    const restoredVideos = firebaseData.videos.map(v => ({
+                        id: v.id,
+                        snippet: {
+                            title: v.title,
+                            channelId: v.channelId,
+                            channelTitle: v.channelTitle,
+                            publishedAt: v.publishedAt,
+                            thumbnails: {
+                                maxres: { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` },
+                                standard: { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` },
+                                high: { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` },
+                                medium: { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` },
+                                default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
+                            },
+                            description: '',
+                            tags: []
+                        },
+                        statistics: {
+                            viewCount: v.viewCount || '0',
+                            likeCount: v.likeCount || '0',
+                            commentCount: '0'
+                        },
+                        contentDetails: {
+                            duration: v.duration || 'PT0S'
+                        },
+                        serpData: v.serp ? {
+                            channelSubscribers: v.serp.subs,
+                            views: v.serp.views,
+                            link: v.serp.link,
+                            extracted_date_from_description: v.serp.extracted_date
+                        } : null
+                    }));
+                    
+                    // Restore items with full structure
+                    const restoredItems = firebaseData.items.map((x, idx) => ({
+                        raw: restoredVideos[idx],
+                        vpd: x.vpd,
+                        vclass: x.vclass,
+                        cband: x.cband,
+                        subs: x.subs
+                    }));
+                    
+                    allVideos = restoredVideos;
+                    allChannelMap = firebaseData.channels || {};
+                    allItems = restoredItems;
+                    renderPage(1);
+                    return;
+                } else if (isExpired && currentSearchMode === 'google') {
+                    // Expired and Google API mode - need to update
+                    console.log('🔄 Google API 모드: 캐시 만료 (24시간 경과) - 업데이트 진행');
+                }
+            } else {
+                console.log('📭 Firebase 캐시 없음 - API 호출 진행');
+            }
+            
+            // 2. Check memory cache second
+            const cacheKey = query.toLowerCase();
+            if (searchCache[cacheKey]) {
+                console.log('📦 메모리 캐시에서 결과 로드');
+                const cachedData = searchCache[cacheKey];
+                allVideos = cachedData.videos;
+                allChannelMap = cachedData.channels;
+                allItems = cachedData.items;
+                // Save to Firebase for persistence
+                saveSearchData(query, allVideos, allChannelMap, allItems);
+                renderPage(1);
+                return;
+            }
+
+                         try {
+                 // Try Google API first
+                 try {
+                     // Build search URL (no filters, simple search)
+                     const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=100&q=${encodeURIComponent(query)}&order=relevance&key=${apiKeyValue}`;
+
+                    const searchResponse = await fetch(searchUrl);
+                    const searchData = await searchResponse.json();
+
+                    // Check for quota exceeded error
+                    if (searchData.error && searchData.error.code === 403) {
+                        console.warn("⚠️ Google API 한도 초과 — SerpAPI로 전환합니다.");
+                        updateSearchModeIndicator('serpapi');
+                        throw new Error("quotaExceeded");
+                    }
+                    
+                    // Google API is working - update mode indicator
+                    console.log('✅ Google API 정상 작동');
+                    updateSearchModeIndicator('google');
+
+                    // Process Google API results
+                    const videoIds = searchData.items.map(item => item.id.videoId).join(',');
+                    const channelIds = [...new Set(searchData.items.map(item => item.snippet.channelId))].join(',');
+
+                    // Step 2: Get detailed video information
+                    const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${apiKeyValue}`;
+                    const videosResponse = await fetch(videosUrl);
+                    const videosData = await videosResponse.json();
+
+                    // Track API usage
+                    // trackApiCall('videos', 1);
+
+                    // Step 3: Get channel information for subscriber counts
+                    const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelIds}&key=${apiKeyValue}`;
+                    const channelsResponse = await fetch(channelsUrl);
+                    const channelsData = await channelsResponse.json();
+
+                    // Track API usage
+                    // trackApiCall('channels', 1);
+
+                    const channelMap = {};
+                    channelsData.items.forEach(channel => {
+                        channelMap[channel.id] = channel;
+                        allChannelMap[channel.id] = channel; // Save to global map
+                    });
+
+                    // Filter by video duration and view count if needed
+                    let filteredVideos = videosData.items;
+                    const videoDuration = null; // Duration filter disabled
+                    const viewCount = null; // View count filter disabled
+                    
+                    if (videoDuration || viewCount) {
+                        filteredVideos = videosData.items.filter(video => {
+                            // Duration filter
+                            if (videoDuration) {
+                                const duration = video.contentDetails?.duration || '';
+                                const seconds = parseDurationToSeconds(duration);
+                                
+                                let passesDurationFilter = false;
+                                switch(videoDuration) {
+                                    case 'short':
+                                        passesDurationFilter = seconds < 240; // Less than 4 minutes
+                                        break;
+                                    case 'medium':
+                                        passesDurationFilter = seconds >= 240 && seconds < 1200; // 4 to 20 minutes
+                                        break;
+                                    case 'long':
+                                        passesDurationFilter = seconds >= 1200; // 20 minutes or more
+                                        break;
+                                    default:
+                                        passesDurationFilter = true;
+                                }
+                                if (!passesDurationFilter) return false;
+                            }
+
+                            // View count filter
+                            if (viewCount) {
+                                const minViews = parseInt(viewCount);
+                                const videoViews = parseInt(video.statistics?.viewCount || 0);
+                                if (videoViews < minViews) return false;
+                            }
+
+                            return true;
+                        });
+                    }
+
+                    // Save all filtered videos
+                    allVideos = filteredVideos;
+
+                    // Enrich videos with velocity and channel data
+                    allItems = filteredVideos.map(video => {
+                        const channel = allChannelMap[video.snippet.channelId];
+                        const vpd = viewVelocityPerDay(video);
+                        const vclass = classifyVelocity(vpd);
+                        const cband = channelSizeBand(channel);
+                        const subs = Number(channel?.statistics?.subscriberCount ?? 0);
+                        
+                        return {
+                            raw: video,
+                            vpd: vpd,
+                            vclass: vclass,
+                            cband: cband,
+                            subs: subs
+                        };
+                    });
+
+                        // Cache the results
+                        searchCache[cacheKey] = {
+                            videos: allVideos,
+                            channels: allChannelMap,
+                            items: allItems
+                        };
+
+                        // Save to Firebase for persistence
+                        saveSearchData(query, allVideos, allChannelMap, allItems);
+
+                        // Display first page (8 items - 4×2 grid)
+                        renderPage(1);
+
+                } catch (googleError) {
+                    if (googleError.message === "quotaExceeded") {
+                        // Switch to SerpAPI
+                        console.log('🔄 SerpAPI로 자동 전환합니다...');
+                        resultsDiv.innerHTML = '<div class="loading">🔄 SerpAPI로 전환 중...</div>';
+                        
+                        const serpVideos = await searchWithSerpAPI(query);
+                        allVideos = serpVideos;
+                        
+                        // Build channel map from SerpAPI data
+                        allChannelMap = {};
+                        serpVideos.forEach(video => {
+                            if (video.snippet.channelId && video.serpData?.channelSubscribers) {
+                                allChannelMap[video.snippet.channelId] = {
+                                    id: video.snippet.channelId,
+                                    snippet: {
+                                        title: video.snippet.channelTitle,
+                                        thumbnails: { default: { url: '' } }
+                                    },
+                                    statistics: {
+                                        subscriberCount: video.serpData.channelSubscribers
+                                    }
+                                };
+                            }
+                        });
+                        
+                        // Create enriched items for SerpAPI results
+                        allItems = serpVideos.map(video => {
+                            const vpd = viewVelocityPerDay(video);
+                            const vclass = classifyVelocity(vpd);
+                            const channel = allChannelMap[video.snippet.channelId];
+                            const cband = channelSizeBand(channel);
+                            const subs = Number(channel?.statistics?.subscriberCount ?? 0);
+                            
+                            return {
+                                raw: video,
+                                vpd: vpd,
+                                vclass: vclass,
+                                cband: cband,
+                                subs: subs
+                            };
+                        });
+
+                        // Cache the results
+                        searchCache[cacheKey] = {
+                            videos: allVideos,
+                            channels: allChannelMap,
+                            items: allItems
+                        };
+
+                        // Save to Firebase for persistence
+                        saveSearchData(query, allVideos, allChannelMap, allItems);
+
+                        // Display results
+                        renderPage(1);
+                    } else {
+                        throw googleError;
+                    }
+                }
+
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ 오류 발생:</strong> ${error.message}
+                    </div>
+                `;
+                console.error('Error:', error);
+            }
+        }
+
+        function totalPages() {
+            const filteredItems = applyAllFilters();
+            return Math.max(1, Math.ceil(filteredItems.length / pageSize));
+        }
+
+        // Render current page to #results
+        function renderPage(page) {
+            // Apply filters first
+            const filteredItems = applyAllFilters()
+                .filter(item => item && item.raw && item.raw.snippet); // Guard against undefined items
+            
+            currentPage = Math.min(Math.max(1, page), Math.ceil(filteredItems.length / pageSize));
+            const start = (currentPage - 1) * pageSize;
+            const end = start + pageSize;
+            const pageItems = filteredItems.slice(start, end);
+
+            let html = `<div class="card-grid">`;
+            
+            pageItems.forEach(item => {
+                const video = item.raw;
+                const channel = allChannelMap[video.snippet.channelId];
+                // Try to get highest quality thumbnail available with multiple fallbacks
+                let thumbnail = video.snippet.thumbnails?.maxres || 
+                               video.snippet.thumbnails?.standard || 
+                               video.snippet.thumbnails?.high || 
+                               video.snippet.thumbnails?.medium || 
+                               video.snippet.thumbnails?.default;
+                
+                // Generate thumbnail URL with multiple fallback options
+                let thumbnailUrl = '';
+                if (thumbnail && thumbnail.url) {
+                    thumbnailUrl = thumbnail.url;
+                } else if (video.id) {
+                    // Try different YouTube thumbnail qualities in order of preference
+                    thumbnailUrl = `https://img.youtube.com/vi/${video.id}/maxresdefault.jpg`;
+                } else {
+                    // Ultimate fallback - placeholder image
+                    thumbnailUrl = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzMzMzMzMyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuydtOuvuOyngCDsgqTtgqQ8L3RleHQ+PC9zdmc+';
+                }
+                
+                // Check if this is SerpAPI data
+                const isSerpAPI = video.serpData;
+                const serpData = video.serpData || {};
+                
+                html += `
+                    <div class="video-card" onclick="window.open('https://www.youtube.com/watch?v=${video.id}', '_blank')">
+                        <div class="thumbnail-container">
+                            <img src="${thumbnailUrl}" 
+                                 alt="${video.snippet.title}" 
+                                 onerror="handleThumbnailError(this, '${video.id}')"
+                                 loading="lazy">
+                            ${video.contentDetails?.duration && video.contentDetails.duration !== 'PT0S' ? `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
+                            <div class="velocity-badge">${formatVelocity(item.vpd)}</div>
+                            ${isSerpAPI ? '<div class="serp-badge">🔵 SerpAPI</div>' : ''}
+                        </div>
+                        <div class="video-info">
+                            <div class="video-title">${video.snippet.title}</div>
+                            <div class="channel-info">
+                                ${channel?.snippet?.thumbnails?.default ? `<img src="${channel.snippet.thumbnails.default.url}" class="channel-icon" alt="${video.snippet.channelTitle}">` : ''}
+                                <span class="channel-name">${video.snippet.channelTitle}</span>
+                                <span class="channel-size-badge">${getChannelSizeEmoji(item.cband)}</span>
+                            </div>
+                            <div class="stats">
+                                <div class="stat-item">👁 ${formatNumber(parseInt(video.statistics.viewCount))}</div>
+                                ${video.statistics.likeCount && video.statistics.likeCount !== '0' ? `<div class="stat-item">👍 ${formatNumber(parseInt(video.statistics.likeCount))}</div>` : ''}
+                                ${video.statistics.commentCount && video.statistics.commentCount !== '0' ? `<div class="stat-item">💬 ${formatNumber(parseInt(video.statistics.commentCount))}</div>` : ''}
+                                ${isSerpAPI ? 
+                                    (serpData.subscriberDataAvailable && serpData.channelSubscribers !== '0' ? 
+                                        `<div class="stat-item">👥 ${formatNumber(parseInt(serpData.channelSubscribers))}</div>` : 
+                                        `<div class="stat-item stat-unavailable" title="SerpAPI에서 구독자 데이터를 제공하지 않습니다">👥 비공개</div>`) 
+                                    : (channel?.statistics?.subscriberCount ? `<div class="stat-item">👥 ${formatNumber(parseInt(channel.statistics.subscriberCount))}</div>` : '')}
+                            </div>
+                            ${isSerpAPI ? `
+                            <div class="serp-stats">
+                                <div class="serp-info">
+                                    <div class="serp-date" title="업로드 날짜 (설명에서 추출됨)">📅 ${formatDate(video.snippet.publishedAt)}</div>
+                                    ${serpData.original_published_date !== serpData.extracted_date_from_description ? 
+                                        `<div class="serp-date-diff" title="원본 날짜: ${serpData.original_published_date}">⚡ 정확한 날짜</div>` : ''}
+                                    ${serpData.duration ? `<div class="serp-duration">⏱️ ${serpData.duration}</div>` : ''}
+                                </div>
+                            </div>
+                            ` : ''}
+                            <div class="tags">
+                                ${video.snippet.tags ? video.snippet.tags.slice(0, 3).map(t => `<span class="tag">#${t}</span>`).join('') : ''}
+                            </div>
+                            <div class="video-description">${video.snippet.description || '-'}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += `</div>`;
+            document.getElementById('results').innerHTML = html;
+
+            // Update page text: "1 / 7 page"
+            document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages()} page`;
+
+            // Update result summary - show filtered count out of total count
+            const totalCount = allItems.length;
+            const filteredCount = filteredItems.length;
+            if (filteredCount === totalCount) {
+                // No filter applied, show only total count
+                document.getElementById('totalCount').textContent = totalCount;
+            } else {
+                // Filter applied, show "filtered / total"
+                document.getElementById('totalCount').innerHTML = `${filteredCount} / ${totalCount}`;
+            }
+
+            // Enable/disable arrows
+            document.getElementById('prevPage').disabled = currentPage === 1;
+            document.getElementById('nextPage').disabled = currentPage === totalPages();
+        }
+
+
+        
+
+         // Set initial search mode to SerpAPI since Google API is exhausted
+         // Defer this call until DOM is fully loaded to avoid temporal dead zone issues
+         window.addEventListener('DOMContentLoaded', function() {
+             updateSearchModeIndicator('serpapi');
+         });
+
+
+        // Thumbnail error handling function
+        function handleThumbnailError(img, videoId) {
+            console.log(`🖼️ 썸네일 로드 실패, 대체 이미지 시도: ${videoId}`);
+            
+            // Try different YouTube thumbnail qualities in order
+            const fallbackUrls = [
+                `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+                `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                `https://img.youtube.com/vi/${videoId}/default.jpg`,
+                `https://img.youtube.com/vi/${videoId}/0.jpg`
+            ];
+            
+            // Check if we've already tried all fallbacks
+            if (!img.dataset.fallbackIndex) {
+                img.dataset.fallbackIndex = '0';
+            } else {
+                img.dataset.fallbackIndex = (parseInt(img.dataset.fallbackIndex) + 1).toString();
+            }
+            
+            const currentIndex = parseInt(img.dataset.fallbackIndex);
+            
+            if (currentIndex < fallbackUrls.length) {
+                // Try next fallback URL
+                img.src = fallbackUrls[currentIndex];
+            } else {
+                // All fallbacks failed, use placeholder
+                img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzMzMzMzMyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuydtOuvuOyngCDsgqTtgqQ8L3RleHQ+PC9zdmc+';
+                img.style.border = '2px dashed #ccc';
+                img.title = '썸네일을 불러올 수 없습니다';
+                console.log(`❌ 모든 썸네일 대체 시도 실패: ${videoId}`);
+            }
+        }
+
+        // User-specific search keyword management
+        async function saveUserLastSearchKeyword(userId, keyword) {
+            try {
+                if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseSetDoc) {
+                    console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
+                    return false;
+                }
+                
+                const userRef = window.firebaseDoc(window.firebaseDb, 'users', userId);
+                await window.firebaseSetDoc(userRef, {
+                    lastSearchKeyword: keyword,
+                    lastSearchTime: Date.now()
+                }, { merge: true });
+                
+                console.log(`💾 사용자 마지막 검색 키워드 저장: "${keyword}"`);
+                return true;
+            } catch (error) {
+                console.error('❌ 마지막 검색 키워드 저장 실패:', error);
+                return false;
+            }
+        }
+        
+        async function loadUserLastSearchKeyword(userId) {
+            try {
+                console.log('🔍 사용자 마지막 검색 키워드 로드 시도:', userId);
+                
+                if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseGetDoc) {
+                    console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
+                    return null;
+                }
+                
+                const userRef = window.firebaseDoc(window.firebaseDb, 'users', userId);
+                console.log('📄 Firebase 문서 참조 생성:', userRef);
+                
+                const userSnap = await window.firebaseGetDoc(userRef);
+                console.log('📊 Firebase 문서 스냅샷:', userSnap.exists() ? '존재함' : '존재하지 않음');
+                
+                if (userSnap.exists()) {
+                    const userData = userSnap.data();
+                    console.log('👤 사용자 데이터:', userData);
+                    
+                    const lastSearchKeyword = userData.lastSearchKeyword;
+                    console.log('🔑 마지막 검색 키워드 필드:', lastSearchKeyword);
+                    
+                    if (lastSearchKeyword) {
+                        console.log(`📖 사용자 마지막 검색 키워드 로드: "${lastSearchKeyword}"`);
+                        return lastSearchKeyword;
+                    } else {
+                        console.log('❌ 마지막 검색 키워드가 사용자 데이터에 없음');
+                    }
+                } else {
+                    console.log('❌ 사용자 문서가 Firebase에 존재하지 않음');
+                }
+                
+                return null;
+            } catch (error) {
+                console.error('❌ 마지막 검색 키워드 로드 실패:', error);
+                return null;
+            }
+        }
+
+        // Firebase-only data management functions
+        function clearSearchData() {
+            console.log('🗑️ Firebase 캐시는 서버에서 관리됩니다. 개별 삭제는 Firebase Console에서 가능합니다.');
+            alert('Firebase 캐시는 서버에서 관리됩니다.\n개별 삭제는 Firebase Console에서 가능합니다.');
+        }
+
+        function showStoredSearches() {
+            console.log('📦 Firebase 캐시는 서버에서 관리됩니다.');
+            return [];
+        }
+
+        function showSearchSelection() {
+            alert('Firebase 캐시는 서버에서 관리됩니다.\n개별 삭제는 Firebase Console에서 가능합니다.');
+        }
+
+        function deleteSelectedSearches() {
+            alert('Firebase 캐시는 서버에서 관리됩니다.\n개별 삭제는 Firebase Console에서 가능합니다.');
+        }
+
+        function hideSearchSelection() {
+            // No-op for Firebase-only mode
+        }
+
+        function updateStoredSearchesDisplay() {
+            const display = document.getElementById('storedSearches');
+            display.innerHTML = 'Firebase 서버 캐시 사용 중';
+        }
+
+        // Add clear data button functionality
+        window.clearAllSearchData = clearSearchData;
+        window.showStoredSearches = showStoredSearches;
+        
+        // Add reset filters function
+        window.resetAllFilters = function() {
+            console.log('🔄 전역 초기화 함수 호출됨');
+            
+            try {
+                // Reset all filters to default values
+                const uploadDateAll = document.querySelector('input[name="uploadDate"][value="all"]');
+                // videoDuration filter removed
+                const viewCountAll = document.querySelector('input[name="viewCount"][value="all"]');
+                const velocityFilterAll = document.querySelector('input[name="velocityFilter"][value="all"]');
+                const channelSizeAll = document.querySelector('input[name="channelSize"][value="all"]');
+                const sortBySelect = document.getElementById('sortBy');
+                const subCountAll = document.querySelector('input[name="subCountFilter"][value="all"]');
+                const durationAll = document.querySelector('input[name="durationFilter"][value="all"]');
+                
+                if (uploadDateAll) uploadDateAll.checked = true;
+                // videoDuration filter removed
+                if (viewCountAll) viewCountAll.checked = true;
+                if (velocityFilterAll) velocityFilterAll.checked = true;
+                if (channelSizeAll) channelSizeAll.checked = true;
+                if (subCountAll) subCountAll.checked = true;
+                if (durationAll) durationAll.checked = true;
+                if (sortBySelect) sortBySelect.value = 'velocity';
+                
+                console.log('✅ 모든 필터 리셋 완료');
+                
+                if (allItems.length > 0) {
+                    console.log('🔄 필터 초기화 중...');
+                    console.log('📊 전체 데이터 복원:', allItems.length, '개');
+                    currentPage = 1;
+                    renderPage(1);
+                } else {
+                    console.log('⚠️ 검색 데이터가 없습니다. 먼저 검색을 실행해주세요.');
+                    alert('먼저 검색을 실행해주세요!');
+                }
+            } catch (error) {
+                console.error('❌ 초기화 중 오류 발생:', error);
+                alert('초기화 중 오류가 발생했습니다: ' + error.message);
+            }
+        };
+
+        // Wait for DOM to be fully loaded before adding event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 DOM 로드 완료 - 이벤트 리스너 등록 중...');
+            
+            // Check if elements exist before adding listeners
+                         const showStoredBtn = document.getElementById('showStoredBtn');
+             const clearDataBtn = document.getElementById('clearDataBtn');
+             const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+             const cancelSelectionBtn = document.getElementById('cancelSelectionBtn');
+             const prevPageBtn = document.getElementById('prevPage');
+             const nextPageBtn = document.getElementById('nextPage');
+            
+            // Data management buttons (only if exists)
+            if (showStoredBtn) {
+                showStoredBtn.addEventListener('click', function() {
+                    showSearchSelection();
+                });
+            }
+            
+            if (clearDataBtn) {
+                clearDataBtn.addEventListener('click', function() {
+                    if (confirm('모든 저장된 검색 데이터를 삭제하시겠습니까?')) {
+                        clearSearchData();
+                        updateStoredSearchesDisplay();
+                    }
+                });
+            }
+
+            // Individual deletion buttons (only if exists)
+            if (deleteSelectedBtn) {
+                deleteSelectedBtn.addEventListener('click', function() {
+                    deleteSelectedSearches();
+                });
+            }
+
+            if (cancelSelectionBtn) {
+                cancelSelectionBtn.addEventListener('click', function() {
+                    hideSearchSelection();
+                });
+            }
+            
+            
+            
+            // Pagination buttons
+            if (prevPageBtn) {
+                prevPageBtn.addEventListener('click', () => {
+                    console.log('◀ 이전 페이지 클릭됨');
+                    renderPage(currentPage - 1);
+                });
+            }
+            
+            if (nextPageBtn) {
+                nextPageBtn.addEventListener('click', () => {
+                    console.log('▶ 다음 페이지 클릭됨');
+                    renderPage(currentPage + 1);
+                });
+            }
+
+            // Keyboard arrow support
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight') renderPage(currentPage + 1);
+                if (e.key === 'ArrowLeft') renderPage(currentPage - 1);
+            });
+
+            // Filter change event listeners
+            const viewCountFilters = document.querySelectorAll('input[name="viewCountFilter"]');
+            viewCountFilters.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    console.log('🔍 조회수 필터 변경:', radio.value);
+                    renderPage(1); // Reset to page 1 when filter changes
+                });
+            });
+
+            // Subscriber filter change event listeners
+            const subCountFilters = document.querySelectorAll('input[name="subCountFilter"]');
+            subCountFilters.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    console.log('🔍 구독자 필터 변경:', radio.value);
+                    renderPage(1); // Reset to page 1 when filter changes
+                });
+            });
+
+            // Upload date filter change event listeners
+            const uploadDateFilters = document.querySelectorAll('input[name="uploadDateFilter"]');
+            uploadDateFilters.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    console.log('🔍 업로드일자 필터 변경:', radio.value);
+                    renderPage(1); // Reset to page 1 when filter changes
+                });
+            });
+
+            // Duration filter change event listeners
+            const durationFilters = document.querySelectorAll('input[name="durationFilter"]');
+            durationFilters.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    console.log('🔍 영상길이 필터 변경:', radio.value);
+                    renderPage(1); // Reset to page 1 when filter changes
+                });
+            });
+
+            // Auth button event listeners
+            const signupBtn = document.getElementById('signupBtn');
+            const loginBtn = document.getElementById('loginBtn');
+            const signupModal = document.getElementById('signupModal');
+            const loginModal = document.getElementById('loginModal');
+            const closeModal = document.getElementById('closeModal');
+            const closeLoginModalBtn = document.getElementById('closeLoginModal');
+            const cancelSignup = document.getElementById('cancelSignup');
+            const cancelLogin = document.getElementById('cancelLogin');
+            const submitSignup = document.getElementById('submitSignup');
+            const submitLogin = document.getElementById('submitLogin');
+
+            // Open signup modal
+            if (signupBtn) {
+                signupBtn.addEventListener('click', function() {
+                    console.log('가입하기 버튼 클릭됨');
+                    signupModal.classList.add('active');
+                });
+            }
+
+            // Open login modal
+            if (loginBtn) {
+                loginBtn.addEventListener('click', function() {
+                    console.log('로그인 버튼 클릭됨');
+                    loginModal.classList.add('active');
+                });
+            }
+
+            // Close modal functions
+            function closeSignupModal() {
+                signupModal.classList.remove('active');
+                // Clear form fields
+                document.getElementById('signupUsername').value = '';
+                document.getElementById('signupId').value = '';
+                document.getElementById('signupPassword').value = '';
+                document.getElementById('signupPasswordConfirm').value = '';
+            }
+
+            function closeLoginModal() {
+                loginModal.classList.remove('active');
+                // Clear form fields
+                document.getElementById('loginEmail').value = '';
+                document.getElementById('loginPassword').value = '';
+            }
+
+            if (closeModal) {
+                closeModal.addEventListener('click', closeSignupModal);
+            }
+
+            if (closeLoginModalBtn) {
+                closeLoginModalBtn.addEventListener('click', closeLoginModal);
+            }
+
+            if (cancelSignup) {
+                cancelSignup.addEventListener('click', closeSignupModal);
+            }
+
+            if (cancelLogin) {
+                cancelLogin.addEventListener('click', closeLoginModal);
+            }
+
+            // Close modal when clicking outside
+            signupModal.addEventListener('click', function(e) {
+                if (e.target === signupModal) {
+                    closeSignupModal();
+                }
+            });
+
+            loginModal.addEventListener('click', function(e) {
+                if (e.target === loginModal) {
+                    closeLoginModal();
+                }
+            });
+
+            // Submit signup form
+            if (submitSignup) {
+                submitSignup.addEventListener('click', async function() {
+                    const username = document.getElementById('signupUsername').value.trim();
+                    const email = document.getElementById('signupId').value.trim();
+                    const password = document.getElementById('signupPassword').value;
+                    const passwordConfirm = document.getElementById('signupPasswordConfirm').value;
+
+                    // Validation
+                    if (!username || !email || !password || !passwordConfirm) {
+                        alert('모든 필드를 입력해주세요.');
+                        return;
+                    }
+
+                    if (password !== passwordConfirm) {
+                        alert('비밀번호가 일치하지 않습니다.');
+                        return;
+                    }
+
+                    if (password.length < 6) {
+                        alert('비밀번호는 최소 6자 이상이어야 합니다.');
+                        return;
+                    }
+
+                    // Firebase Email/Password Signup
+                    try {
+                        const userCredential = await window.createUserWithEmailAndPassword(window.firebaseAuth, email, password);
+                        console.log('✅ 회원가입 성공:', userCredential.user);
+                        
+                        // Save username to Firestore
+                        try {
+                            const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', userCredential.user.uid);
+                            await window.firebaseSetDoc(userDocRef, {
+                                username: username,
+                                email: email,
+                                createdAt: Date.now()
+                            }, { merge: true });
+                            console.log('✅ 사용자 정보 저장 완료:', username);
+                        } catch (dbError) {
+                            console.warn('⚠️ 사용자 정보 저장 실패:', dbError);
+                        }
+                        
+                        alert('회원가입 성공! 환영합니다!');
+                        closeSignupModal();
+                    } catch (error) {
+                        console.error('❌ 회원가입 실패:', error);
+                        let errorMessage = '회원가입 실패: ';
+                        if (error.code === 'auth/email-already-in-use') {
+                            errorMessage += '이미 사용 중인 이메일입니다.';
+                        } else if (error.code === 'auth/weak-password') {
+                            errorMessage += '비밀번호가 너무 약합니다.';
+                        } else if (error.code === 'auth/invalid-email') {
+                            errorMessage += '유효하지 않은 이메일 주소입니다.';
+                        } else {
+                            errorMessage += error.message;
+                        }
+                        alert(errorMessage);
+                    }
+                });
+            }
+
+            // Submit login form
+            if (submitLogin) {
+                submitLogin.addEventListener('click', async function() {
+                    const email = document.getElementById('loginEmail').value.trim();
+                    const password = document.getElementById('loginPassword').value;
+
+                    // Validation
+                    if (!email || !password) {
+                        alert('이메일과 비밀번호를 입력해주세요.');
+                        return;
+                    }
+
+                    // Firebase Email/Password Login
+                    try {
+                        const userCredential = await window.signInWithEmailAndPassword(window.firebaseAuth, email, password);
+                        console.log('✅ 로그인 성공:', userCredential.user);
+                        alert('로그인 성공! 환영합니다!');
+                        closeLoginModal();
+                    } catch (error) {
+                        console.error('❌ 로그인 실패:', error);
+                        let errorMessage = '로그인 실패: ';
+                        if (error.code === 'auth/user-not-found') {
+                            errorMessage += '등록되지 않은 이메일입니다.';
+                        } else if (error.code === 'auth/wrong-password') {
+                            errorMessage += '비밀번호가 올바르지 않습니다.';
+                        } else if (error.code === 'auth/invalid-email') {
+                            errorMessage += '유효하지 않은 이메일 주소입니다.';
+                        } else {
+                            errorMessage += error.message;
+                        }
+                        alert(errorMessage);
+                    }
+                });
+            }
+            
+            // Logout button handler
+            const logoutBtn = document.getElementById('logoutBtn');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', async function() {
+                    try {
+                        await window.signOut(window.firebaseAuth);
+                        console.log('✅ 로그아웃 성공');
+                        alert('로그아웃되었습니다.');
+                    } catch (error) {
+                        console.error('❌ 로그아웃 실패:', error);
+                    }
+                });
+            }
+
+            // Profile Edit Modal Logic
+            const profileEditModal = document.getElementById('profileEditModal');
+            const closeProfileEditModalBtn = document.getElementById('closeProfileEditModal');
+            const cancelProfileEdit = document.getElementById('cancelProfileEdit');
+            const submitProfileEdit = document.getElementById('submitProfileEdit');
+            const editUsername = document.getElementById('editUsername');
+            const editEmail = document.getElementById('editEmail');
+
+            // Open profile edit modal when clicking on username
+            const userName = document.getElementById('userName');
+            if (userName) {
+                userName.addEventListener('click', async function() {
+                    if (window.currentUser) {
+                        // Load current user data
+                        try {
+                            const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', window.currentUser.uid);
+                            const userDocSnap = await window.firebaseGetDoc(userDocRef);
+                            if (userDocSnap.exists()) {
+                                const userData = userDocSnap.data();
+                                editUsername.value = userData.username || '';
+                                editEmail.value = window.currentUser.email || '';
+                            } else {
+                                editUsername.value = '';
+                                editEmail.value = window.currentUser.email || '';
+                            }
+                        } catch (error) {
+                            console.warn('⚠️ 사용자 정보 로드 실패:', error);
+                            editUsername.value = '';
+                            editEmail.value = window.currentUser.email || '';
+                        }
+                        
+                        profileEditModal.classList.add('active');
+                    }
+                });
+            }
+
+            // Close profile edit modal
+            function closeProfileEditModalFunc() {
+                profileEditModal.classList.remove('active');
+                editUsername.value = '';
+                editEmail.value = '';
+            }
+
+            if (closeProfileEditModalBtn) {
+                closeProfileEditModalBtn.addEventListener('click', closeProfileEditModalFunc);
+            }
+
+            if (cancelProfileEdit) {
+                cancelProfileEdit.addEventListener('click', closeProfileEditModalFunc);
+            }
+
+            // Close modal when clicking outside
+            if (profileEditModal) {
+                profileEditModal.addEventListener('click', function(e) {
+                    if (e.target === profileEditModal) {
+                        closeProfileEditModalFunc();
+                    }
+                });
+            }
+
+            // Submit profile edit
+            if (submitProfileEdit) {
+                submitProfileEdit.addEventListener('click', async function() {
+                    const newUsername = editUsername.value.trim();
+
+                    // Validation
+                    if (!newUsername) {
+                        alert('아이디를 입력해주세요.');
+                        return;
+                    }
+
+                    if (!window.currentUser) {
+                        alert('로그인이 필요합니다.');
+                        return;
+                    }
+
+                    // Update username in Firestore
+                    try {
+                        const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', window.currentUser.uid);
+                        await window.firebaseSetDoc(userDocRef, {
+                            username: newUsername,
+                            updatedAt: Date.now()
+                        }, { merge: true });
+                        console.log('✅ 프로필 수정 완료:', newUsername);
+                        
+                        // Update UI
+                        document.getElementById('userName').textContent = newUsername;
+                        
+                        alert('프로필이 수정되었습니다!');
+                        closeProfileEditModalFunc();
+                    } catch (error) {
+                        console.error('❌ 프로필 수정 실패:', error);
+                        alert('프로필 수정 실패: ' + error.message);
+                    }
+                });
+            }
+            
+            // Firebase Auth state observer
+            window.onAuthStateChanged(window.firebaseAuth, async (user) => {
+                const authSection = document.getElementById('authSection');
+                const loginBtn = document.getElementById('loginBtn');
+                const signupBtn = document.getElementById('signupBtn');
+                const userInfo = document.getElementById('userInfo');
+                const userName = document.getElementById('userName');
+                const userAvatar = document.getElementById('userAvatar');
+                
+                if (user) {
+                    // User is signed in
+                    loginBtn.style.display = 'none';
+                    signupBtn.style.display = 'none';
+                    userInfo.style.display = 'flex';
+                    
+                    // Load username from Firestore
+                    try {
+                        const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', user.uid);
+                        const userDocSnap = await window.firebaseGetDoc(userDocRef);
+                        if (userDocSnap.exists()) {
+                            const userData = userDocSnap.data();
+                            const displayName = userData.username || user.displayName || user.email;
+                            userName.textContent = displayName;
+                            console.log('✅ 사용자 로그인 중:', displayName);
+                        } else {
+                            userName.textContent = user.displayName || user.email;
+                            console.log('✅ 사용자 로그인 중:', user.displayName || user.email);
+                        }
+                    } catch (error) {
+                        console.warn('⚠️ 사용자 정보 로드 실패:', error);
+                        userName.textContent = user.displayName || user.email;
+                    }
+                    
+                    // Set avatar with error handling
+                    if (userAvatar) {
+                        userAvatar.onerror = function() {
+                            // If avatar fails to load, use a data URI or hide the image
+                            this.style.display = 'none';
+                        };
+                        if (user.photoURL) {
+                            userAvatar.src = user.photoURL;
+                        } else {
+                            // Use a simple data URI as fallback
+                            userAvatar.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiM2NjdlZWEiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1zaXplPSIxNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj7wn5COPC90ZXh0Pjwvc3ZnPg==';
+                        }
+                    }
+                    window.currentUser = user;
+                    
+                    // Load user's last search keyword and perform search
+                    console.log('📰 로그인된 사용자 - 마지막 검색 키워드 복원 중...');
+                    setTimeout(async () => {
+                        const lastSearchKeyword = await loadUserLastSearchKeyword(user.uid);
+                        console.log('🔍 로드된 마지막 검색 키워드:', lastSearchKeyword);
+                        
+                        const searchKeyword = lastSearchKeyword || 'news';
+                        console.log('🎯 사용할 검색 키워드:', searchKeyword);
+                        
+                        document.getElementById('searchInput').value = searchKeyword;
+                        
+                        if (lastSearchKeyword) {
+                            console.log(`🔄 마지막 검색 키워드 복원: "${lastSearchKeyword}"`);
+                            // Use regular search for saved keyword
+                            window.isDefaultSearch = true;
+                            await search(searchKeyword);
+                            window.isDefaultSearch = false;
+                        } else {
+                            console.log('📰 기본 검색 키워드 사용: "news"');
+                            performDefaultSearch();
+                        }
+                    }, 500);
+                } else {
+                    // User is signed out
+                    console.log('🔓 사용자 로그아웃됨');
+                    loginBtn.style.display = 'inline-block';
+                    signupBtn.style.display = 'inline-block';
+                    userInfo.style.display = 'none';
+                    window.currentUser = null;
+                    
+                    // Automatically search for 'news' when user is not logged in
+                    console.log('📰 로그인되지 않은 사용자에게 기본 검색 결과 표시 (news)');
+                    setTimeout(() => {
+                        document.getElementById('searchInput').value = 'news';
+                        // Trigger the search function without login check
+                        performDefaultSearch();
+                    }, 500);
+                }
+            });
+            
+            // Real-time listener for 'news' query in Firebase
+            let newsDataListener = null;
+            
+            // Function to setup real-time listener for 'news' query
+            function setupNewsDataListener() {
+                try {
+                    const docRef = window.firebaseDoc(window.firebaseDb, 'searchCache', toDocId('news'));
+                    
+                    // Setup real-time listener (disabled - only log changes, don't auto-update UI)
+                    newsDataListener = window.firebaseOnSnapshot(docRef, (snapshot) => {
+                        if (snapshot.exists()) {
+                            const data = snapshot.data();
+                            console.log('📢 Firebase 데이터 변경 감지 (news):', data);
+                            
+                            // Check if data is newer than 24 hours
+                            const age = Date.now() - (data.timestamp || 0);
+                            const ageHours = age / (1000 * 60 * 60);
+                            const isExpired = ageHours >= 24;
+                            
+                            // Don't auto-update UI, just log the change
+                            console.log(`📢 news 데이터 변경 감지됨 (${ageHours.toFixed(1)}시간 전, 만료: ${isExpired ? '예' : '아니오'})`);
+                            
+                            if (isExpired) {
+                                console.log('⏰ 24시간 경과 - 사용자에게 API 호출 안내 (자동 업데이트 안함)');
+                            } else {
+                                console.log('✅ 24시간 미만 - 캐시 유효 (자동 업데이트 안함)');
+                            }
+                            
+                            // Note: We don't auto-update the UI to prevent unnecessary API calls
+                            // Users can manually refresh or search again if they want fresh data
+                        } else {
+                            console.log('📢 Firebase 문서가 존재하지 않음 (news)');
+                        }
+                    }, (error) => {
+                        console.error('❌ Firebase 리스너 오류:', error);
+                    });
+                    
+                    console.log('👂 Firebase 실시간 리스너 등록 완료 (news)');
+                } catch (error) {
+                    console.error('❌ Firebase 리스너 설정 실패:', error);
+                }
+            }
+            
+            // Function to cleanup real-time listener
+            function cleanupNewsDataListener() {
+                if (newsDataListener) {
+                    newsDataListener();
+                    newsDataListener = null;
+                    console.log('🛑 Firebase 실시간 리스너 해제');
+                }
+            }
+            
+            // Function to perform default search without login requirement
+            async function performDefaultSearch() {
+                const startTime = performance.now();
+                console.log('⏱️ performDefaultSearch 시작');
+                
+                // Set flag to indicate this is a default search
+                window.isDefaultSearch = true;
+                
+                const query = 'news';
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = '<div class="loading">⏳ 검색 중...</div>';
+                
+                // Reset pagination for new search
+                currentPage = 1;
+                allVideos = [];
+                allItems = [];
+                allChannelMap = {};
+                
+                // Setup real-time listener for 'news' data
+                setupNewsDataListener();
+
+                // Check Firebase cloud cache first
+                console.log('📥 Firebase 클라우드 캐시 확인 중...');
+                const firebaseStartTime = performance.now();
+                const cachedData = await loadFromFirebase(query);
+                const firebaseEndTime = performance.now();
+                console.log(`⏱️ Firebase 체크 시간: ${(firebaseEndTime - firebaseStartTime).toFixed(2)}ms`);
+                
+                if (cachedData && cachedData.videos && cachedData.videos.length > 0) {
+                    console.log('✅ Firebase 클라우드 캐시에서 데이터 로드:', cachedData.videos.length, '개');
+                    allVideos = cachedData.videos;
+                    allItems = cachedData.items || [];
+                    allChannelMap = cachedData.channels || {};
+                    
+                    // Update data source indicator
+                    if (cachedData.dataSource) {
+                        currentDataSource = cachedData.dataSource;
+                        updateDataSourceIndicator(currentDataSource);
+                    }
+                    
+                    const renderStartTime = performance.now();
+                    renderPage(1);
+                    const renderEndTime = performance.now();
+                    console.log(`⏱️ renderPage 실행 시간: ${(renderEndTime - renderStartTime).toFixed(2)}ms`);
+                    
+                    const totalTime = performance.now() - startTime;
+                    console.log(`✅ 전체 수행 시간: ${totalTime.toFixed(2)}ms`);
+                    window.isDefaultSearch = false;
+                    return;
+                }
+
+                // 2. No cache found - perform API search
+                console.log('🔍 캐시 없음 - API 호출 진행 (24시간 경과 또는 데이터 없음)');
+                
+                // Get API keys
+                const keys = await getApiKeys();
+                const apiKeyValue = keys.youtube;
+                
+                if (!apiKeyValue) {
+                    resultsDiv.innerHTML = '<div class="error">❌ API 키가 설정되지 않았습니다.</div>';
+                    window.isDefaultSearch = false;
+                    return;
+                }
+
+                try {
+                    // Try Google API first
+                    console.log('🌐 Google API 호출 중...');
+                    const apiStartTime = performance.now();
+                    const response = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=100&q=${encodeURIComponent(query)}&key=${apiKeyValue}&type=video`);
+                    
+                    if (!response.ok) {
+                        if (response.status === 403) {
+                            throw new Error('API_QUOTA_EXCEEDED');
+                        }
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    const apiEndTime = performance.now();
+                    console.log(`⏱️ Google API 첫 번째 호출 시간: ${(apiEndTime - apiStartTime).toFixed(2)}ms`);
+                    
+                    if (data.items && data.items.length > 0) {
+                        const videoIds = data.items.map(item => item.id.videoId).join(',');
+                        
+                        const detailsStartTime = performance.now();
+                        const detailsResponse = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${apiKeyValue}`);
+                        const detailsData = await detailsResponse.json();
+                        const detailsEndTime = performance.now();
+                        console.log(`⏱️ Google API 두 번째 호출 시간: ${(detailsEndTime - detailsStartTime).toFixed(2)}ms`);
+                        
+                        const channelIds = [...new Set(detailsData.items.map(item => item.snippet.channelId))];
+                        const channelsStartTime = performance.now();
+                        const channelsResponse = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${channelIds.join(',')}&key=${apiKeyValue}`);
+                        const channelsData = await channelsResponse.json();
+                        const channelsEndTime = performance.now();
+                        console.log(`⏱️ Google API 세 번째 호출 시간: ${(channelsEndTime - channelsStartTime).toFixed(2)}ms`);
+                        
+                        allVideos = detailsData.items;
+                        allChannelMap = {};
+                        channelsData.items.forEach(channel => {
+                            allChannelMap[channel.id] = channel;
+                        });
+                        
+                        // Build items with custom metrics
+                        allItems = allVideos.map((video, index) => {
+                            const channel = allChannelMap[video.snippet.channelId];
+                            const ageDays = Math.max(1, Math.floor((Date.now() - new Date(video.snippet.publishedAt).getTime()) / (1000 * 60 * 60 * 24)));
+                            const viewCount = parseInt(video.statistics?.viewCount || 0);
+                            const vpd = viewCount / ageDays;
+                            const subs = parseInt(channel?.statistics?.subscriberCount || 0);
+                            
+                            let vclass, cband;
+                            if (vpd >= 10000) vclass = '📈 뜨거움';
+                            else if (vpd >= 1000) vclass = '📊 인기';
+                            else if (vpd >= 100) vclass = '📌 보통';
+                            else vclass = '📉 소수';
+                            
+                            if (subs >= 1000000) cband = '🔴 대형';
+                            else if (subs >= 100000) cband = '🟡 중형';
+                            else cband = '🟢 소형';
+                            
+                            return { vpd, vclass, cband, subs, index: index };
+                        });
+                        
+                        // Save to Firebase
+                        await saveToFirebase(query, allVideos, allChannelMap, allItems, 'google');
+                        
+                        currentDataSource = 'google';
+                        updateDataSourceIndicator('google');
+                        
+                        renderPage(1);
+                    } else {
+                        resultsDiv.innerHTML = '<div class="error">❌ 검색 결과가 없습니다.</div>';
+                    }
+                } catch (error) {
+                    console.error('❌ Google API 오류:', error);
+                    resultsDiv.innerHTML = '<div class="error">❌ 검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</div>';
+                } finally {
+                    window.isDefaultSearch = false;
+                }
+                
+                const totalTime = performance.now() - startTime;
+                console.log(`⏱️ 전체 performDefaultSearch 시간: ${totalTime.toFixed(2)}ms`);
+            }
+            
+            console.log('✅ 모든 이벤트 리스너 등록 완료');
         });
+
     </script>
 </body>
 </html>
