@@ -1250,46 +1250,78 @@
                 return;
             }
 
-                         try {
-                 // Try Google API first
-                 try {
-                     // Build search URL (no filters, simple search)
-                     const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=100&q=${encodeURIComponent(query)}&order=relevance&key=${apiKeyValue}`;
+            try {
+                // Try Google API first with pagination (200 results)
+                try {
+                    console.log('🌐 Google API 호출 중... (최대 200개 결과)');
+                    
+                    // ========== 1단계: 4페이지 검색 (200개) ==========
+                    let allSearchItems = [];
+                    let nextPageToken = null;
+                    const maxPages = 4; // 50개 × 4 = 200개
+                    
+                    for (let page = 1; page <= maxPages; page++) {
+                        // 로딩 상태 업데이트
+                        resultsDiv.innerHTML = `<div class="loading">⏳ 검색 중... ${page}/4 페이지 (${allSearchItems.length}개 발견)</div>`;
+                        
+                        // 페이지 토큰 포함한 검색 URL
+                        const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(query)}&order=relevance&key=${apiKeyValue}${nextPageToken ? `&pageToken=${nextPageToken}` : ''}`;
+                        
+                        console.log(`📄 ${page}/4 페이지 로딩 중...`);
+                        const searchResponse = await fetch(searchUrl);
+                        const searchData = await searchResponse.json();
 
-                    const searchResponse = await fetch(searchUrl);
-                    const searchData = await searchResponse.json();
-
-                    // Check for quota exceeded error
-                    if (searchData.error && searchData.error.code === 403) {
-                        console.warn("⚠️ Google API 한도 초과 — SerpAPI로 전환합니다.");
-                        updateSearchModeIndicator('serpapi');
-                        throw new Error("quotaExceeded");
+                        // 할당량 초과 체크
+                        if (searchData.error && searchData.error.code === 403) {
+                            console.warn("⚠️ Google API 한도 초과 — SerpAPI로 전환합니다.");
+                            updateSearchModeIndicator('serpapi');
+                            throw new Error("quotaExceeded");
+                        }
+                        
+                        // 결과 추가
+                        if (searchData.items && searchData.items.length > 0) {
+                            allSearchItems.push(...searchData.items);
+                            console.log(`✅ ${page}페이지: ${searchData.items.length}개 (총 ${allSearchItems.length}개)`);
+                        }
+                        
+                        // 다음 페이지 토큰
+                        nextPageToken = searchData.nextPageToken;
+                        
+                        // 더 이상 페이지가 없으면 중단
+                        if (!nextPageToken) {
+                            console.log(`🏁 마지막 페이지 도달 (총 ${allSearchItems.length}개)`);
+                            break;
+                        }
                     }
                     
-                    // Google API is working - update mode indicator
-                    console.log('✅ Google API 정상 작동');
+                    // Google API 정상 작동
+                    console.log(`✅ Google API 정상 작동 (총 ${allSearchItems.length}개 결과)`);
                     updateSearchModeIndicator('google');
 
-                    // Process Google API results
-                    const videoIds = searchData.items.map(item => item.id.videoId).join(',');
-                    const channelIds = [...new Set(searchData.items.map(item => item.snippet.channelId))].join(',');
+                    // ========== 2단계: Video 상세 정보 가져오기 ==========
+                    const videoIds = allSearchItems.map(item => item.id.videoId).join(',');
+                    const channelIds = [...new Set(allSearchItems.map(item => item.snippet.channelId))].join(',');
 
-                    // Step 2: Get detailed video information
+                    resultsDiv.innerHTML = `<div class="loading">⏳ 비디오 정보 로딩 중... (${allSearchItems.length}개)</div>`;
+                    console.log(`🎬 ${allSearchItems.length}개 비디오 상세 정보 요청 중...`);
+                    
                     const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${apiKeyValue}`;
                     const videosResponse = await fetch(videosUrl);
                     const videosData = await videosResponse.json();
+                    
+                    console.log(`✅ 비디오 정보 로드 완료: ${videosData.items?.length || 0}개`);
 
-                    // Track API usage
-                    // trackApiCall('videos', 1);
-
-                    // Step 3: Get channel information for subscriber counts
+                    // ========== 3단계: 채널 정보 가져오기 ==========
+                    resultsDiv.innerHTML = `<div class="loading">⏳ 채널 정보 로딩 중...</div>`;
+                    console.log(`📺 ${channelIds.split(',').length}개 채널 정보 요청 중...`);
+                    
                     const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelIds}&key=${apiKeyValue}`;
                     const channelsResponse = await fetch(channelsUrl);
                     const channelsData = await channelsResponse.json();
+                    
+                    console.log(`✅ 채널 정보 로드 완료: ${channelsData.items?.length || 0}개`);
 
-                    // Track API usage
-                    // trackApiCall('channels', 1);
-
+                    // Process channel data into map
                     const channelMap = {};
                     channelsData.items.forEach(channel => {
                         channelMap[channel.id] = channel;
