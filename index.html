@@ -10,6 +10,13 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    
+    <!-- 로컬 파일 프로토콜 감지 및 경고 -->
+    <script>
+        if (window.location.protocol === 'file:') {
+            alert('⚠️ HTTP 서버가 필요합니다!\n\npython -m http.server 8000\n\n명령어로 로컬 서버를 실행한 후 http://localhost:8000 으로 접속하세요.');
+        }
+    </script>
 </head>
 <body>
     <!-- Auth Section -->

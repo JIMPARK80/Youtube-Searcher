@@ -36,26 +36,34 @@ export function initializeFirebase() {
  * Firebase 연결 상태 모니터링 및 자동 재연결
  */
 function setupFirebaseConnectionMonitoring() {
-    // 연결 상태 실시간 모니터링
+    // 무제한 캐시 설정
     db.settings({
         cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED
     });
     
     // 네트워크 연결 상태 확인
-    db.enableNetwork().catch(err => {
+    db.enableNetwork().then(() => {
+        isConnected = true;
+        console.log('✅ Firebase 네트워크 연결 성공');
+    }).catch(err => {
         console.warn('⚠️ Firebase 네트워크 연결 실패:', err.message);
         isConnected = false;
     });
     
-    // Firebase 연결 상태 리스너
-    db.onDisconnect().then(() => {
-        console.warn('⚠️ Firebase 연결 끊김 - 오프라인 모드 전환');
+    // 온라인/오프라인 이벤트 감지
+    window.addEventListener('online', () => {
+        console.log('🌐 네트워크 연결 복구 - Firebase 재연결 시도');
+        reconnectFirebase();
+    });
+    
+    window.addEventListener('offline', () => {
+        console.warn('⚠️ 네트워크 연결 끊김 - 오프라인 모드 전환');
         isConnected = false;
     });
     
     // 페이지 가시성 변화 시 재연결 시도
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && !isConnected) {
+        if (document.visibilityState === 'visible' && !isConnected && navigator.onLine) {
             console.log('🔄 페이지 활성화 - Firebase 재연결 시도');
             reconnectFirebase();
         }
