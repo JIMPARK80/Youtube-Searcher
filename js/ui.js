@@ -331,9 +331,14 @@ export function applyFilters(items) {
     return items.filter(item => {
         const video = item.raw;
         
-        // Safety check: Skip invalid items
-        if (!video || !video.snippet) {
-            console.warn('⚠️ Filtering out invalid video item:', item);
+        // Safety check: Skip items without essential data
+        if (!video || !video.snippet || !video.snippet.title) {
+            console.warn('⚠️ Filtering out invalid video item (missing raw/snippet):', {
+                id: item.id,
+                hasRaw: !!video,
+                hasSnippet: !!(video?.snippet),
+                hasTitle: !!(video?.snippet?.title)
+            });
             return false;
         }
         
@@ -357,6 +362,9 @@ export function applyFilters(items) {
         // Upload date filter
         if (dateFilter !== 'all') {
             const days = parseInt(dateFilter);
+            if (!video.snippet.publishedAt) {
+                return false; // Skip items without published date when date filter is active
+            }
             const publishedDate = new Date(video.snippet.publishedAt);
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - days);
