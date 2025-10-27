@@ -442,7 +442,8 @@ export function updateSearchModeIndicator(mode) {
 // ============================================
 
 function restoreFromCache(firebaseData) {
-    allVideos = firebaseData.videos.map(v => ({
+    // Restore videos from compressed cache
+    const restoredVideos = firebaseData.videos.map(v => ({
         id: v.id,
         snippet: {
             title: v.title,
@@ -451,23 +452,39 @@ function restoreFromCache(firebaseData) {
             publishedAt: v.publishedAt,
             thumbnails: {
                 maxres: { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` },
+                standard: { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` },
                 high: { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` },
+                medium: { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` },
                 default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
             }
         },
         statistics: {
-            viewCount: v.viewCount,
-            likeCount: v.likeCount
+            viewCount: v.viewCount || '0',
+            likeCount: v.likeCount || '0'
         },
         contentDetails: {
-            duration: v.duration
-        }
+            duration: v.duration || 'PT0S'
+        },
+        serpData: v.serp || null
     }));
     
+    allVideos = restoredVideos;
     allChannelMap = firebaseData.channels || {};
-    allItems = firebaseData.items || [];
+    
+    // Restore items with proper video mapping by ID
+    const videoById = new Map(restoredVideos.map(v => [v.id, v]));
+    allItems = (firebaseData.items || []).map(item => ({
+        raw: videoById.get(item.id), // Connect to restored video by ID
+        vpd: item.vpd,
+        vclass: item.vclass,
+        cband: item.cband,
+        subs: item.subs
+    })).filter(item => item.raw); // Remove items without matching video
+    
+    console.log(`✅ Firebase 캐시 복원 완료: ${allItems.length}개 항목`);
     
     if (firebaseData.dataSource) {
+        currentDataSource = firebaseData.dataSource;
         updateSearchModeIndicator(firebaseData.dataSource);
     }
 }
