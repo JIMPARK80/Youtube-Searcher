@@ -5,6 +5,7 @@ import { firebaseConfig, CACHE_DURATION } from './config.js';
 let db = null;
 let auth = null;
 let newsDataListener = null;
+let isConnected = false;
 
 /**
  * Firebase 초기화
@@ -22,9 +23,89 @@ export function initializeFirebase() {
         window.firebaseDb = db;
         window.firebaseAuth = auth;
         
+        // Firebase 연결 상태 모니터링 설정
+        setupFirebaseConnectionMonitoring();
+        
         console.log('✅ Firebase 초기화 완료');
     } catch (error) {
         console.error('❌ Firebase 초기화 실패:', error);
+    }
+}
+
+/**
+ * Firebase 연결 상태 모니터링 및 자동 재연결
+ */
+function setupFirebaseConnectionMonitoring() {
+    // 연결 상태 실시간 모니터링
+    db.settings({
+        cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED
+    });
+    
+    // 네트워크 연결 상태 확인
+    db.enableNetwork().catch(err => {
+        console.warn('⚠️ Firebase 네트워크 연결 실패:', err.message);
+        isConnected = false;
+    });
+    
+    // Firebase 연결 상태 리스너
+    db.onDisconnect().then(() => {
+        console.warn('⚠️ Firebase 연결 끊김 - 오프라인 모드 전환');
+        isConnected = false;
+    });
+    
+    // 페이지 가시성 변화 시 재연결 시도
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && !isConnected) {
+            console.log('🔄 페이지 활성화 - Firebase 재연결 시도');
+            reconnectFirebase();
+        }
+    });
+}
+
+/**
+ * Firebase 재연결 시도
+ */
+async function reconnectFirebase() {
+    try {
+        await db.enableNetwork();
+        isConnected = true;
+        console.log('✅ Firebase 재연결 성공');
+    } catch (error) {
+        console.error('❌ Firebase 재연결 실패:', error);
+        isConnected = false;
+        
+        // 5초 후 재시도
+        setTimeout(() => reconnectFirebase(), 5000);
+    }
+}
+
+/**
+ * Firebase에서 API 키 가져오기
+ * @returns {Promise<Object>} API 키 객체
+ */
+export async function getApiKeys() {
+    if (!db) {
+        console.error('Firebase가 초기화되지 않았습니다.');
+        return { youtubeApiKey: '', serpApiKey: '' };
+    }
+
+    try {
+        const doc = await db.collection('config').doc('apiKeys').get();
+        
+        if (doc.exists) {
+            const data = doc.data();
+            console.log('✅ Firebase에서 API 키 로드 성공');
+            return {
+                youtubeApiKey: data.youtubeApiKey || '',
+                serpApiKey: data.serpApiKey || ''
+            };
+        } else {
+            console.warn('⚠️ Firebase에 API 키가 없습니다.');
+            return { youtubeApiKey: '', serpApiKey: '' };
+        }
+    } catch (error) {
+        console.error('❌ Firebase API 키 로드 오류:', error);
+        return { youtubeApiKey: '', serpApiKey: '' };
     }
 }
 
