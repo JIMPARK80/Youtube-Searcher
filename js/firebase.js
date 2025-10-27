@@ -10,8 +10,15 @@ let newsDataListener = null;
  */
 export function initializeFirebase() {
     try {
-        const app = firebase.initializeApp(firebaseConfig);
+        // Firebase가 이미 초기화되어 있는지 확인
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
         db = firebase.firestore();
+        
+        // 전역 변수로 설정 (기존 코드 호환성)
+        window.firebaseDb = db;
+        
         console.log('✅ Firebase 초기화 완료');
     } catch (error) {
         console.error('❌ Firebase 초기화 실패:', error);
