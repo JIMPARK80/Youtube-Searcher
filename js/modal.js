@@ -1,6 +1,6 @@
 // modal.js - 모달 관리 기능
 
-import { login, signup, updateProfile, validateEmail, validatePassword } from './auth.js';
+import { login, signup, updateProfile, validateEmail, validatePassword, getCurrentUser } from './auth.js';
 import { showToast } from './ui-renderer.js';
 
 /**
