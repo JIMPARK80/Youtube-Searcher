@@ -3,6 +3,7 @@
 import { firebaseConfig, CACHE_DURATION } from './config.js';
 
 let db = null;
+let auth = null;
 let newsDataListener = null;
 
 /**
@@ -15,9 +16,11 @@ export function initializeFirebase() {
             firebase.initializeApp(firebaseConfig);
         }
         db = firebase.firestore();
+        auth = firebase.auth();
         
         // 전역 변수로 설정 (기존 코드 호환성)
         window.firebaseDb = db;
+        window.firebaseAuth = auth;
         
         console.log('✅ Firebase 초기화 완료');
     } catch (error) {
