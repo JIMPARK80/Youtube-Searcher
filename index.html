@@ -1319,22 +1319,32 @@
                     const channelsResponse = await fetch(channelsUrl);
                     const channelsData = await channelsResponse.json();
                     
+                    // API 에러 체크
+                    if (channelsData.error) {
+                        console.error('❌ 채널 API 에러:', channelsData.error);
+                        throw new Error(`Channel API Error: ${channelsData.error.message || 'Unknown error'}`);
+                    }
+                    
                     console.log(`✅ 채널 정보 로드 완료: ${channelsData.items?.length || 0}개`);
 
-                    // Process channel data into map
+                    // Process channel data into map (안전한 체크 추가)
                     const channelMap = {};
-                    channelsData.items.forEach(channel => {
-                        channelMap[channel.id] = channel;
-                        allChannelMap[channel.id] = channel; // Save to global map
-                    });
+                    if (channelsData.items && Array.isArray(channelsData.items)) {
+                        channelsData.items.forEach(channel => {
+                            channelMap[channel.id] = channel;
+                            allChannelMap[channel.id] = channel; // Save to global map
+                        });
+                    } else {
+                        console.warn('⚠️ 채널 데이터가 비어있거나 유효하지 않습니다.');
+                    }
 
                     // Filter by video duration and view count if needed
-                    let filteredVideos = videosData.items;
+                    let filteredVideos = videosData.items || [];
                     const videoDuration = null; // Duration filter disabled
                     const viewCount = null; // View count filter disabled
                     
                     if (videoDuration || viewCount) {
-                        filteredVideos = videosData.items.filter(video => {
+                        filteredVideos = (videosData.items || []).filter(video => {
                             // Duration filter
                             if (videoDuration) {
                                 const duration = video.contentDetails?.duration || '';
