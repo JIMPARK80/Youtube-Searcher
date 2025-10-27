@@ -1,199 +1,165 @@
-// Utility functions for formatting and parsing
+// utils.js - 유틸리티 함수들
 
-function formatNumber(num) {
-    if (num >= 1000000) {
-        return (num / 1000000).toFixed(1) + 'M';
-    } else if (num >= 1000) {
-        return (num / 1000).toFixed(1) + 'K';
+/**
+ * ISO 8601 duration을 사람이 읽기 쉬운 형식으로 변환
+ * @param {string} duration - ISO 8601 형식의 duration (예: PT1H2M30S)
+ * @returns {string} 변환된 duration (예: 1:02:30)
+ */
+export function parseDuration(duration) {
+    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    const hours = parseInt(match[1]) || 0;
+    const minutes = parseInt(match[2]) || 0;
+    const seconds = parseInt(match[3]) || 0;
+    
+    if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
-    return num.toString();
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-function formatDuration(duration) {
-    if (!duration) return '0:00';
-    
-    const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
-    if (!match) return '0:00';
-    
-    const hours = (match[1] || '').replace('H', '');
-    const minutes = (match[2] || '').replace('M', '');
-    const seconds = (match[3] || '').replace('S', '');
-    
-    let result = '';
-    if (hours) result += hours + ':';
-    result += (minutes || '0').padStart(2, '0') + ':';
-    result += (seconds || '0').padStart(2, '0');
-    return result;
-}
-
-function parseDurationToSeconds(duration) {
-    if (!duration) return 0;
-    
-    const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
-    if (!match) return 0;
-    
-    const hours = parseInt((match[1] || '').replace('H', '')) || 0;
-    const minutes = parseInt((match[2] || '').replace('M', '')) || 0;
-    const seconds = parseInt((match[3] || '').replace('S', '')) || 0;
-    return hours * 3600 + minutes * 60 + seconds;
-}
-
-function getPublishedAfterDate(period) {
-    if (!period) return '';
-    
+/**
+ * 날짜를 "X일 전" 형식으로 변환
+ * @param {string} publishedAt - ISO 날짜 문자열
+ * @returns {string} 상대적 시간 (예: 3일 전)
+ */
+export function formatRelativeTime(publishedAt) {
     const now = new Date();
-    let date = new Date();
-    const value = parseInt(period);
-
-    console.log(`📅 기간 필터 계산: period=${period}, value=${value}`);
-
-    if (!isNaN(value) && value > 0) {
-        // All values are now in days (1, 3, 7, 30, 90, 180, 365)
-        date.setDate(now.getDate() - value);
-        console.log(`📅 일 단위 계산: ${value}일 전`);
-        console.log(`📅 현재 날짜: ${now.toISOString()}`);
-        console.log(`📅 계산된 컷오프 날짜: ${date.toISOString()}`);
-    } else {
-        console.log(`📅 잘못된 기간 값: ${period}`);
-        return '';
-    }
-
-    return date.toISOString();
-}
-
-// Parse relative date strings (e.g., "3 days ago")
-function parseRelativeDate(relativeDateStr) {
-    if (!relativeDateStr) return null;
+    const published = new Date(publishedAt);
+    const diffMs = now - published;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     
-    const str = relativeDateStr.toLowerCase().trim();
-    const now = Date.now();
-    
-    // Parse relative time strings
-    if (str.includes('ago')) {
-        const matches = str.match(/(\d+)\s*(second|minute|hour|day|week|month|year)/);
-        if (matches) {
-            const value = parseInt(matches[1]);
-            const unit = matches[2];
-            
-            let milliseconds = 0;
-            switch(unit) {
-                case 'second': milliseconds = value * 1000; break;
-                case 'minute': milliseconds = value * 60 * 1000; break;
-                case 'hour': milliseconds = value * 60 * 60 * 1000; break;
-                case 'day': milliseconds = value * 24 * 60 * 60 * 1000; break;
-                case 'week': milliseconds = value * 7 * 24 * 60 * 60 * 1000; break;
-                case 'month': milliseconds = value * 30 * 24 * 60 * 60 * 1000; break;
-                case 'year': milliseconds = value * 365 * 24 * 60 * 60 * 1000; break;
-            }
-            
-            return new Date(now - milliseconds);
-        }
-    }
-    
-    // Try parsing as absolute date
-    const parsedDate = new Date(relativeDateStr);
-    if (!isNaN(parsedDate.getTime())) {
-        return parsedDate;
-    }
-    
-    return null;
-}
-
-function formatDate(dateString) {
-    if (!dateString || dateString === '') {
-        console.warn('빈 날짜 문자열:', dateString);
-        return '날짜 없음';
-    }
-    
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) {
-        console.warn('잘못된 날짜 형식:', dateString);
-        return '날짜 없음'; // '날짜 오류' 대신 '날짜 없음'으로 변경
-    }
-    
-    const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 1) return '1일 전';
+    if (diffDays === 0) return '오늘';
+    if (diffDays === 1) return '어제';
     if (diffDays < 7) return `${diffDays}일 전`;
     if (diffDays < 30) return `${Math.floor(diffDays / 7)}주 전`;
     if (diffDays < 365) return `${Math.floor(diffDays / 30)}개월 전`;
     return `${Math.floor(diffDays / 365)}년 전`;
 }
 
-// View Velocity functions
-function ageDays(publishedAt) {
-    const now = Date.now();
-    const publishedTime = Date.parse(publishedAt);
+/**
+ * 숫자를 K, M 단위로 포맷팅
+ * @param {number} num - 변환할 숫자
+ * @returns {string} 포맷팅된 문자열 (예: 1.2K, 3.4M)
+ */
+export function formatNumber(num) {
+    if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'B';
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+}
+
+/**
+ * VPD(Views Per Day) 계산
+ * @param {number} viewCount - 조회수
+ * @param {string} publishedAt - 게시 날짜
+ * @returns {number} 일일 평균 조회수
+ */
+export function calculateVPD(viewCount, publishedAt) {
+    const ageDays = Math.max(1, Math.floor((Date.now() - new Date(publishedAt).getTime()) / (1000 * 60 * 60 * 24)));
+    return Math.floor(viewCount / ageDays);
+}
+
+/**
+ * VPD 등급 분류
+ * @param {number} vpd - Views Per Day
+ * @returns {string} 등급 (🔈 뜨거움, 🔊 인기, 🔌 보통, 🔉 소수)
+ */
+export function getVPDClass(vpd) {
+    if (vpd >= 10000) return '🔈 뜨거움';
+    if (vpd >= 1000) return '🔊 인기';
+    if (vpd >= 100) return '🔌 보통';
+    return '🔉 소수';
+}
+
+/**
+ * 채널 규모 분류
+ * @param {number} subscriberCount - 구독자 수
+ * @returns {string} 규모 (🔴 대형, 🟡 중형, 🟢 소형)
+ */
+export function getChannelBand(subscriberCount) {
+    if (subscriberCount >= 1000000) return '🔴 대형';
+    if (subscriberCount >= 100000) return '🟡 중형';
+    return '🟢 소형';
+}
+
+/**
+ * 비밀번호 보기/숨기기 토글
+ * @param {string} inputId - 입력 필드 ID
+ * @param {string} toggleId - 토글 버튼 ID
+ */
+export function togglePassword(inputId, toggleId) {
+    const input = document.getElementById(inputId);
+    const toggle = document.getElementById(toggleId);
     
-    // Check if date parsing was successful
-    if (isNaN(publishedTime)) {
-        console.warn('Invalid publishedAt date:', publishedAt);
-        return 0.25; // Return minimum age to avoid division by zero
-    }
-    
-    const ageMs = Math.max(1, now - publishedTime); // guard
-    const d = ageMs / (1000 * 60 * 60 * 24);
-    return d;
-}
-
-function viewVelocityPerDay(video) {
-    const views = Number(video.statistics?.viewCount || 0);
-    const days = ageDays(video.snippet.publishedAt);
-
-    // Handle ultra-fresh videos fairly: show per-hour if < 1 day, but normalize to per-day for ranking
-    const perDay = views / Math.max(0.25, days); // clamp min 0.25 day to avoid infinity spikes
-    return perDay; // numeric, e.g., 25340.7
-}
-
-function formatVelocity(vpd) {
-    if (vpd >= 1_000_000) return `+${(vpd/1_000_000).toFixed(1)}M/day`;
-    if (vpd >= 1_000)     return `+${(vpd/1_000).toFixed(1)}K/day`;
-    return `+${Math.round(vpd)}/day`;
-}
-
-function classifyVelocity(vpd) {
-    if (vpd >= 50_000) return 'recent-surge'; // 최근 급상승
-    if (vpd >= 5_000)  return 'normal';       // 보통
-    return 'slow';                            // 느린 성장
-}
-
-function channelSizeBand(channel) {
-    const sub = Number(channel?.statistics?.subscriberCount ?? NaN);
-    if (Number.isNaN(sub)) return 'hidden'; // 구독자 미공개
-    if (sub < 10_000)      return 'small';  // <10K
-    if (sub < 100_000)     return 'mid';    // 10K–100K
-    return 'large';                          // 100K+
-}
-
-function sortVelocityThenSmallCreator(a, b) {
-    const d = b.vpd - a.vpd;
-    if (d !== 0) return d;
-    return (a.subs || Infinity) - (b.subs || Infinity);
-}
-
-function getChannelSizeEmoji(cband) {
-    switch(cband) {
-        case 'small': return '🌱';
-        case 'mid': return '🌿';
-        case 'large': return '🌳';
-        case 'hidden': return '❓';
-        default: return '';
-    }
-}
-
-// Password toggle function
-function togglePassword(inputId, toggleId) {
-    const passwordInput = document.getElementById(inputId);
-    const toggleText = document.getElementById(toggleId);
-    
-    if (passwordInput.type === 'password') {
-        passwordInput.type = 'text';
-        toggleText.textContent = '숨기기';
+    if (input.type === 'password') {
+        input.type = 'text';
+        toggle.textContent = '숨기기';
     } else {
-        passwordInput.type = 'password';
-        toggleText.textContent = '보기';
+        input.type = 'password';
+        toggle.textContent = '보기';
     }
 }
 
+/**
+ * 로딩 표시
+ * @param {HTMLElement} element - 로딩을 표시할 요소
+ * @param {string} message - 표시할 메시지
+ */
+export function showLoading(element, message = '⏳ 검색 중...') {
+    element.innerHTML = `<div class="loading">${message}</div>`;
+}
+
+/**
+ * 에러 표시
+ * @param {HTMLElement} element - 에러를 표시할 요소
+ * @param {string} message - 에러 메시지
+ */
+export function showError(element, message) {
+    element.innerHTML = `<div class="error">❌ ${message}</div>`;
+}
+
+/**
+ * 디바운스 함수 (연속 호출 방지)
+ * @param {Function} func - 실행할 함수
+ * @param {number} wait - 대기 시간 (ms)
+ * @returns {Function} 디바운스된 함수
+ */
+export function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+/**
+ * 로컬 스토리지에 데이터 저장
+ * @param {string} key - 저장할 키
+ * @param {any} value - 저장할 값
+ */
+export function saveToLocalStorage(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+        console.error('로컬 스토리지 저장 실패:', error);
+    }
+}
+
+/**
+ * 로컬 스토리지에서 데이터 로드
+ * @param {string} key - 로드할 키
+ * @returns {any} 로드된 값 또는 null
+ */
+export function loadFromLocalStorage(key) {
+    try {
+        const item = localStorage.getItem(key);
+        return item ? JSON.parse(item) : null;
+    } catch (error) {
+        console.error('로컬 스토리지 로드 실패:', error);
+        return null;
+    }
+}
