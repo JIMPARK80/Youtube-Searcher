@@ -274,7 +274,9 @@ export function renderPage(page) {
     pageItems.forEach(item => {
         const video = item.raw;
         const card = createVideoCard(video, item);
-        resultsDiv.appendChild(card);
+        if (card) { // Only append if card is not null
+            resultsDiv.appendChild(card);
+        }
     });
     
     // Update pagination
@@ -282,6 +284,12 @@ export function renderPage(page) {
 }
 
 function createVideoCard(video, item) {
+    // Safety check: If video is undefined, return null
+    if (!video || !video.snippet) {
+        console.error('⚠️ Invalid video data:', video);
+        return null;
+    }
+    
     const card = document.createElement('div');
     card.className = 'video-card';
     card.onclick = () => window.open(`https://www.youtube.com/watch?v=${video.id}`, '_blank');
@@ -322,6 +330,12 @@ export function applyFilters(items) {
     
     return items.filter(item => {
         const video = item.raw;
+        
+        // Safety check: Skip invalid items
+        if (!video || !video.snippet) {
+            console.warn('⚠️ Filtering out invalid video item:', item);
+            return false;
+        }
         
         // View count filter
         if (viewFilter !== 'all') {
