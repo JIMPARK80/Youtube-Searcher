@@ -2,13 +2,26 @@
 
 import { API_ENDPOINTS } from './config.js';
 import { calculateVPD, getVPDClass, getChannelBand } from './utils.js';
+import { getApiKeys as getFirebaseApiKeys } from './firebase.js';
 
 /**
- * API 키 가져오기
+ * API 키 가져오기 (Firebase 우선, 실패 시 Vercel API 사용)
  * @returns {Promise<Object>} API 키 객체 { youtube, serpapi }
  */
 export async function getApiKeys() {
     try {
+        // 먼저 Firebase에서 시도
+        const firebaseKeys = await getFirebaseApiKeys();
+        if (firebaseKeys.youtubeApiKey || firebaseKeys.serpApiKey) {
+            console.log('✅ Firebase에서 API 키 로드 성공');
+            return {
+                youtube: firebaseKeys.youtubeApiKey,
+                serpapi: firebaseKeys.serpApiKey
+            };
+        }
+        
+        // Firebase 실패 시 Vercel API 사용
+        console.log('⚠️ Firebase 키 없음, Vercel API 시도');
         const response = await fetch(API_ENDPOINTS.getKeys);
         if (!response.ok) {
             throw new Error('API 키를 가져올 수 없습니다.');

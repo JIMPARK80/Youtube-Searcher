@@ -132,7 +132,25 @@ async function handleSearch() {
         }
     } catch (error) {
         console.error('❌ 검색 오류:', error);
-        showErrorMessage(resultsDiv, '검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        
+        // 에러 타입별 처리
+        let errorType = 'general';
+        let errorMessage = '검색 중 오류가 발생했습니다.';
+        
+        if (error.message.includes('API') || error.message.includes('키')) {
+            errorType = 'api';
+            errorMessage = 'YouTube API 키를 확인할 수 없습니다.';
+        } else if (error.message.includes('네트워크') || error.message.includes('fetch') || error.message.includes('Failed to fetch')) {
+            errorType = 'network';
+            errorMessage = '인터넷 연결을 확인할 수 없습니다.';
+        } else if (error.message.includes('Firebase') || error.message.includes('firestore')) {
+            errorType = 'firebase';
+            errorMessage = '데이터베이스 연결에 실패했습니다.';
+        } else if (error.message) {
+            errorMessage = error.message;
+        }
+        
+        showErrorMessage(resultsDiv, errorMessage, errorType);
     } finally {
         isSearching = false;
     }
@@ -150,9 +168,30 @@ async function performDefaultSearch() {
     }
 
     // 실시간 리스너 설정
-    setupNewsDataListener();
+    try {
+        setupNewsDataListener();
+    } catch (error) {
+        console.warn('⚠️ 실시간 리스너 설정 실패:', error);
+    }
 
-    await handleSearch();
+    // 검색 수행
+    try {
+        await handleSearch();
+    } catch (error) {
+        console.error('❌ 기본 검색 실패:', error);
+        const resultsDiv = document.getElementById('results');
+        
+        // 에러 타입별 처리
+        if (error.message.includes('API') || error.message.includes('키')) {
+            showErrorMessage(resultsDiv, error.message, 'api');
+        } else if (error.message.includes('네트워크') || error.message.includes('fetch')) {
+            showErrorMessage(resultsDiv, error.message, 'network');
+        } else if (error.message.includes('Firebase') || error.message.includes('firestore')) {
+            showErrorMessage(resultsDiv, error.message, 'firebase');
+        } else {
+            showErrorMessage(resultsDiv, error.message, 'general');
+        }
+    }
 }
 
 /**

@@ -80,33 +80,57 @@ async function reconnectFirebase() {
 }
 
 /**
- * Firebase에서 API 키 가져오기
+ * Firebase에서 API 키 가져오기 (타임아웃 및 재시도 포함)
+ * @param {number} timeout - 타임아웃 (밀리초)
+ * @param {number} retries - 최대 재시도 횟수
  * @returns {Promise<Object>} API 키 객체
  */
-export async function getApiKeys() {
+export async function getApiKeys(timeout = 5000, retries = 3) {
     if (!db) {
         console.error('Firebase가 초기화되지 않았습니다.');
         return { youtubeApiKey: '', serpApiKey: '' };
     }
 
-    try {
-        const doc = await db.collection('config').doc('apiKeys').get();
-        
-        if (doc.exists) {
-            const data = doc.data();
-            console.log('✅ Firebase에서 API 키 로드 성공');
-            return {
-                youtubeApiKey: data.youtubeApiKey || '',
-                serpApiKey: data.serpApiKey || ''
-            };
-        } else {
-            console.warn('⚠️ Firebase에 API 키가 없습니다.');
-            return { youtubeApiKey: '', serpApiKey: '' };
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            console.log(`🔑 API 키 로드 시도 ${attempt}/${retries}`);
+            
+            const docPromise = db.collection('config').doc('apiKeys').get();
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('TIMEOUT')), timeout)
+            );
+            
+            const doc = await Promise.race([docPromise, timeoutPromise]);
+            
+            if (doc.exists) {
+                const data = doc.data();
+                console.log('✅ Firebase에서 API 키 로드 성공');
+                return {
+                    youtubeApiKey: data.youtubeApiKey || '',
+                    serpApiKey: data.serpApiKey || ''
+                };
+            } else {
+                console.warn('⚠️ Firebase에 API 키가 없습니다.');
+                return { youtubeApiKey: '', serpApiKey: '' };
+            }
+        } catch (error) {
+            if (error.message === 'TIMEOUT') {
+                console.warn(`⏱️ API 키 로드 타임아웃 (시도 ${attempt}/${retries})`);
+                if (attempt < retries) {
+                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                    continue;
+                }
+            }
+            console.error(`❌ Firebase API 키 로드 오류 (시도 ${attempt}/${retries}):`, error);
+            
+            if (attempt === retries) {
+                console.warn('⚠️ Firebase 연결 실패 - 오프라인 모드로 전환');
+                return { youtubeApiKey: '', serpApiKey: '' };
+            }
         }
-    } catch (error) {
-        console.error('❌ Firebase API 키 로드 오류:', error);
-        return { youtubeApiKey: '', serpApiKey: '' };
     }
+    
+    return { youtubeApiKey: '', serpApiKey: '' };
 }
 
 /**

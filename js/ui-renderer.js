@@ -199,14 +199,82 @@ export function showLoadingSpinner(container) {
  * 에러 메시지 표시
  * @param {HTMLElement} container - 에러를 표시할 컨테이너
  * @param {string} message - 에러 메시지
+ * @param {string} errorType - 에러 타입 ('api', 'network', 'firebase', 'general')
  */
-export function showErrorMessage(container, message) {
+export function showErrorMessage(container, message, errorType = 'general') {
+    const errorConfig = {
+        api: {
+            icon: '🔑',
+            title: 'API 키 오류',
+            message: message || 'YouTube API 키를 확인할 수 없습니다.',
+            solutions: [
+                'API 키가 Firebase에 올바르게 설정되어 있는지 확인하세요.',
+                '<a href="setup.html" style="color: #4CAF50; text-decoration: underline;">API 키 설정 페이지</a>에서 키를 확인하세요.',
+                '인터넷 연결을 확인하고 페이지를 새로고침하세요.'
+            ]
+        },
+        network: {
+            icon: '🌐',
+            title: '네트워크 오류',
+            message: message || '인터넷 연결을 확인할 수 없습니다.',
+            solutions: [
+                '인터넷 연결을 확인하세요.',
+                '방화벽이나 VPN이 연결을 차단하고 있는지 확인하세요.',
+                '잠시 후 다시 시도하세요.'
+            ]
+        },
+        firebase: {
+            icon: '🔥',
+            title: 'Firebase 연결 오류',
+            message: message || '데이터베이스 연결에 실패했습니다.',
+            solutions: [
+                '인터넷 연결을 확인하세요.',
+                '다른 검색어로 시도해보세요 (오프라인 캐시 사용).',
+                '페이지를 새로고침하세요.'
+            ]
+        },
+        general: {
+            icon: '⚠️',
+            title: '오류가 발생했습니다',
+            message: message || '예기치 않은 오류가 발생했습니다.',
+            solutions: [
+                '페이지를 새로고침해보세요.',
+                '브라우저 캐시를 삭제하고 다시 시도하세요.',
+                '문제가 계속되면 개발자에게 문의하세요.'
+            ]
+        }
+    };
+
+    const config = errorConfig[errorType] || errorConfig.general;
+    
     container.innerHTML = `
-        <div class="error-container">
-            <div class="error-icon">❌</div>
-            <h3>오류가 발생했습니다</h3>
-            <p>${message}</p>
-            <button class="retry-btn" onclick="location.reload()">다시 시도</button>
+        <div class="error-container" style="max-width: 600px; margin: 40px auto; padding: 30px; text-align: center;">
+            <div class="error-icon" style="font-size: 64px; margin-bottom: 20px;">${config.icon}</div>
+            <h3 style="font-size: 24px; margin-bottom: 10px; color: #333;">${config.title}</h3>
+            <p style="font-size: 16px; color: #666; margin-bottom: 30px;">${config.message}</p>
+            
+            <div class="error-solutions" style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: left;">
+                <h4 style="font-size: 16px; margin-bottom: 15px; color: #555;">해결 방법:</h4>
+                <ul style="list-style: none; padding: 0;">
+                    ${config.solutions.map((solution, index) => `
+                        <li style="margin-bottom: 10px; padding-left: 20px; position: relative;">
+                            <span style="position: absolute; left: 0; color: #4CAF50;">${index + 1}.</span>
+                            <span style="color: #666;">${solution}</span>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+            
+            <div class="error-actions" style="display: flex; gap: 10px; justify-content: center;">
+                <button class="retry-btn" onclick="location.reload()" 
+                        style="padding: 12px 24px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">
+                    🔄 다시 시도
+                </button>
+                <button class="retry-btn" onclick="window.location.href='setup.html'" 
+                        style="padding: 12px 24px; background: #2196F3; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">
+                    ⚙️ 설정 확인
+                </button>
+            </div>
         </div>
     `;
 }
