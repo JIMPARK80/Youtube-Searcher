@@ -6,21 +6,10 @@
     <title>Jim's YouTube 검색기</title>
     <link rel="stylesheet" href="css/styles.css">
     
-    <!-- Firebase SDK -->
-    <script>
-        // Firebase SDK를 먼저 로드
-        (function() {
-            const script1 = document.createElement('script');
-            script1.src = 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js';
-            script1.async = false;
-            document.head.appendChild(script1);
-            
-            const script2 = document.createElement('script');
-            script2.src = 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js';
-            script2.async = false;
-            script1.onload = () => document.head.appendChild(script2);
-        })();
-    </script>
+    <!-- Firebase SDK - 동기 로딩 -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 </head>
 <body>
     <!-- Auth Section -->
@@ -218,9 +207,6 @@
         </div>
     </div>
 
-    <!-- 외부 JS 모듈 로드 (ES6 Module) -->
-    <script type="module" src="js/main.js"></script>
-    
     <!-- 전역 함수 (비밀번호 토글) -->
     <script>
         function togglePassword(inputId, toggleId) {
@@ -235,6 +221,14 @@
                 toggle.textContent = '보기';
             }
         }
+        
+        // Firebase SDK 로드 완료 후 main.js 로드
+        window.addEventListener('load', function() {
+            const script = document.createElement('script');
+            script.type = 'module';
+            script.src = 'js/main.js';
+            document.body.appendChild(script);
+        });
     </script>
 </body>
 </html>
