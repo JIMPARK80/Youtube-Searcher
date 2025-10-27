@@ -719,7 +719,7 @@
                 }
 
                 // Track SerpAPI usage
-                trackApiCall('serpapi', 1);
+                // trackApiCall('serpapi', 1);
 
                 // Convert SerpAPI format to our format
                 const videos = data.video_results.map(v => {
@@ -1280,7 +1280,7 @@
                     const videosData = await videosResponse.json();
 
                     // Track API usage
-                    trackApiCall('videos', 1);
+                    // trackApiCall('videos', 1);
 
                     // Step 3: Get channel information for subscriber counts
                     const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelIds}&key=${apiKeyValue}`;
@@ -1288,7 +1288,7 @@
                     const channelsData = await channelsResponse.json();
 
                     // Track API usage
-                    trackApiCall('channels', 1);
+                    // trackApiCall('channels', 1);
 
                     const channelMap = {};
                     channelsData.items.forEach(channel => {
