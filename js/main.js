@@ -1,14 +1,15 @@
-// Global variables for pagination and search state
-let allVideos = [];      // filled after API fetch
-let allItems = [];       // enriched with velocity and channel data
-const pageSize = 8;      // items per page (4×2 grid)
-let currentPage = 1;     // 1-based
+// Main application logic
+// This file initializes the app and coordinates between modules
+
+// Global variables (declared here but will be managed by modules)
+let allVideos = [];
+let allItems = [];
 let allChannelMap = {};
-let searchCache = {};   // Cache search results by query
+let searchCache = {};
+let currentPage = 1;
 let currentSearchQuery = '';
-let currentSearchMode = 'google'; // 'google' or 'serpapi'
-let apiKey = '';
-let serpApiKey = '';
+let currentSearchMode = 'google';
+let pageSize = CONFIG?.PAGE_SIZE || 8;
 
 // Search function
 async function search() {
