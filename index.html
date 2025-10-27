@@ -25,12 +25,12 @@
             <h2>로그인</h2>
             <div class="form-group">
                 <label for="loginEmail">이메일</label>
-                <input type="email" id="loginEmail" placeholder="이메일을 입력하세요">
+                <input type="email" id="loginEmail" placeholder="이메일을 입력하세요" autocomplete="username">
             </div>
             <div class="form-group">
                 <label for="loginPassword">비밀번호</label>
                 <div class="password-wrapper">
-                    <input type="password" id="loginPassword" placeholder="비밀번호를 입력하세요">
+                    <input type="password" id="loginPassword" placeholder="비밀번호를 입력하세요" autocomplete="current-password">
                     <button type="button" class="password-toggle" onclick="togglePassword('loginPassword', 'loginPasswordToggle')">
                         <span id="loginPasswordToggle">보기</span>
                     </button>
@@ -54,12 +54,12 @@
             </div>
             <div class="form-group">
                 <label for="signupId">이메일</label>
-                <input type="email" id="signupId" placeholder="이메일을 입력하세요">
+                <input type="email" id="signupId" placeholder="이메일을 입력하세요" autocomplete="username">
             </div>
             <div class="form-group">
                 <label for="signupPassword">비밀번호</label>
                 <div class="password-wrapper">
-                    <input type="password" id="signupPassword" placeholder="비밀번호를 입력하세요">
+                    <input type="password" id="signupPassword" placeholder="비밀번호를 입력하세요" autocomplete="new-password">
                     <button type="button" class="password-toggle" onclick="togglePassword('signupPassword', 'signupPasswordToggle')">
                         <span id="signupPasswordToggle">보기</span>
                     </button>
@@ -68,7 +68,7 @@
             <div class="form-group">
                 <label for="signupPasswordConfirm">비밀번호 확인</label>
                 <div class="password-wrapper">
-                    <input type="password" id="signupPasswordConfirm" placeholder="비밀번호를 다시 입력하세요">
+                    <input type="password" id="signupPasswordConfirm" placeholder="비밀번호를 다시 입력하세요" autocomplete="new-password">
                     <button type="button" class="password-toggle" onclick="togglePassword('signupPasswordConfirm', 'signupPasswordConfirmToggle')">
                         <span id="signupPasswordConfirmToggle">보기</span>
                     </button>
