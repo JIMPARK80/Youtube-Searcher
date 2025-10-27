@@ -213,10 +213,9 @@
         // Global variables and functions are defined in: js/main.js, js/utils.js, js/filters.js, js/pagination.js, js/firebase-cache.js, js/api.js
         
         // Authentication and event listener code only
-            try {
-                console.log('🔄 SerpAPI로 검색 중...');
-                // Get SerpAPI key from Firebase server first
-                const keys = await getApiKeys();
+        
+        // Reset all filters function
+        window.resetAllFilters = function() {
                 const serpApiKey = keys.serpapi;
                 if (!serpApiKey) {
                     throw new Error('SerpAPI 키가 설정되지 않았습니다. API 키 설정에서 SerpAPI 키를 입력해주세요.');
