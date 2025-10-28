@@ -184,9 +184,9 @@ export async function saveToFirebase(query, videos, channels, items, dataSource 
         console.log(`📊 저장할 데이터 크기: ${(dataSize / 1024).toFixed(2)} KB`);
         
         if (dataSize > 1000000) { // 1MB 초과
-            console.warn('⚠️ 데이터가 너무 큽니다. 일부만 저장합니다.');
-            data.videos = data.videos.slice(0, 50);
-            data.items = data.items.slice(0, 50);
+            console.warn('⚠️ 데이터가 커서 일부만 저장합니다 (최대 100개까지 유지).');
+            data.videos = data.videos.slice(0, 100);
+            data.items = data.items.slice(0, 100);
         }
         
         await window.firebaseSetDoc(cacheRef, data);
