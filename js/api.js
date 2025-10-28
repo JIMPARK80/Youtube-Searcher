@@ -81,62 +81,73 @@ function createHiddenApiKeyInputs(keys) {
 // FIREBASE 캐싱 함수
 // ============================================
 
-// Load from Firebase cloud cache
+// Load from Firebase cloud cache (자동 병합 로드)
 export async function loadFromFirebase(query) {
     try {
         if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseGetDoc) {
-            console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
+            console.log('⚠️ Firebase 초기화 안 됨');
             return null;
         }
         
-        // Sanitize document ID
         const docId = window.toDocId(query);
-        console.log(`🔍 Firebase 캐시 확인 중: 검색어="${query}" -> 문서 ID: "${docId}"`);
+        console.log(`🔍 Firebase 캐시 확인 중: "${query}" -> "${docId}"`);
         
-        const cacheRef = window.firebaseDoc(window.firebaseDb, 'searchCache', docId);
-        const cacheSnap = await window.firebaseGetDoc(cacheRef);
-        
-        if (cacheSnap.exists()) {
-            const data = cacheSnap.data();
-            const age = Date.now() - data.timestamp;
-            const ageHours = age / (1000 * 60 * 60);
-            
-            console.log(`☁️ Firebase 캐시 발견: ${ageHours.toFixed(1)}시간 전 데이터`);
-            console.log(`📊 캐시 정보: ${data.items?.length || 0}개 항목, 소스: ${data.dataSource || 'unknown'}`);
-            
-            // 24시간 이내면 유효
-            if (age < 24 * 60 * 60 * 1000) {
-                console.log('✅ 유효한 Firebase 캐시 사용');
-                return data;
-            } else {
-                console.log('⏰ Firebase 캐시 만료 (24시간 초과)');
-            }
-        } else {
+        const mainRef = window.firebaseDoc(window.firebaseDb, 'searchCache', docId);
+        const part2Ref = window.firebaseDoc(window.firebaseDb, 'searchCache', `${docId}_p2`);
+
+        const [mainSnap, part2Snap] = await Promise.all([
+            window.firebaseGetDoc(mainRef),
+            window.firebaseGetDoc(part2Ref)
+        ]);
+
+        if (!mainSnap.exists()) {
             console.log(`🔭 Firebase 캐시 없음 (문서 ID: "${docId}")`);
+            return null;
+        }
+
+        const mainData = mainSnap.data();
+        const age = Date.now() - mainData.timestamp;
+        const ageHours = age / (1000 * 60 * 60);
+        
+        // part2가 있으면 병합
+        if (part2Snap.exists()) {
+            const part2Data = part2Snap.data();
+            mainData.videos.push(...part2Data.videos);
+            mainData.items.push(...part2Data.items);
+            console.log(`☁️ Firebase 캐시 발견 (병합): ${ageHours.toFixed(1)}시간 전`);
+            console.log(`📊 병합된 캐시: 총 ${mainData.videos.length}개 항목, 소스: ${mainData.dataSource || 'unknown'}`);
+        } else {
+            console.log(`☁️ Firebase 캐시 발견 (단일): ${ageHours.toFixed(1)}시간 전`);
+            console.log(`📊 캐시 정보: ${mainData.videos?.length || 0}개 항목, 소스: ${mainData.dataSource || 'unknown'}`);
         }
         
-        return null;
+        // 24시간 이내면 유효
+        if (age < 24 * 60 * 60 * 1000) {
+            console.log('✅ 유효한 Firebase 캐시 사용');
+            return mainData;
+        } else {
+            console.log('⏰ Firebase 캐시 만료 (24시간 초과)');
+            return null;
+        }
+        
     } catch (error) {
         console.error('❌ Firebase 캐시 로드 실패:', error);
         return null;
     }
 }
 
-// Save to Firebase cloud cache
+// Save to Firebase cloud cache (자동 분할 저장: 50+50)
 export async function saveToFirebase(query, videos, channels, items, dataSource = 'google', nextPageToken = null) {
     try {
         if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseSetDoc) {
-            console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
+            console.log('⚠️ Firebase 초기화 안 됨');
             return;
         }
-        
-        // Sanitize document ID
+
         const docId = window.toDocId(query);
         console.log(`💾 문서 ID: "${query}" -> "${docId}"`);
-        
         const cacheRef = window.firebaseDoc(window.firebaseDb, 'searchCache', docId);
-        
-        // Shrink data to prevent payload size issues
+
         const shrinkVideo = v => ({
             id: v.id,
             title: v.snippet?.title,
@@ -153,7 +164,7 @@ export async function saveToFirebase(query, videos, channels, items, dataSource 
                 extracted_date: v.serpData.extracted_date_from_description ?? null
             } : null
         });
-        
+
         const shrinkItem = x => ({
             id: x?.raw?.id,
             vpd: x.vpd,
@@ -161,40 +172,43 @@ export async function saveToFirebase(query, videos, channels, items, dataSource 
             cband: x.cband,
             subs: x.subs
         });
+
+        const now = Date.now();
+        const totalVideos = (videos || []).length;
+        console.log(`💾 저장 시작: videos=${totalVideos}개, items=${(items || []).length}개`);
         
-        const videoCount = (videos || []).length;
-        console.log(`💾 저장 시작: videos=${videoCount}개, items=${(items || []).length}개`);
-        
-        const data = {
-            query: query,
-            videos: (videos || []).map(shrinkVideo),
-            channels: channels || {},
-            items: (items || []).map(shrinkItem),
-            timestamp: Date.now(),
-            cacheVersion: '1.2',
-            dataSource: dataSource,
-            meta: {
-                fetchedPages: videoCount <= 50 ? 1 : 2,
-                nextPageToken: nextPageToken || null,
-                resultLimit: videoCount,
-                source: dataSource
-            }
-        };
-        
-        // 디버깅: 데이터 크기 확인
-        const dataSize = JSON.stringify(data).length;
-        console.log(`📊 저장할 데이터 크기: ${(dataSize / 1024).toFixed(2)} KB`);
-        console.log(`📦 압축 후: videos=${data.videos.length}개, items=${data.items.length}개`);
-        
-        if (dataSize > 1000000) { // 1MB 초과
-            console.warn('⚠️ 데이터가 커서 일부만 저장합니다 (최대 100개까지 유지).');
-            data.videos = data.videos.slice(0, 100);
-            data.items = data.items.slice(0, 100);
-            console.log(`✂️ 제한 적용 후: videos=${data.videos.length}개, items=${data.items.length}개`);
+        const chunks = [
+            { videos: videos.slice(0, 50), items: items.slice(0, 50), part: 1 },
+            { videos: videos.slice(50, 100), items: items.slice(50, 100), part: 2 }
+        ];
+
+        for (const chunk of chunks) {
+            if (chunk.videos.length === 0) continue;
+
+            const targetRef = chunk.part === 1
+                ? cacheRef
+                : window.firebaseDoc(window.firebaseDb, 'searchCache', `${docId}_p${chunk.part}`);
+
+            const data = {
+                query,
+                videos: chunk.videos.map(shrinkVideo),
+                channels: chunk.part === 1 ? channels : {},
+                items: chunk.items.map(shrinkItem),
+                timestamp: now,
+                cacheVersion: '1.3',
+                dataSource,
+                meta: {
+                    part: chunk.part,
+                    total: totalVideos,
+                    nextPageToken: chunk.part === 1 ? nextPageToken : null,
+                    source: dataSource
+                }
+            };
+
+            await window.firebaseSetDoc(targetRef, data);
+            console.log(`✅ Firebase 캐시 저장 완료 (part ${chunk.part}, ${chunk.videos.length}개)`);
         }
-        
-        await window.firebaseSetDoc(cacheRef, data);
-        console.log(`✅ Firebase 캐시 저장 완료: ${data.videos.length}개 비디오`);
+
     } catch (error) {
         console.error('❌ Firebase 캐시 저장 실패:', error);
     }
