@@ -33,7 +33,8 @@ export function formatNumber(num) {
     } else if (num >= 1000) {
         return (num / 1000).toFixed(1) + 'K';
     }
-    return num.toString();
+    // 1000 미만의 숫자도 소수점 1자리로 반올림
+    return Number(num).toFixed(1);
 }
 
 export function formatDuration(duration) {
