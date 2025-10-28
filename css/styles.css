@@ -234,7 +234,9 @@ body {
 
 .stats {
     display: flex;
-    gap: 10px;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 12px;
     font-size: 0.8em;
     color: #666;
     margin-bottom: 6px;
@@ -244,7 +246,13 @@ body {
 .stat-item {
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
+    white-space: nowrap;
+    transition: color 0.2s ease;
+}
+
+.stat-item:hover {
+    color: #333;
 }
 
 .stat-unavailable {
