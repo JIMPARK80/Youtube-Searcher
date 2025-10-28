@@ -109,6 +109,15 @@ export async function loadFromFirebase(query) {
         const age = Date.now() - mainData.timestamp;
         const ageHours = age / (1000 * 60 * 60);
         
+        // 캐시 버전 체크 (1.3 미만이면 업그레이드 필요)
+        const CURRENT_VERSION = '1.3';
+        const cacheVersion = mainData.cacheVersion || '1.0';
+        if (cacheVersion < CURRENT_VERSION) {
+            console.warn(`🔄 구버전 캐시 발견 (v${cacheVersion} → v${CURRENT_VERSION})`);
+            console.warn(`♻️ 캐시 업그레이드: 새로 fetch하여 100개 저장합니다`);
+            return null; // 캐시 무효화 → 새로 fetch
+        }
+        
         // part2가 있으면 병합
         if (part2Snap.exists()) {
             const part2Data = part2Snap.data();
