@@ -324,8 +324,8 @@ function createVideoCard(video, item) {
                 <span class="stat-item">👍 ${formatNumber(video.statistics?.likeCount || 0)}</span>
             </div>
             <div class="velocity-info">
-                <span>📈 ${formatNumber(item.vpd)}/day</span>
-                <span>👥 ${formatNumber(item.subs || 0)}</span>
+                <span class="vpd-badge">+${formatNumber(item.vpd)}/day</span>
+                <span class="subscribers-info">👥 ${formatNumber(item.subs || 0)}</span>
             </div>
         </div>
     `;
