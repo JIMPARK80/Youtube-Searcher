@@ -93,11 +93,14 @@ export async function loadFromFirebase(query) {
         console.log(`🔍 Firebase 캐시 확인 중: "${query}" -> "${docId}"`);
         
         const mainRef = window.firebaseDoc(window.firebaseDb, 'searchCache', docId);
-        const part2Ref = window.firebaseDoc(window.firebaseDb, 'searchCache', `${docId}_p2`);
+        const partRefs = [2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => 
+            window.firebaseDoc(window.firebaseDb, 'searchCache', `${docId}_p${i}`)
+        );
+        
 
-        const [mainSnap, part2Snap] = await Promise.all([
+        const [mainSnap, ...partSnaps] = await Promise.all([
             window.firebaseGetDoc(mainRef),
-            window.firebaseGetDoc(part2Ref)
+            ...partRefs.map(ref => window.firebaseGetDoc(ref))
         ]);
 
         if (!mainSnap.exists()) {
@@ -109,26 +112,26 @@ export async function loadFromFirebase(query) {
         const age = Date.now() - mainData.timestamp;
         const ageHours = age / (1000 * 60 * 60);
         
-        // 캐시 버전 체크 (1.3 미만이면 업그레이드 필요)
-        const CURRENT_VERSION = '1.3';
+        // 캐시 버전 체크 (latest미만이면 업그레이드 필요)
+        const CURRENT_VERSION = '1.32';
         const cacheVersion = mainData.cacheVersion || '1.0';
         if (cacheVersion < CURRENT_VERSION) {
             console.warn(`🔄 구버전 캐시 발견 (v${cacheVersion} → v${CURRENT_VERSION})`);
-            console.warn(`♻️ 캐시 업그레이드: 새로 fetch하여 100개 저장합니다`);
+            console.warn(`♻️ 캐시 업그레이드: 새로 fetch하여 500개 저장합니다`);
             return null; // 캐시 무효화 → 새로 fetch
         }
         
-        // part2가 있으면 병합
-        if (part2Snap.exists()) {
-            const part2Data = part2Snap.data();
-            mainData.videos.push(...part2Data.videos);
-            mainData.items.push(...part2Data.items);
-            console.log(`☁️ Firebase 캐시 발견 (병합): ${ageHours.toFixed(1)}시간 전`);
-            console.log(`📊 병합된 캐시: 총 ${mainData.videos.length}개 항목, 소스: ${mainData.dataSource || 'unknown'}`);
-        } else {
-            console.log(`☁️ Firebase 캐시 발견 (단일): ${ageHours.toFixed(1)}시간 전`);
-            console.log(`📊 캐시 정보: ${mainData.videos?.length || 0}개 항목, 소스: ${mainData.dataSource || 'unknown'}`);
+        // part2~part6 병합
+        for (const partSnap of partSnaps) {
+            if (partSnap.exists()) {
+                const partData = partSnap.data();
+                mainData.videos.push(...partData.videos);
+                mainData.items.push(...partData.items);
+            }
         }
+        const totalParts = 1 + partSnaps.filter(s => s.exists()).length;
+        console.log(`☁️ Firebase 캐시 발견 (${totalParts}개 파트 병합): ${ageHours.toFixed(1)}시간 전`);
+        console.log(`📊 병합된 캐시: 총 ${mainData.videos.length}개 항목, 소스: ${mainData.dataSource || 'unknown'}`);
         
         // 24시간 이내면 유효
         if (age < 24 * 60 * 60 * 1000) {
@@ -188,7 +191,15 @@ export async function saveToFirebase(query, videos, channels, items, dataSource 
         
         const chunks = [
             { videos: videos.slice(0, 50), items: items.slice(0, 50), part: 1 },
-            { videos: videos.slice(50, 100), items: items.slice(50, 100), part: 2 }
+            { videos: videos.slice(50, 100), items: items.slice(50, 100), part: 2 },
+            { videos: videos.slice(100, 150), items: items.slice(100, 150), part: 3 },
+            { videos: videos.slice(150, 200), items: items.slice(150, 200), part: 4 },
+            { videos: videos.slice(200, 250), items: items.slice(200, 250), part: 5 },
+            { videos: videos.slice(250, 300), items: items.slice(250, 300), part: 6 },
+            { videos: videos.slice(300, 350), items: items.slice(300, 350), part: 7 },
+            { videos: videos.slice(350, 400), items: items.slice(350, 400), part: 8 },
+            { videos: videos.slice(400, 450), items: items.slice(400, 450), part: 9 },
+            { videos: videos.slice(450, 500), items: items.slice(450, 500), part: 10 }
         ];
 
         for (const chunk of chunks) {
@@ -204,7 +215,7 @@ export async function saveToFirebase(query, videos, channels, items, dataSource 
                 channels: chunk.part === 1 ? channels : {},
                 items: chunk.items.map(shrinkItem),
                 timestamp: now,
-                cacheVersion: '1.3',
+                cacheVersion: '1.32',
                 dataSource,
                 meta: {
                     part: chunk.part,
@@ -290,11 +301,11 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
     try {
         console.log('🌐 Google API 호출 중...');
         
-        // ① Step 1: Search for videos (최대 100개, 50개씩 2페이지)
+        // ① Step 1: Search for videos (최대 500개, 50개씩 10페이지)
         let searchItems = [];
         let nextPageToken = null;
         
-        for (let page = 0; page < 2; page++) {
+        for (let page = 0; page < 10; page++) {
             const pageParam = nextPageToken ? `&pageToken=${nextPageToken}` : '';
             const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(query)}&order=relevance&key=${apiKeyValue}${pageParam}`;
             const searchResponse = await fetch(searchUrl);
