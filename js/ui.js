@@ -325,7 +325,7 @@ function createVideoCard(video, item) {
             </div>
             <div class="velocity-info">
                 <span>📈 ${formatNumber(item.vpd)}/day</span>
-                <span>${getChannelSizeEmoji(item.cband)}</span>
+                <span>👥 ${formatNumber(item.subs || 0)}</span>
             </div>
         </div>
     `;
