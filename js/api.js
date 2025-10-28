@@ -163,6 +163,8 @@ export async function saveToFirebase(query, videos, channels, items, dataSource 
         });
         
         const videoCount = (videos || []).length;
+        console.log(`💾 저장 시작: videos=${videoCount}개, items=${(items || []).length}개`);
+        
         const data = {
             query: query,
             videos: (videos || []).map(shrinkVideo),
@@ -182,15 +184,17 @@ export async function saveToFirebase(query, videos, channels, items, dataSource 
         // 디버깅: 데이터 크기 확인
         const dataSize = JSON.stringify(data).length;
         console.log(`📊 저장할 데이터 크기: ${(dataSize / 1024).toFixed(2)} KB`);
+        console.log(`📦 압축 후: videos=${data.videos.length}개, items=${data.items.length}개`);
         
         if (dataSize > 1000000) { // 1MB 초과
             console.warn('⚠️ 데이터가 커서 일부만 저장합니다 (최대 100개까지 유지).');
             data.videos = data.videos.slice(0, 100);
             data.items = data.items.slice(0, 100);
+            console.log(`✂️ 제한 적용 후: videos=${data.videos.length}개, items=${data.items.length}개`);
         }
         
         await window.firebaseSetDoc(cacheRef, data);
-        console.log('✅ Firebase 캐시 저장 완료');
+        console.log(`✅ Firebase 캐시 저장 완료: ${data.videos.length}개 비디오`);
     } catch (error) {
         console.error('❌ Firebase 캐시 저장 실패:', error);
     }
@@ -289,6 +293,7 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
 
         // ② Step 2: Get detailed video information (50개씩 배치)
         const videoIds = searchItems.map(item => item.id.videoId).filter(Boolean);
+        console.log(`📋 비디오 ID 추출: ${videoIds.length}개`);
         let videoDetails = [];
         for (const ids of chunk(videoIds, 50)) {
             const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${ids.join(",")}&key=${apiKeyValue}`;
@@ -296,6 +301,7 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
             const d = await r.json();
             videoDetails.push(...(d.items || []));
         }
+        console.log(`📹 비디오 상세 정보: ${videoDetails.length}개`);
 
         // ③ Step 3: Get channel information (50개씩 배치)
         const channelIds = [...new Set(videoDetails.map(v => v.snippet.channelId))];
@@ -306,7 +312,9 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
             const d = await r.json();
             (d.items || []).forEach(ch => { channelsMap[ch.id] = ch; });
         }
+        console.log(`👥 채널 정보: ${Object.keys(channelsMap).length}개`);
 
+        console.log(`🔙 반환: videos=${videoDetails.length}개, channels=${Object.keys(channelsMap).length}개`);
         return {
             videos: videoDetails,
             channels: channelsMap,

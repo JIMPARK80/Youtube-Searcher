@@ -229,7 +229,7 @@ export async function search() {
                 updateSearchModeIndicator('google');
                 renderPage(1);
                 return;
-            }
+            }   
             
             // A-4) Google 캐시 + 24시간 경과 + 50개 + nextPageToken → 토핑
             if (cacheSource === 'google' && isExpired && count === 50 && meta.nextPageToken) {
@@ -278,6 +278,7 @@ async function performFullGoogleSearch(query, apiKeyValue) {
     try {
         console.log('🌐 Google API 전체 검색 (최대 100개)');
         const result = await searchYouTubeAPI(query, apiKeyValue);
+        console.log(`🎯 fetch 완료: ${result.videos.length}개`);
         allVideos = result.videos;
         allChannelMap = result.channels;
         
