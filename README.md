@@ -5,7 +5,7 @@
 
 A web application to search YouTube videos and view detailed information with advanced analytics.
 
-**🔗 Live Demo:** [YouTube Searcher](https://youtube-searcher-jimpark80.vercel.app/)
+**🔗 Live Demo:** [YouTube Searcher](https://youtube-searcher-gray.vercel.app/)
 
 [한국어 문서 보기](#-한국어-버전)
 
@@ -273,7 +273,7 @@ Give a ⭐️ if this project helped you!
 
 유튜브 비디오를 검색하고 상세 정보를 확인할 수 있는 고급 분석 기능이 포함된 웹 애플리케이션입니다.
 
-**🔗 라이브 데모:** [YouTube Searcher](https://youtube-searcher-jimpark80.vercel.app/)
+**🔗 라이브 데모:** [YouTube Searcher](https://youtube-searcher-gray.vercel.app/)
 
 ## ✨ 주요 기능
 
