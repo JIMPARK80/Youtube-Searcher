@@ -133,11 +133,6 @@
                     <label><input type="radio" name="viewCountFilter" value="100000"> 100K+</label>
                     <label><input type="radio" name="viewCountFilter" value="1000000"> 1M+</label>
                     <label><input type="radio" name="viewCountFilter" value="10000000"> 10M+</label>
-                    <label><input type="radio" name="viewCountFilter" value="custom"> <span data-i18n="filter.custom">사용자 정의</span></label>
-                    <div class="custom-range" id="viewCountCustom" style="display: none; margin-left: 20px; margin-top: 5px;">
-                        <input type="number" id="viewCountMin" placeholder="최소" style="width: 80px;"> ~ 
-                        <input type="number" id="viewCountMax" placeholder="최대" style="width: 80px;">
-                    </div>
                 </div>
                 
                 <!-- Subscriber Count Filter -->
@@ -149,11 +144,6 @@
                     <label><input type="radio" name="subCountFilter" value="10000-100000"> 10K-100K</label>
                     <label><input type="radio" name="subCountFilter" value="100000-1000000"> 100K-1M</label>
                     <label><input type="radio" name="subCountFilter" value="1000000"> 1M+</label>
-                    <label><input type="radio" name="subCountFilter" value="custom"> <span data-i18n="filter.custom">사용자 정의</span></label>
-                    <div class="custom-range" id="subCountCustom" style="display: none; margin-left: 20px; margin-top: 5px;">
-                        <input type="number" id="subCountMin" placeholder="최소" style="width: 80px;"> ~ 
-                        <input type="number" id="subCountMax" placeholder="최대" style="width: 80px;">
-                    </div>
                 </div>
                  
                  <!-- Upload Date Filter -->
@@ -167,25 +157,21 @@
                      <label><input type="radio" name="uploadDateFilter" value="90"> <span data-i18n="filter.date.month3">3개월 이내</span></label>
                      <label><input type="radio" name="uploadDateFilter" value="180"> <span data-i18n="filter.date.month6">6개월 이내</span></label>
                     <label><input type="radio" name="uploadDateFilter" value="365"> <span data-i18n="filter.date.year1">1년 이내</span></label>
-                    <label><input type="radio" name="uploadDateFilter" value="custom"> <span data-i18n="filter.custom">사용자 정의</span></label>
-                    <div class="custom-range" id="uploadDateCustom" style="display: none; margin-left: 20px; margin-top: 5px;">
-                        <input type="number" id="uploadDateMin" placeholder="최소 (일)" style="width: 80px;"> ~ 
-                        <input type="number" id="uploadDateMax" placeholder="최대 (일)" style="width: 80px;"> <small>(일 단위)</small>
-                    </div>
                 </div>
                 
                 <!-- Video Duration Filter -->
                 <div class="filter-group duration-filter">
                     <label data-i18n="filter.duration">영상길이 필터:</label>
                     <label><input type="radio" name="durationFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
-                    <label><input type="radio" name="durationFilter" value="0-60"> <1min</label>
-                    <label><input type="radio" name="durationFilter" value="60-600"> 1min-10min</label>
-                    <label><input type="radio" name="durationFilter" value="1200-3600"> 20min-1hour</label>
-                    <label><input type="radio" name="durationFilter" value="3600"> 1hour+</label>
-                    <label><input type="radio" name="durationFilter" value="custom"> <span data-i18n="filter.custom">사용자 정의</span></label>
+                    <label><input type="radio" name="durationFilter" value="0-60"> <span data-i18n="filter.duration.shorts">쇼츠구간</span> (&lt;1min)</label>
+                    <label><input type="radio" name="durationFilter" value="60-600"> <span data-i18n="filter.duration.short">짧은영상</span> (1-10min)</label>
+                    <label><input type="radio" name="durationFilter" value="600-1800"> <span data-i18n="filter.duration.medium">중간영상</span> (10-30min)</label>
+                    <label><input type="radio" name="durationFilter" value="1800-3600"> <span data-i18n="filter.duration.long">긴영상</span> (30min-1hr)</label>
+                    <label><input type="radio" name="durationFilter" value="3600"> <span data-i18n="filter.duration.verylong">아주긴영상</span> (1hr+)</label>
+                    <label><input type="radio" name="durationFilter" value="custom"> <span data-i18n="filter.custom">사용자선택</span></label>
                     <div class="custom-range" id="durationCustom" style="display: none; margin-left: 20px; margin-top: 5px;">
-                        <input type="number" id="durationMin" placeholder="최소 (초)" style="width: 80px;"> ~ 
-                        <input type="number" id="durationMax" placeholder="최대 (초)" style="width: 80px;"> <small>(초 단위)</small>
+                        <input type="number" id="durationMin" placeholder="최소 (분)" style="width: 80px;" min="0"> ~ 
+                        <input type="number" id="durationMax" placeholder="최대 (분)" style="width: 80px;" min="0"> <small>(분 단위)</small>
                     </div>
                 </div>
             </div>

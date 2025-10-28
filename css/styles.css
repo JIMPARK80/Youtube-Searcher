@@ -616,14 +616,13 @@ body {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 10px;
     backdrop-filter: blur(10px);
-    overflow-x: auto;
 }
 
 .filter-group {
     display: flex;
     align-items: center;
     gap: 10px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
 }
 
 .filter-group > label:first-child {
@@ -658,13 +657,36 @@ body {
     margin: 0;
 }
 
+/* Custom Range Input */
+.custom-range {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.custom-range input[type="number"] {
+    padding: 6px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 12px;
+}
+
+.custom-range small {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 11px;
+}
+
 /* View Filter Optimization */
 .filter-group.view-filter {
     display: flex;
     flex-direction: row !important;
     align-items: center;
     gap: 12px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
 }
 
 .filter-group.view-filter > label {
@@ -681,7 +703,7 @@ body {
     flex-direction: row !important;
     align-items: center;
     gap: 12px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     margin-top: 10px;
 }
 
@@ -714,7 +736,7 @@ body {
     flex-direction: row !important;
     align-items: center;
     gap: 12px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     margin-top: 10px;
 }
 
@@ -1036,7 +1058,7 @@ body {
     flex-direction: row !important;
     align-items: center;
     gap: 12px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     margin-top: 10px;
 }
 

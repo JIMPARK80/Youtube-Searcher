@@ -557,11 +557,25 @@ export function applyFilters(items) {
         // Duration filter
         if (durationFilter !== 'all') {
             const seconds = parseDurationToSeconds(video.contentDetails?.duration);
-            const [min, max] = durationFilter.split('-').map(Number);
-            if (max) {
-                if (seconds < min || seconds > max) return false;
+            
+            // Handle custom range filter (in minutes)
+            if (durationFilter === 'custom') {
+                const minMinutes = parseInt(document.getElementById('durationMin')?.value || 0);
+                const maxMinutes = parseInt(document.getElementById('durationMax')?.value || Infinity);
+                const minSeconds = minMinutes * 60;
+                const maxSeconds = maxMinutes === Infinity ? Infinity : maxMinutes * 60;
+                
+                if (seconds < minSeconds || seconds > maxSeconds) return false;
             } else {
-                if (seconds < min) return false;
+                // Handle preset range filters
+                const [min, max] = durationFilter.split('-').map(Number);
+                if (max) {
+                    // Range filter (e.g., "60-600" for 1-10min)
+                    if (seconds < min || seconds > max) return false;
+                } else {
+                    // Minimum filter (e.g., "3600" for 1hr+)
+                    if (seconds < min) return false;
+                }
             }
         }
         
@@ -689,7 +703,29 @@ export function setupEventListeners() {
     
     // Filter changes (radio and checkbox)
     document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(input => {
-        input.addEventListener('change', () => renderPage(1));
+        input.addEventListener('change', () => {
+            // Show/hide custom duration range
+            if (input.name === 'durationFilter') {
+                const customRange = document.getElementById('durationCustom');
+                if (customRange) {
+                    customRange.style.display = input.value === 'custom' ? 'block' : 'none';
+                }
+            }
+            renderPage(1);
+        });
+    });
+    
+    // Custom duration range input changes
+    ['durationMin', 'durationMax'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', () => {
+                const durationFilter = document.querySelector('input[name="durationFilter"]:checked')?.value;
+                if (durationFilter === 'custom') {
+                    renderPage(1);
+                }
+            });
+        }
     });
     
     // Pagination
