@@ -38,7 +38,40 @@ export async function initializeApiKeys() {
     const keys = await getApiKeys();
     apiKey = keys.youtube;
     serpApiKey = keys.serpapi;
+    
+    // DOM에 hidden input 동적 생성 (HTML에 노출 방지)
+    createHiddenApiKeyInputs(keys);
+    
     return { apiKey, serpApiKey };
+}
+
+// Hidden input 생성 함수 (베스트 프랙티스)
+function createHiddenApiKeyInputs(keys) {
+    // 기존 input이 있으면 제거
+    const existingApiKey = document.getElementById('apiKey');
+    const existingSerpApiKey = document.getElementById('serpApiKey');
+    if (existingApiKey) existingApiKey.remove();
+    if (existingSerpApiKey) existingSerpApiKey.remove();
+    
+    // YouTube API 키
+    if (keys.youtube) {
+        const apiKeyInput = document.createElement('input');
+        apiKeyInput.type = 'hidden'; // password 대신 hidden 사용
+        apiKeyInput.id = 'apiKey';
+        apiKeyInput.value = keys.youtube;
+        document.body.appendChild(apiKeyInput);
+    }
+    
+    // SerpAPI 키
+    if (keys.serpapi) {
+        const serpApiKeyInput = document.createElement('input');
+        serpApiKeyInput.type = 'hidden';
+        serpApiKeyInput.id = 'serpApiKey';
+        serpApiKeyInput.value = keys.serpapi;
+        document.body.appendChild(serpApiKeyInput);
+    }
+    
+    console.log('🔐 API 키 hidden input 생성 완료');
 }
 
 // ============================================
