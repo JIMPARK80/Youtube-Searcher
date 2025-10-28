@@ -277,17 +277,20 @@ export function initializeI18n() {
 
 // 언어 토글 버튼 생성
 function createLanguageToggleButton() {
-    const authSection = document.getElementById('authSection');
-    if (authSection && !document.getElementById('languageToggle')) {
-        const langBtn = document.createElement('button');
-        langBtn.id = 'languageToggle';
-        langBtn.className = 'language-toggle-btn';
-        langBtn.textContent = currentLanguage === 'ko' ? '🇰🇷 한국어' : '🇺🇸 English';
-        langBtn.onclick = toggleLanguage;
-        langBtn.title = t('language.toggle');
-        
-        // authSection의 첫 번째 자식으로 추가
-        authSection.insertBefore(langBtn, authSection.firstChild);
+    // 언어 버튼이 이미 존재하면 생성하지 않음
+    if (document.getElementById('languageToggle')) {
+        return;
     }
+    
+    // 언어 버튼을 body의 직접 자식으로 추가 (왼쪽 상단 고정)
+    const langBtn = document.createElement('button');
+    langBtn.id = 'languageToggle';
+    langBtn.className = 'language-toggle-btn';
+    langBtn.textContent = currentLanguage === 'ko' ? '🇰🇷 한국어' : '🇺🇸 English';
+    langBtn.onclick = toggleLanguage;
+    langBtn.title = t('language.toggle');
+    
+    // body의 첫 번째 자식으로 추가
+    document.body.insertBefore(langBtn, document.body.firstChild);
 }
 

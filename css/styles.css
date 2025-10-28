@@ -841,6 +841,10 @@ body {
 
 /* Language Toggle Button */
 .language-toggle-btn {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
     padding: 8px 16px;
     border: 2px solid white;
     border-radius: 8px;
