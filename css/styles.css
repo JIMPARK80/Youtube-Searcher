@@ -149,11 +149,13 @@ body {
 
 .card-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 16px;
 }
 
 .video-card {
+    display: flex;
+    flex-direction: column;
     background: white;
     border-radius: 15px;
     overflow: hidden;
@@ -247,8 +249,16 @@ body {
 .stat-unavailable {
     color: #999 !important;
     opacity: 0.7;
-    font-style: italic;
-    font-size: 11px;
+}
+
+.velocity-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 0.75em;
+    color: #667eea;
+    font-weight: 600;
 }
 
 .stat-unavailable:hover {
@@ -716,13 +726,13 @@ body {
 
 @media (max-width: 1200px) {
     .card-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     }
 }
 
 @media (max-width: 900px) {
     .card-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     }
 }
 

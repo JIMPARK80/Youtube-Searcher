@@ -276,14 +276,18 @@ export function renderPage(page) {
     const gridContainer = document.createElement('div');
     gridContainer.className = 'card-grid';
     
+    // Use DocumentFragment to prevent layout thrashing
+    const fragment = document.createDocumentFragment();
+    
     pageItems.forEach(item => {
         const video = item.raw;
         const card = createVideoCard(video, item);
         if (card) { // Only append if card is not null
-            gridContainer.appendChild(card);
+            fragment.appendChild(card);
         }
     });
     
+    gridContainer.appendChild(fragment);
     resultsDiv.appendChild(gridContainer);
     
     // Update pagination
@@ -306,14 +310,18 @@ function createVideoCard(video, item) {
                      video.snippet.thumbnails?.default?.url;
     
     card.innerHTML = `
-        <img src="${thumbnail}" alt="${video.snippet.title}" class="thumbnail">
-        <div class="card-content">
+        <div class="thumbnail-container">
+            <img src="${thumbnail}" alt="${video.snippet.title}" loading="lazy">
+            ${video.contentDetails?.duration ? `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
+        </div>
+        <div class="video-info">
             <h3 class="video-title">${video.snippet.title}</h3>
-            <p class="channel-name">${video.snippet.channelTitle}</p>
-            <div class="video-stats">
-                <span>👁️ ${formatNumber(video.statistics?.viewCount || 0)}</span>
-                <span>👍 ${formatNumber(video.statistics?.likeCount || 0)}</span>
-                <span>⏱️ ${formatDuration(video.contentDetails?.duration)}</span>
+            <div class="channel-info">
+                <span class="channel-name">${video.snippet.channelTitle}</span>
+            </div>
+            <div class="stats">
+                <span class="stat-item">👁️ ${formatNumber(video.statistics?.viewCount || 0)}</span>
+                <span class="stat-item">👍 ${formatNumber(video.statistics?.likeCount || 0)}</span>
             </div>
             <div class="velocity-info">
                 <span>📈 ${formatNumber(item.vpd)}/day</span>
