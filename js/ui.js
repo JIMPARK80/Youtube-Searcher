@@ -313,6 +313,7 @@ function createVideoCard(video, item) {
         <div class="thumbnail-container">
             <img src="${thumbnail}" alt="${video.snippet.title}" loading="lazy">
             ${video.contentDetails?.duration ? `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
+            <div class="vpd-badge">+${formatNumber(item.vpd)}/day</div>
         </div>
         <div class="video-info">
             <h3 class="video-title">${video.snippet.title}</h3>
@@ -322,10 +323,7 @@ function createVideoCard(video, item) {
             <div class="stats">
                 <span class="stat-item">👁 ${formatNumber(video.statistics?.viewCount || 0)}</span>
                 <span class="stat-item">👍 ${formatNumber(video.statistics?.likeCount || 0)}</span>
-            </div>
-            <div class="velocity-info">
-                <span class="vpd-badge">+${formatNumber(item.vpd)}/day</span>
-                <span class="subscribers-info">👥 ${formatNumber(item.subs || 0)}</span>
+                <span class="stat-item">👥 ${formatNumber(item.subs || 0)}</span>
             </div>
         </div>
     `;
