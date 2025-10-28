@@ -149,8 +149,9 @@ body {
 
 .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 16px;
+    width: 100%;
 }
 
 .video-card {
@@ -724,15 +725,17 @@ body {
     margin: 0;
 }
 
+/* Desktop: 4 columns (default above 1200px) */
+
 @media (max-width: 1200px) {
     .card-grid {
-        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        grid-template-columns: repeat(3, 1fr);
     }
 }
 
 @media (max-width: 900px) {
     .card-grid {
-        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        grid-template-columns: repeat(2, 1fr);
     }
 }
 
