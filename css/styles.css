@@ -199,7 +199,7 @@ body {
 .vpd-badge {
     position: absolute;
     top: 6px;
-    right: 6px;
+    left: 6px;
     background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
     color: white;
     padding: 4px 10px;
