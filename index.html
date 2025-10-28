@@ -128,11 +128,16 @@
                 <div class="filter-group view-filter">
                     <label data-i18n="filter.viewCount">조회수 필터:</label>
                     <label><input type="radio" name="viewCountFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
-                    <label><input type="radio" name="viewCountFilter" value="1000"> 1K+</label>
-                    <label><input type="radio" name="viewCountFilter" value="10000"> 10K+</label>
-                    <label><input type="radio" name="viewCountFilter" value="100000"> 100K+</label>
-                    <label><input type="radio" name="viewCountFilter" value="1000000"> 1M+</label>
-                    <label><input type="radio" name="viewCountFilter" value="10000000"> 10M+</label>
+                    <label><input type="radio" name="viewCountFilter" value="0-1000"> <span data-i18n="filter.viewCount.grade5">5등급</span> (&lt;1K)</label>
+                    <label><input type="radio" name="viewCountFilter" value="1000-10000"> <span data-i18n="filter.viewCount.grade4">4등급</span> (1K-10K)</label>
+                    <label><input type="radio" name="viewCountFilter" value="10000-100000"> <span data-i18n="filter.viewCount.grade3">3등급</span> (10K-100K)</label>
+                    <label><input type="radio" name="viewCountFilter" value="100000-1000000"> <span data-i18n="filter.viewCount.grade2">2등급</span> (100K-1M)</label>
+                    <label><input type="radio" name="viewCountFilter" value="1000000"> <span data-i18n="filter.viewCount.grade1">1등급</span> (1M+)</label>
+                    <label><input type="radio" name="viewCountFilter" value="custom"> <span data-i18n="filter.custom">사용자정의</span></label>
+                    <div class="custom-range" id="viewCountCustom" style="display: none; margin-left: 20px; margin-top: 5px;">
+                        <input type="number" id="viewCountMin" data-i18n-placeholder="filter.viewCount.minPlaceholder" placeholder="최소" style="width: 80px;" min="0"> ~ 
+                        <input type="number" id="viewCountMax" data-i18n-placeholder="filter.viewCount.maxPlaceholder" placeholder="최대" style="width: 80px;" min="0">
+                    </div>
                 </div>
                 
                 <!-- Subscriber Count Filter -->
@@ -170,8 +175,8 @@
                     <label><input type="radio" name="durationFilter" value="3600"> <span data-i18n="filter.duration.verylong">아주긴영상</span> (1hr+)</label>
                     <label><input type="radio" name="durationFilter" value="custom"> <span data-i18n="filter.custom">사용자선택</span></label>
                     <div class="custom-range" id="durationCustom" style="display: none; margin-left: 20px; margin-top: 5px;">
-                        <input type="number" id="durationMin" placeholder="최소 (분)" style="width: 80px;" min="0"> ~ 
-                        <input type="number" id="durationMax" placeholder="최대 (분)" style="width: 80px;" min="0"> <small>(분 단위)</small>
+                        <input type="number" id="durationMin" data-i18n-placeholder="filter.duration.minPlaceholder" placeholder="최소 (분)" style="width: 80px;" min="0"> ~ 
+                        <input type="number" id="durationMax" data-i18n-placeholder="filter.duration.maxPlaceholder" placeholder="최대 (분)" style="width: 80px;" min="0"> <small data-i18n="filter.duration.unit">(분 단위)</small>
                     </div>
                 </div>
             </div>

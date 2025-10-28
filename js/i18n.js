@@ -65,11 +65,18 @@ const translations = {
         
         // 필터
         'filter.viewCount': '조회수 필터',
+        'filter.viewCount.grade5': '5등급',
+        'filter.viewCount.grade4': '4등급',
+        'filter.viewCount.grade3': '3등급',
+        'filter.viewCount.grade2': '2등급',
+        'filter.viewCount.grade1': '1등급',
+        'filter.viewCount.minPlaceholder': '최소',
+        'filter.viewCount.maxPlaceholder': '최대',
         'filter.subCount': '구독자 필터',
         'filter.uploadDate': '업로드일자 필터',
         'filter.duration': '영상길이 필터',
         'filter.all': '전체',
-        'filter.custom': '사용자 정의',
+        'filter.custom': '사용자정의',
         'filter.date.day1': '최근 1일',
         'filter.date.day3': '최근 3일',
         'filter.date.day7': '최근 7일',
@@ -82,6 +89,9 @@ const translations = {
         'filter.duration.medium': '중간영상',
         'filter.duration.long': '긴영상',
         'filter.duration.verylong': '아주긴영상',
+        'filter.duration.minPlaceholder': '최소 (분)',
+        'filter.duration.maxPlaceholder': '최대 (분)',
+        'filter.duration.unit': '(분 단위)',
         'filter.duration.hint': '(모두 선택 = 전체)',
         
         // 결과
@@ -158,6 +168,13 @@ const translations = {
         
         // Filters
         'filter.viewCount': 'View Count Filter',
+        'filter.viewCount.grade5': 'Grade 5',
+        'filter.viewCount.grade4': 'Grade 4',
+        'filter.viewCount.grade3': 'Grade 3',
+        'filter.viewCount.grade2': 'Grade 2',
+        'filter.viewCount.grade1': 'Grade 1',
+        'filter.viewCount.minPlaceholder': 'Min',
+        'filter.viewCount.maxPlaceholder': 'Max',
         'filter.subCount': 'Subscriber Filter',
         'filter.uploadDate': 'Upload Date Filter',
         'filter.duration': 'Video Duration Filter',
@@ -175,6 +192,9 @@ const translations = {
         'filter.duration.medium': 'Medium Videos',
         'filter.duration.long': 'Long Videos',
         'filter.duration.verylong': 'Very Long Videos',
+        'filter.duration.minPlaceholder': 'Min (min)',
+        'filter.duration.maxPlaceholder': 'Max (min)',
+        'filter.duration.unit': '(in minutes)',
         'filter.duration.hint': '(All selected = All)',
         
         // Results
@@ -235,6 +255,15 @@ function updatePageTexts() {
             }
         } else {
             element.textContent = translation;
+        }
+    });
+    
+    // data-i18n-placeholder 속성을 가진 요소의 placeholder 업데이트
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
+        const key = element.getAttribute('data-i18n-placeholder');
+        const translation = t(key);
+        if (element.placeholder !== undefined) {
+            element.placeholder = translation;
         }
     });
     
