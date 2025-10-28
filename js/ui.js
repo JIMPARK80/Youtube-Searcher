@@ -272,13 +272,19 @@ export function renderPage(page) {
         return;
     }
     
+    // Create grid container
+    const gridContainer = document.createElement('div');
+    gridContainer.className = 'card-grid';
+    
     pageItems.forEach(item => {
         const video = item.raw;
         const card = createVideoCard(video, item);
         if (card) { // Only append if card is not null
-            resultsDiv.appendChild(card);
+            gridContainer.appendChild(card);
         }
     });
+    
+    resultsDiv.appendChild(gridContainer);
     
     // Update pagination
     updatePaginationControls(filteredItems.length);
