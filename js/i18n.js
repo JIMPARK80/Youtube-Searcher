@@ -275,22 +275,19 @@ export function initializeI18n() {
     console.log(`✅ 다국어 시스템 초기화 완료 (현재 언어: ${currentLanguage})`);
 }
 
-// 언어 토글 버튼 생성
+// 언어 토글 버튼 초기화
 function createLanguageToggleButton() {
-    // 언어 버튼이 이미 존재하면 생성하지 않음
-    if (document.getElementById('languageToggle')) {
+    const langBtn = document.getElementById('languageToggle');
+    if (!langBtn) {
+        console.warn('⚠️ 언어 전환 버튼을 찾을 수 없습니다.');
         return;
     }
     
-    // 언어 버튼을 body의 직접 자식으로 추가 (왼쪽 상단 고정)
-    const langBtn = document.createElement('button');
-    langBtn.id = 'languageToggle';
-    langBtn.className = 'language-toggle-btn';
-    langBtn.textContent = currentLanguage === 'ko' ? '🇰🇷 한국어' : '🇺🇸 English';
+    // 이벤트 리스너 연결
     langBtn.onclick = toggleLanguage;
     langBtn.title = t('language.toggle');
     
-    // body의 첫 번째 자식으로 추가
-    document.body.insertBefore(langBtn, document.body.firstChild);
+    // 현재 언어에 맞게 텍스트 업데이트
+    updateLanguageToggleButton();
 }
 
