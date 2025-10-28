@@ -310,6 +310,10 @@ function createVideoCard(video, item) {
                      video.snippet.thumbnails?.high?.url || 
                      video.snippet.thumbnails?.default?.url;
     
+    // 업로드 경과일수 계산
+    const uploadedDays = ageDays(video.snippet.publishedAt);
+    const daysText = uploadedDays < 1 ? '< 1d' : `${Math.floor(uploadedDays)}d`;
+    
     card.innerHTML = `
         <div class="thumbnail-container">
             <img src="${thumbnail}" alt="${video.snippet.title}" loading="lazy">
@@ -325,6 +329,7 @@ function createVideoCard(video, item) {
                 <span class="stat-item">👁 ${formatNumber(video.statistics?.viewCount || 0)}</span>
                 <span class="stat-item">👍 ${formatNumber(video.statistics?.likeCount || 0)}</span>
                 <span class="stat-item">👥 ${formatNumber(item.subs || 0)}</span>
+                <span class="stat-item">📅 ${daysText}</span>
             </div>
         </div>
     `;
