@@ -128,10 +128,10 @@ export function channelSizeBand(channel) {
 
 export function getChannelSizeEmoji(cband) {
     switch(cband) {
-        case 'small': return '🌱';
-        case 'mid': return '🌿';
-        case 'large': return '🌳';
-        case 'hidden': return '❓';
+        case 'small': return '👥 소형';
+        case 'mid': return '👥 중형';
+        case 'large': return '👥 대형';
+        case 'hidden': return '👥 비공개';
         default: return '';
     }
 }
@@ -320,7 +320,7 @@ function createVideoCard(video, item) {
                 <span class="channel-name">${video.snippet.channelTitle}</span>
             </div>
             <div class="stats">
-                <span class="stat-item">👁️ ${formatNumber(video.statistics?.viewCount || 0)}</span>
+                <span class="stat-item">👁 ${formatNumber(video.statistics?.viewCount || 0)}</span>
                 <span class="stat-item">👍 ${formatNumber(video.statistics?.likeCount || 0)}</span>
             </div>
             <div class="velocity-info">
