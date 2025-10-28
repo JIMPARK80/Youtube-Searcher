@@ -527,16 +527,39 @@ export function applyFilters(items) {
         
         // View count filter
         if (viewFilter !== 'all') {
-            const minViews = parseInt(viewFilter);
-            if (parseInt(video.statistics?.viewCount || 0) < minViews) return false;
+            const viewCount = parseInt(video.statistics?.viewCount || 0);
+            
+            // Handle custom range filter
+            if (viewFilter === 'custom') {
+                const minViews = parseInt(document.getElementById('viewCountMin')?.value || 0);
+                const maxViews = parseInt(document.getElementById('viewCountMax')?.value || Infinity);
+                
+                if (viewCount < minViews || viewCount > maxViews) return false;
+            } else if (viewFilter.includes('-')) {
+                // Handle range filters (e.g., "0-1000" for Grade 5)
+                const [min, max] = viewFilter.split('-').map(Number);
+                if (viewCount < min || viewCount > max) return false;
+            } else {
+                // Handle minimum filters (e.g., "1000000" for Grade 1)
+                const minViews = parseInt(viewFilter);
+                if (viewCount < minViews) return false;
+            }
         }
         
         // Subscriber filter
         if (subFilter !== 'all') {
-            if (subFilter.includes('-')) {
+            // Handle custom range filter
+            if (subFilter === 'custom') {
+                const minSubs = parseInt(document.getElementById('subCountMin')?.value || 0);
+                const maxSubs = parseInt(document.getElementById('subCountMax')?.value || Infinity);
+                
+                if (item.subs < minSubs || item.subs > maxSubs) return false;
+            } else if (subFilter.includes('-')) {
+                // Handle range filters
                 const [min, max] = subFilter.split('-').map(Number);
                 if (item.subs < min || item.subs > max) return false;
             } else {
+                // Handle minimum filters (e.g., "10000000" for Diamond)
                 const minSubs = parseInt(subFilter);
                 if (item.subs < minSubs) return false;
             }
@@ -557,11 +580,25 @@ export function applyFilters(items) {
         // Duration filter
         if (durationFilter !== 'all') {
             const seconds = parseDurationToSeconds(video.contentDetails?.duration);
-            const [min, max] = durationFilter.split('-').map(Number);
-            if (max) {
-                if (seconds < min || seconds > max) return false;
+            
+            // Handle custom range filter (in minutes)
+            if (durationFilter === 'custom') {
+                const minMinutes = parseInt(document.getElementById('durationMin')?.value || 0);
+                const maxMinutes = parseInt(document.getElementById('durationMax')?.value || Infinity);
+                const minSeconds = minMinutes * 60;
+                const maxSeconds = maxMinutes === Infinity ? Infinity : maxMinutes * 60;
+                
+                if (seconds < minSeconds || seconds > maxSeconds) return false;
             } else {
-                if (seconds < min) return false;
+                // Handle preset range filters
+                const [min, max] = durationFilter.split('-').map(Number);
+                if (max) {
+                    // Range filter (e.g., "60-600" for 1-10min)
+                    if (seconds < min || seconds > max) return false;
+                } else {
+                    // Minimum filter (e.g., "3600" for 1hr+)
+                    if (seconds < min) return false;
+                }
             }
         }
         
@@ -687,9 +724,71 @@ export function setupEventListeners() {
         if (e.key === 'Enter') search();
     });
     
-    // Filter changes
-    document.querySelectorAll('input[type="radio"]').forEach(radio => {
-        radio.addEventListener('change', () => renderPage(1));
+    // Filter changes (radio and checkbox)
+    document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(input => {
+        input.addEventListener('change', () => {
+            // Show/hide custom view count range
+            if (input.name === 'viewCountFilter') {
+                const customRange = document.getElementById('viewCountCustom');
+                if (customRange) {
+                    customRange.style.display = input.value === 'custom' ? 'block' : 'none';
+                }
+            }
+            // Show/hide custom subscriber count range
+            if (input.name === 'subCountFilter') {
+                const customRange = document.getElementById('subCountCustom');
+                if (customRange) {
+                    customRange.style.display = input.value === 'custom' ? 'block' : 'none';
+                }
+            }
+            // Show/hide custom duration range
+            if (input.name === 'durationFilter') {
+                const customRange = document.getElementById('durationCustom');
+                if (customRange) {
+                    customRange.style.display = input.value === 'custom' ? 'block' : 'none';
+                }
+            }
+            renderPage(1);
+        });
+    });
+    
+    // Custom view count range input changes
+    ['viewCountMin', 'viewCountMax'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', () => {
+                const viewFilter = document.querySelector('input[name="viewCountFilter"]:checked')?.value;
+                if (viewFilter === 'custom') {
+                    renderPage(1);
+                }
+            });
+        }
+    });
+    
+    // Custom subscriber count range input changes
+    ['subCountMin', 'subCountMax'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', () => {
+                const subFilter = document.querySelector('input[name="subCountFilter"]:checked')?.value;
+                if (subFilter === 'custom') {
+                    renderPage(1);
+                }
+            });
+        }
+    });
+    
+    // Custom duration range input changes
+    ['durationMin', 'durationMax'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', () => {
+                const durationFilter = document.querySelector('input[name="durationFilter"]:checked')?.value;
+                if (durationFilter === 'custom') {
+                    renderPage(1);
+                }
+            });
+        }
     });
     
     // Pagination
