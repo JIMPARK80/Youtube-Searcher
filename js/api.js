@@ -3,6 +3,9 @@
 // YouTube API, SerpAPI, Firebase 캐싱
 // ============================================
 
+// 유틸: 배열을 n개씩 청크로 나누기 (기본 50개)
+const chunk = (a, n = 50) => Array.from({length: Math.ceil(a.length/n)}, (_,i)=>a.slice(i*n, (i+1)*n));
+
 // API 키 관리
 export let apiKey = null;
 export let serpApiKey = null;
@@ -194,40 +197,54 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
     try {
         console.log('🌐 Google API 호출 중...');
         
-        // Step 1: Search for videos
-        const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=100&q=${encodeURIComponent(query)}&order=relevance&key=${apiKeyValue}`;
-        const searchResponse = await fetch(searchUrl);
-        const searchData = await searchResponse.json();
+        // ① Step 1: Search for videos (최대 100개, 50개씩 2페이지)
+        let searchItems = [];
+        let nextPageToken = null;
+        
+        for (let page = 0; page < 2; page++) {
+            const pageParam = nextPageToken ? `&pageToken=${nextPageToken}` : '';
+            const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(query)}&order=relevance&key=${apiKeyValue}${pageParam}`;
+            const searchResponse = await fetch(searchUrl);
+            const searchData = await searchResponse.json();
 
-        // Check for quota exceeded error
-        if (searchData.error && searchData.error.code === 403) {
-            console.warn("⚠️ Google API 한도 초과");
-            throw new Error("quotaExceeded");
+            // Check for quota exceeded error
+            if (searchData.error && searchData.error.code === 403) {
+                console.warn("⚠️ Google API 한도 초과");
+                throw new Error("quotaExceeded");
+            }
+            
+            searchItems.push(...(searchData.items || []));
+            nextPageToken = searchData.nextPageToken;
+            
+            if (!nextPageToken) break; // 더 이상 결과 없음
         }
         
-        console.log('✅ Google API 정상 작동');
+        console.log(`✅ Google API 정상 작동 (${searchItems.length}개 검색 결과)`);
 
-        // Step 2: Get detailed video information
-        const videoIds = searchData.items.map(item => item.id.videoId).join(',');
-        const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${apiKeyValue}`;
-        const videosResponse = await fetch(videosUrl);
-        const videosData = await videosResponse.json();
+        // ② Step 2: Get detailed video information (50개씩 배치)
+        const videoIds = searchItems.map(item => item.id.videoId).filter(Boolean);
+        let videoDetails = [];
+        for (const ids of chunk(videoIds, 50)) {
+            const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${ids.join(",")}&key=${apiKeyValue}`;
+            const r = await fetch(url);
+            const d = await r.json();
+            videoDetails.push(...(d.items || []));
+        }
 
-        // Step 3: Get channel information
-        const channelIds = [...new Set(searchData.items.map(item => item.snippet.channelId))].join(',');
-        const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelIds}&key=${apiKeyValue}`;
-        const channelsResponse = await fetch(channelsUrl);
-        const channelsData = await channelsResponse.json();
-
-        // Build channel map
-        const channelMap = {};
-        channelsData.items.forEach(channel => {
-            channelMap[channel.id] = channel;
-        });
+        // ③ Step 3: Get channel information (50개씩 배치)
+        const channelIds = [...new Set(videoDetails.map(v => v.snippet.channelId))];
+        let channelsMap = {};
+        for (const ids of chunk(channelIds, 50)) {
+            const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${ids.join(",")}&key=${apiKeyValue}`;
+            const r = await fetch(url);
+            const d = await r.json();
+            (d.items || []).forEach(ch => { channelsMap[ch.id] = ch; });
+        }
 
         return {
-            videos: videosData.items,
-            channels: channelMap
+            videos: videoDetails,
+            channels: channelsMap,
+            nextPageToken: nextPageToken  // 다음 페이지 토큰 저장
         };
     } catch (error) {
         console.error('❌ YouTube API 오류:', error);
