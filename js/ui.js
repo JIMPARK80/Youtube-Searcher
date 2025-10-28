@@ -687,9 +687,9 @@ export function setupEventListeners() {
         if (e.key === 'Enter') search();
     });
     
-    // Filter changes
-    document.querySelectorAll('input[type="radio"]').forEach(radio => {
-        radio.addEventListener('change', () => renderPage(1));
+    // Filter changes (radio and checkbox)
+    document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(input => {
+        input.addEventListener('change', () => renderPage(1));
     });
     
     // Pagination

@@ -76,6 +76,10 @@ const translations = {
         'filter.date.month3': '3개월 이내',
         'filter.date.month6': '6개월 이내',
         'filter.date.year1': '1년 이내',
+        'filter.duration.shorts': '쇼츠 (<60초)',
+        'filter.duration.short': '단편 (1-10분)',
+        'filter.duration.medium': '중편 (10-30분)',
+        'filter.duration.long': '장편 (30분+)',
         
         // 결과
         'result.summary': '검색 결과',
@@ -162,6 +166,10 @@ const translations = {
         'filter.date.month3': 'Within 3 months',
         'filter.date.month6': 'Within 6 months',
         'filter.date.year1': 'Within 1 year',
+        'filter.duration.shorts': 'Shorts (<60s)',
+        'filter.duration.short': 'Short (1-10min)',
+        'filter.duration.medium': 'Medium (10-30min)',
+        'filter.duration.long': 'Long (30min+)',
         
         // Results
         'result.summary': 'Search Results',

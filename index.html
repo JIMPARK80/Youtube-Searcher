@@ -159,14 +159,13 @@
                     <label><input type="radio" name="uploadDateFilter" value="365"> <span data-i18n="filter.date.year1">1년 이내</span></label>
                 </div>
                 
-                <!-- Video Duration Filter -->
+                <!-- Video Duration Filter (Multiple selection enabled) -->
                 <div class="filter-group duration-filter">
                     <label data-i18n="filter.duration">영상길이 필터:</label>
-                    <label><input type="radio" name="durationFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
-                    <label><input type="radio" name="durationFilter" value="0-60"> <1min</label>
-                    <label><input type="radio" name="durationFilter" value="60-600"> 1min-10min</label>
-                    <label><input type="radio" name="durationFilter" value="1200-3600"> 20min-1hour</label>
-                    <label><input type="radio" name="durationFilter" value="3600"> 1hour+</label>
+                    <label><input type="checkbox" name="durationFilter" value="shorts"> <span data-i18n="filter.duration.shorts">쇼츠 (&lt;60초)</span></label>
+                    <label><input type="checkbox" name="durationFilter" value="short"> <span data-i18n="filter.duration.short">단편 (1-10분)</span></label>
+                    <label><input type="checkbox" name="durationFilter" value="medium"> <span data-i18n="filter.duration.medium">중편 (10-30분)</span></label>
+                    <label><input type="checkbox" name="durationFilter" value="long"> <span data-i18n="filter.duration.long">장편 (30분+)</span></label>
                 </div>
             </div>
 
@@ -677,30 +676,30 @@
                 });
             }
             
-            // Apply video duration filter
-            const durationFilter = document.querySelector('input[name="durationFilter"]:checked')?.value;
-            if (durationFilter && durationFilter !== 'all') {
-                if (durationFilter.includes('-')) {
-                    // Range filter (e.g., "60-600")
-                    const [minStr, maxStr] = durationFilter.split('-');
-                    const minSeconds = parseInt(minStr);
-                    const maxSeconds = parseInt(maxStr);
-                    items = items.filter(item => {
-                        if (!item?.raw?.contentDetails) return false;
-                        const duration = item.raw.contentDetails.duration || '';
-                        const seconds = parseDurationToSeconds(duration);
-                        return seconds >= minSeconds && seconds <= maxSeconds;
+            // Apply video duration filter (multiple selection with OR logic)
+            const checkedDurations = Array.from(document.querySelectorAll('input[name="durationFilter"]:checked')).map(cb => cb.value);
+            if (checkedDurations.length > 0) {
+                items = items.filter(item => {
+                    if (!item?.raw?.contentDetails) return false;
+                    const duration = item.raw.contentDetails.duration || '';
+                    const seconds = parseDurationToSeconds(duration);
+                    
+                    // Check if video matches any of the selected duration categories
+                    return checkedDurations.some(category => {
+                        switch(category) {
+                            case 'shorts':
+                                return seconds < 60; // Less than 60 seconds
+                            case 'short':
+                                return seconds >= 60 && seconds < 600; // 1-10 minutes
+                            case 'medium':
+                                return seconds >= 600 && seconds < 1800; // 10-30 minutes
+                            case 'long':
+                                return seconds >= 1800; // 30 minutes or more
+                            default:
+                                return true;
+                        }
                     });
-                } else {
-                    // Minimum filter (e.g., "3600" for 1hour+)
-                    const minSeconds = parseInt(durationFilter);
-                    items = items.filter(item => {
-                        if (!item?.raw?.contentDetails) return false;
-                        const duration = item.raw.contentDetails.duration || '';
-                        const seconds = parseDurationToSeconds(duration);
-                        return seconds >= minSeconds;
-                    });
-                }
+                });
             }
             
             // 성장속도 기준 정렬만 적용
