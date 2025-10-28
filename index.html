@@ -144,11 +144,16 @@
                 <div class="filter-group sub-filter">
                     <label data-i18n="filter.subCount">구독자 필터:</label>
                     <label><input type="radio" name="subCountFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
-                    <label><input type="radio" name="subCountFilter" value="0-1000"> 1-1K</label>
-                    <label><input type="radio" name="subCountFilter" value="1000-10000"> 1K-10K</label>
-                    <label><input type="radio" name="subCountFilter" value="10000-100000"> 10K-100K</label>
-                    <label><input type="radio" name="subCountFilter" value="100000-1000000"> 100K-1M</label>
-                    <label><input type="radio" name="subCountFilter" value="1000000"> 1M+</label>
+                    <label><input type="radio" name="subCountFilter" value="0-1000"> 🐣 <span data-i18n="filter.subCount.rookie">신입</span> (1-1K)</label>
+                    <label><input type="radio" name="subCountFilter" value="1000-10000"> 🎬 <span data-i18n="filter.subCount.beginner">초보</span> (1K-10K)</label>
+                    <label><input type="radio" name="subCountFilter" value="100000-1000000"> 🥈 <span data-i18n="filter.subCount.silver">실버버튼</span> (100K-1M)</label>
+                    <label><input type="radio" name="subCountFilter" value="1000000-10000000"> 🥇 <span data-i18n="filter.subCount.gold">골드버튼</span> (1M-10M)</label>
+                    <label><input type="radio" name="subCountFilter" value="10000000"> 💎 <span data-i18n="filter.subCount.diamond">다이아버튼</span> (10M+)</label>
+                    <label><input type="radio" name="subCountFilter" value="custom"> <span data-i18n="filter.custom">사용자정의</span></label>
+                    <div class="custom-range" id="subCountCustom" style="display: none; margin-left: 20px; margin-top: 5px;">
+                        <input type="number" id="subCountMin" data-i18n-placeholder="filter.subCount.minPlaceholder" placeholder="최소" style="width: 80px;" min="0"> ~ 
+                        <input type="number" id="subCountMax" data-i18n-placeholder="filter.subCount.maxPlaceholder" placeholder="최대" style="width: 80px;" min="0">
+                    </div>
                 </div>
                  
                  <!-- Upload Date Filter -->

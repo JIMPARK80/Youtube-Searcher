@@ -548,10 +548,18 @@ export function applyFilters(items) {
         
         // Subscriber filter
         if (subFilter !== 'all') {
-            if (subFilter.includes('-')) {
+            // Handle custom range filter
+            if (subFilter === 'custom') {
+                const minSubs = parseInt(document.getElementById('subCountMin')?.value || 0);
+                const maxSubs = parseInt(document.getElementById('subCountMax')?.value || Infinity);
+                
+                if (item.subs < minSubs || item.subs > maxSubs) return false;
+            } else if (subFilter.includes('-')) {
+                // Handle range filters
                 const [min, max] = subFilter.split('-').map(Number);
                 if (item.subs < min || item.subs > max) return false;
             } else {
+                // Handle minimum filters (e.g., "10000000" for Diamond)
                 const minSubs = parseInt(subFilter);
                 if (item.subs < minSubs) return false;
             }
@@ -726,6 +734,13 @@ export function setupEventListeners() {
                     customRange.style.display = input.value === 'custom' ? 'block' : 'none';
                 }
             }
+            // Show/hide custom subscriber count range
+            if (input.name === 'subCountFilter') {
+                const customRange = document.getElementById('subCountCustom');
+                if (customRange) {
+                    customRange.style.display = input.value === 'custom' ? 'block' : 'none';
+                }
+            }
             // Show/hide custom duration range
             if (input.name === 'durationFilter') {
                 const customRange = document.getElementById('durationCustom');
@@ -744,6 +759,19 @@ export function setupEventListeners() {
             input.addEventListener('input', () => {
                 const viewFilter = document.querySelector('input[name="viewCountFilter"]:checked')?.value;
                 if (viewFilter === 'custom') {
+                    renderPage(1);
+                }
+            });
+        }
+    });
+    
+    // Custom subscriber count range input changes
+    ['subCountMin', 'subCountMax'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', () => {
+                const subFilter = document.querySelector('input[name="subCountFilter"]:checked')?.value;
+                if (subFilter === 'custom') {
                     renderPage(1);
                 }
             });
