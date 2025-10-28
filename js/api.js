@@ -3,6 +3,9 @@
 // YouTube API, SerpAPI, Firebase 캐싱
 // ============================================
 
+// 유틸: 배열을 n개씩 청크로 나누기 (기본 50개)
+const chunk = (a, n = 50) => Array.from({length: Math.ceil(a.length/n)}, (_,i)=>a.slice(i*n, (i+1)*n));
+
 // API 키 관리
 export let apiKey = null;
 export let serpApiKey = null;
@@ -78,62 +81,82 @@ function createHiddenApiKeyInputs(keys) {
 // FIREBASE 캐싱 함수
 // ============================================
 
-// Load from Firebase cloud cache
+// Load from Firebase cloud cache (자동 병합 로드)
 export async function loadFromFirebase(query) {
     try {
         if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseGetDoc) {
-            console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
+            console.log('⚠️ Firebase 초기화 안 됨');
             return null;
         }
         
-        // Sanitize document ID
         const docId = window.toDocId(query);
-        console.log(`🔍 Firebase 캐시 확인 중: 검색어="${query}" -> 문서 ID: "${docId}"`);
+        console.log(`🔍 Firebase 캐시 확인 중: "${query}" -> "${docId}"`);
         
-        const cacheRef = window.firebaseDoc(window.firebaseDb, 'searchCache', docId);
-        const cacheSnap = await window.firebaseGetDoc(cacheRef);
-        
-        if (cacheSnap.exists()) {
-            const data = cacheSnap.data();
-            const age = Date.now() - data.timestamp;
-            const ageHours = age / (1000 * 60 * 60);
-            
-            console.log(`☁️ Firebase 캐시 발견: ${ageHours.toFixed(1)}시간 전 데이터`);
-            console.log(`📊 캐시 정보: ${data.items?.length || 0}개 항목, 소스: ${data.dataSource || 'unknown'}`);
-            
-            // 24시간 이내면 유효
-            if (age < 24 * 60 * 60 * 1000) {
-                console.log('✅ 유효한 Firebase 캐시 사용');
-                return data;
-            } else {
-                console.log('⏰ Firebase 캐시 만료 (24시간 초과)');
-            }
-        } else {
+        const mainRef = window.firebaseDoc(window.firebaseDb, 'searchCache', docId);
+        const part2Ref = window.firebaseDoc(window.firebaseDb, 'searchCache', `${docId}_p2`);
+
+        const [mainSnap, part2Snap] = await Promise.all([
+            window.firebaseGetDoc(mainRef),
+            window.firebaseGetDoc(part2Ref)
+        ]);
+
+        if (!mainSnap.exists()) {
             console.log(`🔭 Firebase 캐시 없음 (문서 ID: "${docId}")`);
+            return null;
+        }
+
+        const mainData = mainSnap.data();
+        const age = Date.now() - mainData.timestamp;
+        const ageHours = age / (1000 * 60 * 60);
+        
+        // 캐시 버전 체크 (1.3 미만이면 업그레이드 필요)
+        const CURRENT_VERSION = '1.3';
+        const cacheVersion = mainData.cacheVersion || '1.0';
+        if (cacheVersion < CURRENT_VERSION) {
+            console.warn(`🔄 구버전 캐시 발견 (v${cacheVersion} → v${CURRENT_VERSION})`);
+            console.warn(`♻️ 캐시 업그레이드: 새로 fetch하여 100개 저장합니다`);
+            return null; // 캐시 무효화 → 새로 fetch
         }
         
-        return null;
+        // part2가 있으면 병합
+        if (part2Snap.exists()) {
+            const part2Data = part2Snap.data();
+            mainData.videos.push(...part2Data.videos);
+            mainData.items.push(...part2Data.items);
+            console.log(`☁️ Firebase 캐시 발견 (병합): ${ageHours.toFixed(1)}시간 전`);
+            console.log(`📊 병합된 캐시: 총 ${mainData.videos.length}개 항목, 소스: ${mainData.dataSource || 'unknown'}`);
+        } else {
+            console.log(`☁️ Firebase 캐시 발견 (단일): ${ageHours.toFixed(1)}시간 전`);
+            console.log(`📊 캐시 정보: ${mainData.videos?.length || 0}개 항목, 소스: ${mainData.dataSource || 'unknown'}`);
+        }
+        
+        // 24시간 이내면 유효
+        if (age < 24 * 60 * 60 * 1000) {
+            console.log('✅ 유효한 Firebase 캐시 사용');
+            return mainData;
+        } else {
+            console.log('⏰ Firebase 캐시 만료 (24시간 초과)');
+            return null;
+        }
+        
     } catch (error) {
         console.error('❌ Firebase 캐시 로드 실패:', error);
         return null;
     }
 }
 
-// Save to Firebase cloud cache
-export async function saveToFirebase(query, videos, channels, items, dataSource = 'google') {
+// Save to Firebase cloud cache (자동 분할 저장: 50+50)
+export async function saveToFirebase(query, videos, channels, items, dataSource = 'google', nextPageToken = null) {
     try {
         if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseSetDoc) {
-            console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
+            console.log('⚠️ Firebase 초기화 안 됨');
             return;
         }
-        
-        // Sanitize document ID
+
         const docId = window.toDocId(query);
         console.log(`💾 문서 ID: "${query}" -> "${docId}"`);
-        
         const cacheRef = window.firebaseDoc(window.firebaseDb, 'searchCache', docId);
-        
-        // Shrink data to prevent payload size issues
+
         const shrinkVideo = v => ({
             id: v.id,
             title: v.snippet?.title,
@@ -150,7 +173,7 @@ export async function saveToFirebase(query, videos, channels, items, dataSource 
                 extracted_date: v.serpData.extracted_date_from_description ?? null
             } : null
         });
-        
+
         const shrinkItem = x => ({
             id: x?.raw?.id,
             vpd: x.vpd,
@@ -158,32 +181,105 @@ export async function saveToFirebase(query, videos, channels, items, dataSource 
             cband: x.cband,
             subs: x.subs
         });
+
+        const now = Date.now();
+        const totalVideos = (videos || []).length;
+        console.log(`💾 저장 시작: videos=${totalVideos}개, items=${(items || []).length}개`);
         
-        const data = {
-            query: query,
-            videos: (videos || []).map(shrinkVideo),
-            channels: channels || {},
-            items: (items || []).map(shrinkItem),
-            timestamp: Date.now(),
-            cacheVersion: '1.1',
-            dataSource: dataSource
-        };
-        
-        // 디버깅: 데이터 크기 확인
-        const dataSize = JSON.stringify(data).length;
-        console.log(`📊 저장할 데이터 크기: ${(dataSize / 1024).toFixed(2)} KB`);
-        
-        if (dataSize > 1000000) { // 1MB 초과
-            console.warn('⚠️ 데이터가 너무 큽니다. 일부만 저장합니다.');
-            data.videos = data.videos.slice(0, 50);
-            data.items = data.items.slice(0, 50);
+        const chunks = [
+            { videos: videos.slice(0, 50), items: items.slice(0, 50), part: 1 },
+            { videos: videos.slice(50, 100), items: items.slice(50, 100), part: 2 }
+        ];
+
+        for (const chunk of chunks) {
+            if (chunk.videos.length === 0) continue;
+
+            const targetRef = chunk.part === 1
+                ? cacheRef
+                : window.firebaseDoc(window.firebaseDb, 'searchCache', `${docId}_p${chunk.part}`);
+
+            const data = {
+                query,
+                videos: chunk.videos.map(shrinkVideo),
+                channels: chunk.part === 1 ? channels : {},
+                items: chunk.items.map(shrinkItem),
+                timestamp: now,
+                cacheVersion: '1.3',
+                dataSource,
+                meta: {
+                    part: chunk.part,
+                    total: totalVideos,
+                    nextPageToken: chunk.part === 1 ? nextPageToken : null,
+                    source: dataSource
+                }
+            };
+
+            await window.firebaseSetDoc(targetRef, data);
+            console.log(`✅ Firebase 캐시 저장 완료 (part ${chunk.part}, ${chunk.videos.length}개)`);
         }
-        
-        await window.firebaseSetDoc(cacheRef, data);
-        console.log('✅ Firebase 캐시 저장 완료');
+
     } catch (error) {
         console.error('❌ Firebase 캐시 저장 실패:', error);
     }
+}
+
+// ============================================
+// 토핑(Top-up) 함수들 - 캐시 최적화용
+// ============================================
+
+// 1) 다음 50개만 가져오기: search.list 1회
+export async function fetchNext50WithToken(query, apiKey, pageToken) {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=relevance&maxResults=50&q=${encodeURIComponent(query)}&key=${apiKey}&pageToken=${pageToken}`;
+    const r = await fetch(url);
+    const d = await r.json();
+    return {
+        items: (d.items || []),
+        nextPageToken: d.nextPageToken || null
+    };
+}
+
+// 2) 신규 비디오/채널 상세만 배치 호출(최소화)
+export async function hydrateDetailsOnlyForNew(nextPage, apiKey) {
+    const ids = nextPage.items.map(it => it.id.videoId).filter(Boolean);
+    // videos.list (50개 배치 한 번)
+    const vr = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${ids.join(',')}&key=${apiKey}`);
+    const vd = await vr.json();
+    const videoDetails = vd.items || [];
+
+    // channels.list (신규 채널만)
+    const channelIds = [...new Set(videoDetails.map(v => v.snippet.channelId))];
+    let channelsMap = {};
+    if (channelIds.length) {
+        const cr = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelIds.join(',')}&key=${apiKey}`);
+        const cd = await cr.json();
+        (cd.items || []).forEach(ch => { channelsMap[ch.id] = ch; });
+    }
+    return { videoDetails, channelsMap };
+}
+
+// 3) 기존 캐시 + 신규 50개 머지 (videos/channels/items)
+export function mergeCacheWithMore(cache, newVideos, newChannelsMap) {
+    // Shrink new videos to match cache format
+    const shrinkVideo = v => ({
+        id: v.id,
+        title: v.snippet?.title,
+        channelId: v.snippet?.channelId,
+        channelTitle: v.snippet?.channelTitle,
+        publishedAt: v.snippet?.publishedAt,
+        viewCount: v.statistics?.viewCount ?? null,
+        likeCount: v.statistics?.likeCount ?? null,
+        duration: v.contentDetails?.duration ?? null,
+        serp: null
+    });
+    
+    // videos: 기존 압축 데이터 + 새 압축 데이터
+    const videos = [...(cache.videos || []), ...newVideos.map(shrinkVideo)];
+
+    // channels: 기존 채널 + 새 채널
+    const channels = { ...(cache.channels || {}) };
+    Object.entries(newChannelsMap).forEach(([id, ch]) => { channels[id] = ch; });
+
+    return { videos, channels, meta: cache.meta || {} };
 }
 
 // ============================================
@@ -194,40 +290,58 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
     try {
         console.log('🌐 Google API 호출 중...');
         
-        // Step 1: Search for videos
-        const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=100&q=${encodeURIComponent(query)}&order=relevance&key=${apiKeyValue}`;
-        const searchResponse = await fetch(searchUrl);
-        const searchData = await searchResponse.json();
+        // ① Step 1: Search for videos (최대 100개, 50개씩 2페이지)
+        let searchItems = [];
+        let nextPageToken = null;
+        
+        for (let page = 0; page < 2; page++) {
+            const pageParam = nextPageToken ? `&pageToken=${nextPageToken}` : '';
+            const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(query)}&order=relevance&key=${apiKeyValue}${pageParam}`;
+            const searchResponse = await fetch(searchUrl);
+            const searchData = await searchResponse.json();
 
-        // Check for quota exceeded error
-        if (searchData.error && searchData.error.code === 403) {
-            console.warn("⚠️ Google API 한도 초과");
-            throw new Error("quotaExceeded");
+            // Check for quota exceeded error
+            if (searchData.error && searchData.error.code === 403) {
+                console.warn("⚠️ Google API 한도 초과");
+                throw new Error("quotaExceeded");
+            }
+            
+            searchItems.push(...(searchData.items || []));
+            nextPageToken = searchData.nextPageToken;
+            
+            if (!nextPageToken) break; // 더 이상 결과 없음
         }
         
-        console.log('✅ Google API 정상 작동');
+        console.log(`✅ Google API 정상 작동 (${searchItems.length}개 검색 결과)`);
 
-        // Step 2: Get detailed video information
-        const videoIds = searchData.items.map(item => item.id.videoId).join(',');
-        const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${apiKeyValue}`;
-        const videosResponse = await fetch(videosUrl);
-        const videosData = await videosResponse.json();
+        // ② Step 2: Get detailed video information (50개씩 배치)
+        const videoIds = searchItems.map(item => item.id.videoId).filter(Boolean);
+        console.log(`📋 비디오 ID 추출: ${videoIds.length}개`);
+        let videoDetails = [];
+        for (const ids of chunk(videoIds, 50)) {
+            const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${ids.join(",")}&key=${apiKeyValue}`;
+            const r = await fetch(url);
+            const d = await r.json();
+            videoDetails.push(...(d.items || []));
+        }
+        console.log(`📹 비디오 상세 정보: ${videoDetails.length}개`);
 
-        // Step 3: Get channel information
-        const channelIds = [...new Set(searchData.items.map(item => item.snippet.channelId))].join(',');
-        const channelsUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelIds}&key=${apiKeyValue}`;
-        const channelsResponse = await fetch(channelsUrl);
-        const channelsData = await channelsResponse.json();
+        // ③ Step 3: Get channel information (50개씩 배치)
+        const channelIds = [...new Set(videoDetails.map(v => v.snippet.channelId))];
+        let channelsMap = {};
+        for (const ids of chunk(channelIds, 50)) {
+            const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${ids.join(",")}&key=${apiKeyValue}`;
+            const r = await fetch(url);
+            const d = await r.json();
+            (d.items || []).forEach(ch => { channelsMap[ch.id] = ch; });
+        }
+        console.log(`👥 채널 정보: ${Object.keys(channelsMap).length}개`);
 
-        // Build channel map
-        const channelMap = {};
-        channelsData.items.forEach(channel => {
-            channelMap[channel.id] = channel;
-        });
-
+        console.log(`🔙 반환: videos=${videoDetails.length}개, channels=${Object.keys(channelsMap).length}개`);
         return {
-            videos: videosData.items,
-            channels: channelMap
+            videos: videoDetails,
+            channels: channelsMap,
+            nextPageToken: nextPageToken  // 다음 페이지 토큰 저장
         };
     } catch (error) {
         console.error('❌ YouTube API 오류:', error);
