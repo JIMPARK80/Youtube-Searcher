@@ -123,7 +123,7 @@ export async function loadFromFirebase(query) {
 }
 
 // Save to Firebase cloud cache
-export async function saveToFirebase(query, videos, channels, items, dataSource = 'google') {
+export async function saveToFirebase(query, videos, channels, items, dataSource = 'google', nextPageToken = null) {
     try {
         if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseSetDoc) {
             console.log('⚠️ Firebase가 아직 초기화되지 않았습니다.');
@@ -162,14 +162,21 @@ export async function saveToFirebase(query, videos, channels, items, dataSource 
             subs: x.subs
         });
         
+        const videoCount = (videos || []).length;
         const data = {
             query: query,
             videos: (videos || []).map(shrinkVideo),
             channels: channels || {},
             items: (items || []).map(shrinkItem),
             timestamp: Date.now(),
-            cacheVersion: '1.1',
-            dataSource: dataSource
+            cacheVersion: '1.2',
+            dataSource: dataSource,
+            meta: {
+                fetchedPages: videoCount <= 50 ? 1 : 2,
+                nextPageToken: nextPageToken || null,
+                resultLimit: videoCount,
+                source: dataSource
+            }
         };
         
         // 디버깅: 데이터 크기 확인
@@ -187,6 +194,65 @@ export async function saveToFirebase(query, videos, channels, items, dataSource 
     } catch (error) {
         console.error('❌ Firebase 캐시 저장 실패:', error);
     }
+}
+
+// ============================================
+// 토핑(Top-up) 함수들 - 캐시 최적화용
+// ============================================
+
+// 1) 다음 50개만 가져오기: search.list 1회
+export async function fetchNext50WithToken(query, apiKey, pageToken) {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=relevance&maxResults=50&q=${encodeURIComponent(query)}&key=${apiKey}&pageToken=${pageToken}`;
+    const r = await fetch(url);
+    const d = await r.json();
+    return {
+        items: (d.items || []),
+        nextPageToken: d.nextPageToken || null
+    };
+}
+
+// 2) 신규 비디오/채널 상세만 배치 호출(최소화)
+export async function hydrateDetailsOnlyForNew(nextPage, apiKey) {
+    const ids = nextPage.items.map(it => it.id.videoId).filter(Boolean);
+    // videos.list (50개 배치 한 번)
+    const vr = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${ids.join(',')}&key=${apiKey}`);
+    const vd = await vr.json();
+    const videoDetails = vd.items || [];
+
+    // channels.list (신규 채널만)
+    const channelIds = [...new Set(videoDetails.map(v => v.snippet.channelId))];
+    let channelsMap = {};
+    if (channelIds.length) {
+        const cr = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelIds.join(',')}&key=${apiKey}`);
+        const cd = await cr.json();
+        (cd.items || []).forEach(ch => { channelsMap[ch.id] = ch; });
+    }
+    return { videoDetails, channelsMap };
+}
+
+// 3) 기존 캐시 + 신규 50개 머지 (videos/channels/items)
+export function mergeCacheWithMore(cache, newVideos, newChannelsMap) {
+    // Shrink new videos to match cache format
+    const shrinkVideo = v => ({
+        id: v.id,
+        title: v.snippet?.title,
+        channelId: v.snippet?.channelId,
+        channelTitle: v.snippet?.channelTitle,
+        publishedAt: v.snippet?.publishedAt,
+        viewCount: v.statistics?.viewCount ?? null,
+        likeCount: v.statistics?.likeCount ?? null,
+        duration: v.contentDetails?.duration ?? null,
+        serp: null
+    });
+    
+    // videos: 기존 압축 데이터 + 새 압축 데이터
+    const videos = [...(cache.videos || []), ...newVideos.map(shrinkVideo)];
+
+    // channels: 기존 채널 + 새 채널
+    const channels = { ...(cache.channels || {}) };
+    Object.entries(newChannelsMap).forEach(([id, ch]) => { channels[id] = ch; });
+
+    return { videos, channels, meta: cache.meta || {} };
 }
 
 // ============================================

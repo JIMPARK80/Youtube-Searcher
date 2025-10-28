@@ -9,7 +9,10 @@ import {
     saveToFirebase, 
     searchYouTubeAPI, 
     searchWithSerpAPI,
-    saveUserLastSearchKeyword 
+    saveUserLastSearchKeyword,
+    fetchNext50WithToken,
+    hydrateDetailsOnlyForNew,
+    mergeCacheWithMore
 } from './api.js';
 import { t } from './i18n.js';
 
@@ -187,17 +190,93 @@ export async function search() {
     allItems = [];
     allChannelMap = {};
 
-    // Check Firebase cache
+    // ============================================
+    // 캐시 로직: 스마트 캐시 전략
+    // ============================================
+    
+    const DESIRED_COUNT = 100;
     const firebaseData = await loadFromFirebase(query);
+    
     if (firebaseData) {
-        console.log('☁️ Firebase 캐시 발견');
-        restoreFromCache(firebaseData);
-        renderPage(1);
-        return;
+        const age = Date.now() - firebaseData.timestamp;
+        const isExpired = age >= 24 * 60 * 60 * 1000;
+        const count = firebaseData.videos?.length || 0;
+        const meta = firebaseData.meta || {};
+        const cacheSource = firebaseData.dataSource || meta.source || 'unknown';
+        
+        console.log(`📦 캐시 정보: ${count}개, 소스=${cacheSource}, 만료=${isExpired ? 'Y' : 'N'}`);
+        
+        // A) 현재 모드 = Google API
+        if (currentSearchMode === 'google') {
+            // A-1) 캐시 없음 → 전체 검색
+            if (!firebaseData) {
+                console.log('🔍 캐시 없음 → Google API 전체 검색');
+                await performFullGoogleSearch(query, apiKeyValue);
+                return;
+            }
+            
+            // A-2) 캐시가 SerpAPI → Google로 갱신
+            if (cacheSource === 'serpapi') {
+                console.log('🔄 SerpAPI 캐시 → Google API로 갱신');
+                await performFullGoogleSearch(query, apiKeyValue);
+                return;
+            }
+            
+            // A-3) Google 캐시 + 24시간 이내 → 그대로 사용
+            if (cacheSource === 'google' && !isExpired) {
+                console.log('✅ 신선한 Google 캐시 사용 (호출 0)');
+                restoreFromCache(firebaseData);
+                updateSearchModeIndicator('google');
+                renderPage(1);
+                return;
+            }
+            
+            // A-4) Google 캐시 + 24시간 경과 + 50개 + nextPageToken → 토핑
+            if (cacheSource === 'google' && isExpired && count === 50 && meta.nextPageToken) {
+                console.log('🔝 토핑 모드: 추가 50개만 fetch');
+                await performTopUpUpdate(query, apiKeyValue, firebaseData);
+                return;
+            }
+            
+            // A-5) Google 캐시 + 24시간 경과 + 기타 → 전체 갱신
+            console.log('🔄 Google 캐시 만료 → 전체 갱신');
+            await performFullGoogleSearch(query, apiKeyValue);
+            return;
+        }
+        
+        // B) 현재 모드 = SerpAPI
+        if (currentSearchMode === 'serpapi') {
+            // B-1) 신선한 Google 캐시가 있으면 그대로 사용 (보너스!)
+            if (cacheSource === 'google' && !isExpired) {
+                console.log('🎁 보너스: 신선한 Google 캐시 사용 (SerpAPI 호출 0)');
+                restoreFromCache(firebaseData);
+                updateSearchModeIndicator('google'); // Google 데이터임을 표시
+                renderPage(1);
+                return;
+            }
+            
+            // B-2) 그 외 → SerpAPI 호출
+            console.log('🔍 SerpAPI 검색');
+            await performSerpAPISearch(query);
+            return;
+        }
+    } else {
+        // 캐시 없음
+        if (currentSearchMode === 'google') {
+            await performFullGoogleSearch(query, apiKeyValue);
+        } else {
+            await performSerpAPISearch(query);
+        }
     }
+}
 
-    // Perform API search
+// ============================================
+// 검색 실행 함수들
+// ============================================
+
+async function performFullGoogleSearch(query, apiKeyValue) {
     try {
+        console.log('🌐 Google API 전체 검색 (최대 100개)');
         const result = await searchYouTubeAPI(query, apiKeyValue);
         allVideos = result.videos;
         allChannelMap = result.channels;
@@ -219,34 +298,118 @@ export async function search() {
             };
         });
 
-        // Save to Firebase
-        await saveToFirebase(query, allVideos, allChannelMap, allItems, 'google');
+        // Save to Firebase with nextPageToken
+        await saveToFirebase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken);
         updateSearchModeIndicator('google');
         renderPage(1);
 
     } catch (googleError) {
         if (googleError.message === "quotaExceeded") {
-            console.log('🔄 SerpAPI로 전환...');
-            const serpVideos = await searchWithSerpAPI(query);
-            allVideos = serpVideos;
-            
-            allItems = serpVideos.map(video => {
-                const vpd = viewVelocityPerDay(video);
-                return {
-                    raw: video,
-                    vpd: vpd,
-                    vclass: classifyVelocity(vpd),
-                    cband: 'hidden',
-                    subs: 0
-                };
-            });
-
-            await saveToFirebase(query, allVideos, allChannelMap, allItems, 'serpapi');
-            updateSearchModeIndicator('serpapi');
-            renderPage(1);
+            console.log('🔄 할당량 초과 → SerpAPI로 전환');
+            await performSerpAPISearch(query);
         } else {
+            const resultsDiv = document.getElementById('results');
             resultsDiv.innerHTML = `<div class="error">${t('search.error')}</div>`;
         }
+    }
+}
+
+async function performTopUpUpdate(query, apiKeyValue, firebaseData) {
+    try {
+        const meta = firebaseData.meta || {};
+        console.log('🔝 토핑: search.list 1회 + 신규 50개 상세 정보');
+        
+        // 1) 다음 50개 검색
+        const more = await fetchNext50WithToken(query, apiKeyValue, meta.nextPageToken);
+        
+        // 2) 신규 50개 비디오/채널 상세
+        const { videoDetails, channelsMap } = await hydrateDetailsOnlyForNew(more, apiKeyValue);
+        
+        // 3) 기존 캐시와 merge (압축 형태로 저장)
+        const merged = mergeCacheWithMore(firebaseData, videoDetails, channelsMap);
+        
+        // 4) 압축된 데이터 복원
+        const restoredVideos = merged.videos.map(v => ({
+            id: v.id,
+            snippet: {
+                title: v.title,
+                channelId: v.channelId,
+                channelTitle: v.channelTitle,
+                publishedAt: v.publishedAt,
+                thumbnails: {
+                    maxres: { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` },
+                    standard: { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` },
+                    high: { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` },
+                    medium: { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` },
+                    default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
+                }
+            },
+            statistics: {
+                viewCount: v.viewCount || '0',
+                likeCount: v.likeCount || '0'
+            },
+            contentDetails: {
+                duration: v.duration || 'PT0S'
+            },
+            serpData: v.serp || null
+        }));
+        
+        allVideos = restoredVideos;
+        allChannelMap = merged.channels;
+        
+        // 5) items 재계산
+        allItems = allVideos.map(video => {
+            const channel = allChannelMap[video.snippet.channelId];
+            const vpd = viewVelocityPerDay(video);
+            const vclass = classifyVelocity(vpd);
+            const cband = channelSizeBand(channel);
+            const subs = Number(channel?.statistics?.subscriberCount ?? 0);
+            
+            return {
+                raw: video,
+                vpd: vpd,
+                vclass: vclass,
+                cband: cband,
+                subs: subs
+            };
+        });
+        
+        // 6) Firebase 저장 (meta 업데이트)
+        await saveToFirebase(query, restoredVideos, allChannelMap, allItems, 'google', more.nextPageToken);
+        updateSearchModeIndicator('google');
+        renderPage(1);
+        
+    } catch (error) {
+        console.error('❌ 토핑 실패:', error);
+        await performFullGoogleSearch(query, apiKeyValue);
+    }
+}
+
+async function performSerpAPISearch(query) {
+    try {
+        console.log('🔍 SerpAPI 검색');
+        const serpVideos = await searchWithSerpAPI(query);
+        allVideos = serpVideos;
+        allChannelMap = {};
+        
+        allItems = serpVideos.map(video => {
+            const vpd = viewVelocityPerDay(video);
+            return {
+                raw: video,
+                vpd: vpd,
+                vclass: classifyVelocity(vpd),
+                cband: 'hidden',
+                subs: 0
+            };
+        });
+
+        await saveToFirebase(query, allVideos, allChannelMap, allItems, 'serpapi', null);
+        updateSearchModeIndicator('serpapi');
+        renderPage(1);
+    } catch (error) {
+        console.error('❌ SerpAPI 검색 실패:', error);
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = `<div class="error">${t('search.error')}</div>`;
     }
 }
 
