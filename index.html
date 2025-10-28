@@ -133,6 +133,11 @@
                     <label><input type="radio" name="viewCountFilter" value="100000"> 100K+</label>
                     <label><input type="radio" name="viewCountFilter" value="1000000"> 1M+</label>
                     <label><input type="radio" name="viewCountFilter" value="10000000"> 10M+</label>
+                    <label><input type="radio" name="viewCountFilter" value="custom"> <span data-i18n="filter.custom">사용자 정의</span></label>
+                    <div class="custom-range" id="viewCountCustom" style="display: none; margin-left: 20px; margin-top: 5px;">
+                        <input type="number" id="viewCountMin" placeholder="최소" style="width: 80px;"> ~ 
+                        <input type="number" id="viewCountMax" placeholder="최대" style="width: 80px;">
+                    </div>
                 </div>
                 
                 <!-- Subscriber Count Filter -->
@@ -144,6 +149,11 @@
                     <label><input type="radio" name="subCountFilter" value="10000-100000"> 10K-100K</label>
                     <label><input type="radio" name="subCountFilter" value="100000-1000000"> 100K-1M</label>
                     <label><input type="radio" name="subCountFilter" value="1000000"> 1M+</label>
+                    <label><input type="radio" name="subCountFilter" value="custom"> <span data-i18n="filter.custom">사용자 정의</span></label>
+                    <div class="custom-range" id="subCountCustom" style="display: none; margin-left: 20px; margin-top: 5px;">
+                        <input type="number" id="subCountMin" placeholder="최소" style="width: 80px;"> ~ 
+                        <input type="number" id="subCountMax" placeholder="최대" style="width: 80px;">
+                    </div>
                 </div>
                  
                  <!-- Upload Date Filter -->
@@ -157,6 +167,11 @@
                      <label><input type="radio" name="uploadDateFilter" value="90"> <span data-i18n="filter.date.month3">3개월 이내</span></label>
                      <label><input type="radio" name="uploadDateFilter" value="180"> <span data-i18n="filter.date.month6">6개월 이내</span></label>
                     <label><input type="radio" name="uploadDateFilter" value="365"> <span data-i18n="filter.date.year1">1년 이내</span></label>
+                    <label><input type="radio" name="uploadDateFilter" value="custom"> <span data-i18n="filter.custom">사용자 정의</span></label>
+                    <div class="custom-range" id="uploadDateCustom" style="display: none; margin-left: 20px; margin-top: 5px;">
+                        <input type="number" id="uploadDateMin" placeholder="최소 (일)" style="width: 80px;"> ~ 
+                        <input type="number" id="uploadDateMax" placeholder="최대 (일)" style="width: 80px;"> <small>(일 단위)</small>
+                    </div>
                 </div>
                 
                 <!-- Video Duration Filter -->
@@ -167,6 +182,11 @@
                     <label><input type="radio" name="durationFilter" value="60-600"> 1min-10min</label>
                     <label><input type="radio" name="durationFilter" value="1200-3600"> 20min-1hour</label>
                     <label><input type="radio" name="durationFilter" value="3600"> 1hour+</label>
+                    <label><input type="radio" name="durationFilter" value="custom"> <span data-i18n="filter.custom">사용자 정의</span></label>
+                    <div class="custom-range" id="durationCustom" style="display: none; margin-left: 20px; margin-top: 5px;">
+                        <input type="number" id="durationMin" placeholder="최소 (초)" style="width: 80px;"> ~ 
+                        <input type="number" id="durationMax" placeholder="최대 (초)" style="width: 80px;"> <small>(초 단위)</small>
+                    </div>
                 </div>
             </div>
 
@@ -635,18 +655,38 @@
             // Apply view count filter
             const viewCountFilter = document.querySelector('input[name="viewCountFilter"]:checked')?.value;
             if (viewCountFilter && viewCountFilter !== 'all') {
-                const minViews = parseInt(viewCountFilter);
-                items = items.filter(item => {
-                    if (!item?.raw?.statistics) return false;
-                    const views = parseInt(item.raw.statistics.viewCount || 0);
-                    return views >= minViews;
-                });
+                if (viewCountFilter === 'custom') {
+                    // Custom range
+                    const minViews = parseInt(document.getElementById('viewCountMin')?.value || 0);
+                    const maxViews = parseInt(document.getElementById('viewCountMax')?.value || Infinity);
+                    items = items.filter(item => {
+                        if (!item?.raw?.statistics) return false;
+                        const views = parseInt(item.raw.statistics.viewCount || 0);
+                        return views >= minViews && views <= maxViews;
+                    });
+                } else {
+                    // Preset minimum
+                    const minViews = parseInt(viewCountFilter);
+                    items = items.filter(item => {
+                        if (!item?.raw?.statistics) return false;
+                        const views = parseInt(item.raw.statistics.viewCount || 0);
+                        return views >= minViews;
+                    });
+                }
             }
             
             // Apply subscriber count filter (range-based)
             const subCountFilter = document.querySelector('input[name="subCountFilter"]:checked')?.value;
             if (subCountFilter && subCountFilter !== 'all') {
-                if (subCountFilter.includes('-')) {
+                if (subCountFilter === 'custom') {
+                    // Custom range
+                    const minSubs = parseInt(document.getElementById('subCountMin')?.value || 0);
+                    const maxSubs = parseInt(document.getElementById('subCountMax')?.value || Infinity);
+                    items = items.filter(item => {
+                        const subs = parseInt(item.subs || 0);
+                        return subs >= minSubs && subs <= maxSubs;
+                    });
+                } else if (subCountFilter.includes('-')) {
                     // Range filter (e.g., "1000-10000")
                     const [minStr, maxStr] = subCountFilter.split('-');
                     const minSubs = parseInt(minStr);
@@ -668,19 +708,46 @@
             // Apply upload date filter
             const uploadDateFilter = document.querySelector('input[name="uploadDateFilter"]:checked')?.value;
             if (uploadDateFilter && uploadDateFilter !== 'all') {
-                const cutoffDate = getPublishedAfterDate(uploadDateFilter);
-                items = items.filter(item => {
-                    if (!item?.raw?.snippet) return false;
-                    const publishedAt = item.raw.snippet.publishedAt;
-                    if (!publishedAt) return false;
-                    return publishedAt >= cutoffDate;
-                });
+                let minDate, maxDate;
+                if (uploadDateFilter === 'custom') {
+                    // Custom range (in days)
+                    const minDays = parseInt(document.getElementById('uploadDateMin')?.value || 0);
+                    const maxDays = parseInt(document.getElementById('uploadDateMax')?.value || 36500); // 100 years default
+                    const now = new Date();
+                    maxDate = new Date(now.getTime() - minDays * 24 * 60 * 60 * 1000).toISOString();
+                    minDate = new Date(now.getTime() - maxDays * 24 * 60 * 60 * 1000).toISOString();
+                    items = items.filter(item => {
+                        if (!item?.raw?.snippet) return false;
+                        const publishedAt = item.raw.snippet.publishedAt;
+                        if (!publishedAt) return false;
+                        return publishedAt >= minDate && publishedAt <= maxDate;
+                    });
+                } else {
+                    // Preset filter
+                    const cutoffDate = getPublishedAfterDate(uploadDateFilter);
+                    items = items.filter(item => {
+                        if (!item?.raw?.snippet) return false;
+                        const publishedAt = item.raw.snippet.publishedAt;
+                        if (!publishedAt) return false;
+                        return publishedAt >= cutoffDate;
+                    });
+                }
             }
             
             // Apply video duration filter
             const durationFilter = document.querySelector('input[name="durationFilter"]:checked')?.value;
             if (durationFilter && durationFilter !== 'all') {
-                if (durationFilter.includes('-')) {
+                if (durationFilter === 'custom') {
+                    // Custom range (in seconds)
+                    const minSeconds = parseInt(document.getElementById('durationMin')?.value || 0);
+                    const maxSeconds = parseInt(document.getElementById('durationMax')?.value || Infinity);
+                    items = items.filter(item => {
+                        if (!item?.raw?.contentDetails) return false;
+                        const duration = item.raw.contentDetails.duration || '';
+                        const seconds = parseDurationToSeconds(duration);
+                        return seconds >= minSeconds && seconds <= maxSeconds;
+                    });
+                } else if (durationFilter.includes('-')) {
                     // Range filter (e.g., "60-600")
                     const [minStr, maxStr] = durationFilter.split('-');
                     const minSeconds = parseInt(minStr);
@@ -1837,8 +1904,53 @@
             durationFilters.forEach(radio => {
                 radio.addEventListener('change', () => {
                     console.log('🔍 영상길이 필터 변경:', radio.value);
+                    // Toggle custom range visibility
+                    const customRange = document.getElementById('durationCustom');
+                    if (customRange) {
+                        customRange.style.display = radio.value === 'custom' ? 'block' : 'none';
+                    }
                     renderPage(1); // Reset to page 1 when filter changes
                 });
+            });
+
+            // Custom filter toggle handlers
+            // View Count custom toggle
+            document.querySelectorAll('input[name="viewCountFilter"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    const customRange = document.getElementById('viewCountCustom');
+                    if (customRange) {
+                        customRange.style.display = radio.value === 'custom' ? 'block' : 'none';
+                    }
+                });
+            });
+
+            // Subscriber Count custom toggle
+            document.querySelectorAll('input[name="subCountFilter"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    const customRange = document.getElementById('subCountCustom');
+                    if (customRange) {
+                        customRange.style.display = radio.value === 'custom' ? 'block' : 'none';
+                    }
+                });
+            });
+
+            // Upload Date custom toggle
+            document.querySelectorAll('input[name="uploadDateFilter"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    const customRange = document.getElementById('uploadDateCustom');
+                    if (customRange) {
+                        customRange.style.display = radio.value === 'custom' ? 'block' : 'none';
+                    }
+                });
+            });
+
+            // Custom range input change listeners
+            ['viewCountMin', 'viewCountMax', 'subCountMin', 'subCountMax', 
+             'uploadDateMin', 'uploadDateMax', 'durationMin', 'durationMax'].forEach(id => {
+                const input = document.getElementById(id);
+                if (input) {
+                    input.addEventListener('change', () => renderPage(1));
+                }
             });
 
             // Auth button event listeners
