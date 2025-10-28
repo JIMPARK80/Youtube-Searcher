@@ -5,6 +5,7 @@
 import { initializeApiKeys } from './api.js';
 import { initializeUI } from './ui.js';
 import { initializeAuth } from './auth.js';
+import { initializeI18n } from './i18n.js';
 
 // ============================================
 // 전역 변수 초기화
@@ -23,6 +24,10 @@ async function initializeApp() {
     try {
         // Wait for Firebase to be fully loaded
         await waitForFirebase();
+        
+        // Initialize i18n (다국어 시스템)
+        console.log('🌐 다국어 시스템 초기화 중...');
+        initializeI18n();
         
         // Initialize API keys
         console.log('🔑 API 키 초기화 중...');

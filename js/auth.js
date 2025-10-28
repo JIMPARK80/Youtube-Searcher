@@ -3,6 +3,8 @@
 // 로그인, 회원가입, 프로필 관리
 // ============================================
 
+import { t } from './i18n.js';
+
 // ============================================
 // 비밀번호 토글 함수
 // ============================================
@@ -13,10 +15,10 @@ export function togglePassword(inputId, toggleId) {
     
     if (passwordInput.type === 'password') {
         passwordInput.type = 'text';
-        toggleText.textContent = '숨기기';
+        toggleText.textContent = t('auth.hide');
     } else {
         passwordInput.type = 'password';
-        toggleText.textContent = '보기';
+        toggleText.textContent = t('auth.show');
     }
 }
 
@@ -128,7 +130,7 @@ async function handleLogin() {
     
     // Validation
     if (!email || !password) {
-        alert('이메일과 비밀번호를 입력해주세요.');
+        alert(t('auth.enterEmailPassword'));
         return;
     }
     
@@ -143,23 +145,23 @@ async function handleLogin() {
         // Close modal
         document.getElementById('loginModal').classList.remove('active');
         
-        alert('로그인 성공!');
+        alert(t('auth.loginSuccess'));
     } catch (error) {
         console.error('❌ 로그인 실패:', error);
         
-        let errorMessage = '로그인 실패: ';
+        let errorMessage = t('auth.loginFailed');
         switch(error.code) {
             case 'auth/user-not-found':
-                errorMessage += '사용자를 찾을 수 없습니다.';
+                errorMessage += t('auth.error.userNotFound');
                 break;
             case 'auth/wrong-password':
-                errorMessage += '비밀번호가 올바르지 않습니다.';
+                errorMessage += t('auth.error.wrongPassword');
                 break;
             case 'auth/invalid-email':
-                errorMessage += '이메일 형식이 올바르지 않습니다.';
+                errorMessage += t('auth.error.invalidEmail');
                 break;
             case 'auth/too-many-requests':
-                errorMessage += '너무 많은 시도가 있었습니다. 나중에 다시 시도해주세요.';
+                errorMessage += t('auth.error.tooManyRequests');
                 break;
             default:
                 errorMessage += error.message;
@@ -181,17 +183,17 @@ async function handleSignup() {
     
     // Validation
     if (!username || !email || !password || !passwordConfirm) {
-        alert('모든 필드를 입력해주세요.');
+        alert(t('auth.enterAllFields'));
         return;
     }
     
     if (password !== passwordConfirm) {
-        alert('비밀번호가 일치하지 않습니다.');
+        alert(t('auth.passwordMismatch'));
         return;
     }
     
     if (password.length < 6) {
-        alert('비밀번호는 최소 6자 이상이어야 합니다.');
+        alert(t('auth.passwordMinLength'));
         return;
     }
     
@@ -218,20 +220,20 @@ async function handleSignup() {
         // Close modal
         document.getElementById('signupModal').classList.remove('active');
         
-        alert('회원가입 성공! 로그인되었습니다.');
+        alert(t('auth.signupSuccess'));
     } catch (error) {
         console.error('❌ 회원가입 실패:', error);
         
-        let errorMessage = '회원가입 실패: ';
+        let errorMessage = t('auth.signupFailed');
         switch(error.code) {
             case 'auth/email-already-in-use':
-                errorMessage += '이미 사용 중인 이메일입니다.';
+                errorMessage += t('auth.error.emailInUse');
                 break;
             case 'auth/invalid-email':
-                errorMessage += '이메일 형식이 올바르지 않습니다.';
+                errorMessage += t('auth.error.invalidEmail');
                 break;
             case 'auth/weak-password':
-                errorMessage += '비밀번호가 너무 약합니다. 6자 이상 입력하세요.';
+                errorMessage += t('auth.error.weakPassword');
                 break;
             default:
                 errorMessage += error.message;
@@ -252,7 +254,7 @@ export function setupLogout() {
             try {
                 await window.signOut(window.firebaseAuth);
                 console.log('✅ 로그아웃 성공');
-                alert('로그아웃되었습니다.');
+                alert(t('auth.logoutSuccess'));
             } catch (error) {
                 console.error('❌ 로그아웃 실패:', error);
             }
@@ -330,12 +332,12 @@ export function setupProfileEditModal() {
             const newUsername = editUsername.value.trim();
             
             if (!newUsername) {
-                alert('아이디를 입력해주세요.');
+                alert(t('auth.enterUsername'));
                 return;
             }
             
             if (!window.currentUser) {
-                alert('로그인이 필요합니다.');
+                alert(t('auth.loginRequired'));
                 return;
             }
             
@@ -351,11 +353,11 @@ export function setupProfileEditModal() {
                 // Update UI
                 document.getElementById('userName').textContent = newUsername;
                 
-                alert('프로필이 수정되었습니다!');
+                alert(t('auth.profileUpdateSuccess'));
                 closeProfileEditModalFunc();
             } catch (error) {
                 console.error('❌ 프로필 수정 실패:', error);
-                alert('프로필 수정 실패: ' + error.message);
+                alert(t('auth.profileUpdateFailed') + error.message);
             }
         });
     }

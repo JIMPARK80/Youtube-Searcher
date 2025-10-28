@@ -839,6 +839,31 @@ body {
     transform: translateY(-2px);
 }
 
+/* Language Toggle Button */
+.language-toggle-btn {
+    padding: 8px 16px;
+    border: 2px solid white;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(10px);
+}
+
+.language-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.language-toggle-btn:active {
+    transform: translateY(0);
+}
+
 /* Signup Modal Styles */
 .signup-modal {
     display: none;

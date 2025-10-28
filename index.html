@@ -9,12 +9,12 @@
 <body>
     <!-- Auth Section -->
     <div class="auth-section" id="authSection">
-        <button class="auth-btn login-btn" id="loginBtn">로그인</button>
-        <button class="auth-btn signup-btn" id="signupBtn">가입하기</button>
+        <button class="auth-btn login-btn" id="loginBtn" data-i18n="auth.login">로그인</button>
+        <button class="auth-btn signup-btn" id="signupBtn" data-i18n="auth.signup">가입하기</button>
         <div class="user-info" id="userInfo" style="display: none;">
             <img id="userAvatar" class="user-avatar" src="" alt="User Avatar">
-            <span class="user-name" id="userName" style="cursor: pointer;" title="클릭하여 프로필 수정"></span>
-            <button class="logout-btn" id="logoutBtn">로그아웃</button>
+            <span class="user-name" id="userName" style="cursor: pointer;" title="클릭하여 프로필 수정" data-i18n-title="auth.profileClickToEdit"></span>
+            <button class="logout-btn" id="logoutBtn" data-i18n="auth.logout">로그아웃</button>
         </div>
     </div>
 
@@ -22,23 +22,23 @@
     <div class="signup-modal" id="loginModal">
         <form class="signup-form" onsubmit="return false;">
             <button class="close-modal" id="closeLoginModal">&times;</button>
-            <h2>로그인</h2>
+            <h2 data-i18n="auth.login">로그인</h2>
             <div class="form-group">
-                <label for="loginEmail">이메일</label>
-                <input type="email" id="loginEmail" placeholder="이메일을 입력하세요" autocomplete="username">
+                <label for="loginEmail" data-i18n="auth.email">이메일</label>
+                <input type="email" id="loginEmail" placeholder="이메일을 입력하세요" data-i18n="auth.emailPlaceholder" autocomplete="username">
             </div>
             <div class="form-group">
-                <label for="loginPassword">비밀번호</label>
+                <label for="loginPassword" data-i18n="auth.password">비밀번호</label>
                 <div class="password-wrapper">
-                    <input type="password" id="loginPassword" placeholder="비밀번호를 입력하세요" autocomplete="current-password">
+                    <input type="password" id="loginPassword" placeholder="비밀번호를 입력하세요" data-i18n="auth.passwordPlaceholder" autocomplete="current-password">
                     <button type="button" class="password-toggle" onclick="togglePassword('loginPassword', 'loginPasswordToggle')">
-                        <span id="loginPasswordToggle">보기</span>
+                        <span id="loginPasswordToggle" data-i18n="auth.show">보기</span>
                     </button>
                 </div>
             </div>
             <div class="form-buttons">
-                <button class="submit-btn" id="submitLogin">로그인</button>
-                <button class="cancel-btn" id="cancelLogin">취소</button>
+                <button class="submit-btn" id="submitLogin" data-i18n="auth.login">로그인</button>
+                <button class="cancel-btn" id="cancelLogin" data-i18n="auth.cancel">취소</button>
             </div>
         </form>
     </div>
@@ -47,36 +47,36 @@
     <div class="signup-modal" id="signupModal">
         <form class="signup-form" onsubmit="return false;">
             <button class="close-modal" id="closeModal">&times;</button>
-            <h2>회원 가입</h2>
+            <h2 data-i18n="auth.signup">회원 가입</h2>
             <div class="form-group">
-                <label for="signupUsername">아이디</label>
-                <input type="text" id="signupUsername" placeholder="아이디를 입력하세요">
+                <label for="signupUsername" data-i18n="auth.username">아이디</label>
+                <input type="text" id="signupUsername" placeholder="아이디를 입력하세요" data-i18n="auth.usernamePlaceholder">
             </div>
             <div class="form-group">
-                <label for="signupId">이메일</label>
-                <input type="email" id="signupId" placeholder="이메일을 입력하세요" autocomplete="username">
+                <label for="signupId" data-i18n="auth.email">이메일</label>
+                <input type="email" id="signupId" placeholder="이메일을 입력하세요" data-i18n="auth.emailPlaceholder" autocomplete="username">
             </div>
             <div class="form-group">
-                <label for="signupPassword">비밀번호</label>
+                <label for="signupPassword" data-i18n="auth.password">비밀번호</label>
                 <div class="password-wrapper">
-                    <input type="password" id="signupPassword" placeholder="비밀번호를 입력하세요" autocomplete="new-password">
+                    <input type="password" id="signupPassword" placeholder="비밀번호를 입력하세요" data-i18n="auth.passwordPlaceholder" autocomplete="new-password">
                     <button type="button" class="password-toggle" onclick="togglePassword('signupPassword', 'signupPasswordToggle')">
-                        <span id="signupPasswordToggle">보기</span>
+                        <span id="signupPasswordToggle" data-i18n="auth.show">보기</span>
                     </button>
                 </div>
             </div>
             <div class="form-group">
-                <label for="signupPasswordConfirm">비밀번호 확인</label>
+                <label for="signupPasswordConfirm" data-i18n="auth.passwordConfirm">비밀번호 확인</label>
                 <div class="password-wrapper">
-                    <input type="password" id="signupPasswordConfirm" placeholder="비밀번호를 다시 입력하세요" autocomplete="new-password">
+                    <input type="password" id="signupPasswordConfirm" placeholder="비밀번호를 다시 입력하세요" data-i18n="auth.passwordConfirmPlaceholder" autocomplete="new-password">
                     <button type="button" class="password-toggle" onclick="togglePassword('signupPasswordConfirm', 'signupPasswordConfirmToggle')">
-                        <span id="signupPasswordConfirmToggle">보기</span>
+                        <span id="signupPasswordConfirmToggle" data-i18n="auth.show">보기</span>
                     </button>
                 </div>
             </div>
             <div class="form-buttons">
-                <button class="submit-btn" id="submitSignup">가입하기</button>
-                <button class="cancel-btn" id="cancelSignup">취소</button>
+                <button class="submit-btn" id="submitSignup" data-i18n="auth.signup">가입하기</button>
+                <button class="cancel-btn" id="cancelSignup" data-i18n="auth.cancel">취소</button>
             </div>
         </form>
     </div>
@@ -85,32 +85,32 @@
     <div class="signup-modal" id="profileEditModal">
         <form class="signup-form" onsubmit="return false;">
             <button class="close-modal" id="closeProfileEditModal">&times;</button>
-            <h2>프로필 수정</h2>
+            <h2 data-i18n="auth.profileEditTitle">프로필 수정</h2>
             <div class="form-group">
-                <label for="editUsername">아이디</label>
-                <input type="text" id="editUsername" placeholder="아이디를 입력하세요">
+                <label for="editUsername" data-i18n="auth.username">아이디</label>
+                <input type="text" id="editUsername" placeholder="아이디를 입력하세요" data-i18n="auth.usernamePlaceholder">
             </div>
             <div class="form-group">
-                <label for="editEmail">이메일</label>
-                <input type="email" id="editEmail" placeholder="이메일을 입력하세요" readonly style="background: #f0f0f0;">
+                <label for="editEmail" data-i18n="auth.email">이메일</label>
+                <input type="email" id="editEmail" placeholder="이메일을 입력하세요" data-i18n="auth.emailPlaceholder" readonly style="background: #f0f0f0;">
             </div>
             <div class="form-buttons">
-                <button class="submit-btn" id="submitProfileEdit">수정하기</button>
-                <button class="cancel-btn" id="cancelProfileEdit">취소</button>
+                <button class="submit-btn" id="submitProfileEdit" data-i18n="auth.profileEdit">수정하기</button>
+                <button class="cancel-btn" id="cancelProfileEdit" data-i18n="auth.cancel">취소</button>
             </div>
         </form>
     </div>
 
     <div class="container">
         <div class="header">
-            <h1>🎬 Jim's YouTube 채널</h1>
-            <p>검색어를 입력하고 다양한 정보를 확인하세요!</p>
+            <h1 data-i18n="app.title">🎬 Jim's YouTube 채널</h1>
+            <p data-i18n="app.subtitle">검색어를 입력하고 다양한 정보를 확인하세요!</p>
         </div>
 
         <div class="search-box">
             <div class="search-input-group">
-                <input type="text" id="searchInput" placeholder="검색어를 입력하세요..." value="news" />
-                <button id="searchBtn">검색</button>
+                <input type="text" id="searchInput" placeholder="검색어를 입력하세요..." data-i18n="search.placeholder" value="news" />
+                <button id="searchBtn" data-i18n="search.button">검색</button>
             </div>
             
             <div class="search-mode-indicator" id="searchModeIndicator">
@@ -127,8 +127,8 @@
             <!-- View Count Filter -->
             <div class="filter-section">
                 <div class="filter-group view-filter">
-                    <label>조회수 필터:</label>
-                    <label><input type="radio" name="viewCountFilter" value="all" checked> 전체</label>
+                    <label data-i18n="filter.viewCount">조회수 필터:</label>
+                    <label><input type="radio" name="viewCountFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
                     <label><input type="radio" name="viewCountFilter" value="1000"> 1K+</label>
                     <label><input type="radio" name="viewCountFilter" value="10000"> 10K+</label>
                     <label><input type="radio" name="viewCountFilter" value="100000"> 100K+</label>
@@ -138,8 +138,8 @@
                 
                 <!-- Subscriber Count Filter -->
                 <div class="filter-group sub-filter">
-                    <label>구독자 필터:</label>
-                    <label><input type="radio" name="subCountFilter" value="all" checked> 전체</label>
+                    <label data-i18n="filter.subCount">구독자 필터:</label>
+                    <label><input type="radio" name="subCountFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
                     <label><input type="radio" name="subCountFilter" value="0-1000"> 1-1K</label>
                     <label><input type="radio" name="subCountFilter" value="1000-10000"> 1K-10K</label>
                     <label><input type="radio" name="subCountFilter" value="10000-100000"> 10K-100K</label>
@@ -149,21 +149,21 @@
                  
                  <!-- Upload Date Filter -->
                  <div class="filter-group date-filter">
-                     <label>업로드일자 필터:</label>
-                     <label><input type="radio" name="uploadDateFilter" value="all" checked> 전체</label>
-                     <label><input type="radio" name="uploadDateFilter" value="1"> 최근 1일</label>
-                     <label><input type="radio" name="uploadDateFilter" value="3"> 최근 3일</label>
-                     <label><input type="radio" name="uploadDateFilter" value="7"> 최근 7일</label>
-                     <label><input type="radio" name="uploadDateFilter" value="30"> 1개월 이내</label>
-                     <label><input type="radio" name="uploadDateFilter" value="90"> 3개월 이내</label>
-                     <label><input type="radio" name="uploadDateFilter" value="180"> 6개월 이내</label>
-                    <label><input type="radio" name="uploadDateFilter" value="365"> 1년 이내</label>
+                     <label data-i18n="filter.uploadDate">업로드일자 필터:</label>
+                     <label><input type="radio" name="uploadDateFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
+                     <label><input type="radio" name="uploadDateFilter" value="1"> <span data-i18n="filter.date.day1">최근 1일</span></label>
+                     <label><input type="radio" name="uploadDateFilter" value="3"> <span data-i18n="filter.date.day3">최근 3일</span></label>
+                     <label><input type="radio" name="uploadDateFilter" value="7"> <span data-i18n="filter.date.day7">최근 7일</span></label>
+                     <label><input type="radio" name="uploadDateFilter" value="30"> <span data-i18n="filter.date.month1">1개월 이내</span></label>
+                     <label><input type="radio" name="uploadDateFilter" value="90"> <span data-i18n="filter.date.month3">3개월 이내</span></label>
+                     <label><input type="radio" name="uploadDateFilter" value="180"> <span data-i18n="filter.date.month6">6개월 이내</span></label>
+                    <label><input type="radio" name="uploadDateFilter" value="365"> <span data-i18n="filter.date.year1">1년 이내</span></label>
                 </div>
                 
                 <!-- Video Duration Filter -->
                 <div class="filter-group duration-filter">
-                    <label>영상길이 필터:</label>
-                    <label><input type="radio" name="durationFilter" value="all" checked> 전체</label>
+                    <label data-i18n="filter.duration">영상길이 필터:</label>
+                    <label><input type="radio" name="durationFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
                     <label><input type="radio" name="durationFilter" value="0-60"> <1min</label>
                     <label><input type="radio" name="durationFilter" value="60-600"> 1min-10min</label>
                     <label><input type="radio" name="durationFilter" value="1200-3600"> 20min-1hour</label>
@@ -173,11 +173,11 @@
 
         <div class="pagination-section">
             <div class="result-summary" id="resultSummary">
-                검색 결과: <span id="totalCount">0</span>개
+                <span data-i18n="result.summary">검색 결과</span>: <span id="totalCount">0</span><span data-i18n="result.count">개</span>
             </div>
             <div class="pagination-bar">
                 <button id="prevPage" class="page-btn" aria-label="Previous page">◀</button>
-                <span id="pageInfo" class="page-info">1 / 1 page</span>
+                <span id="pageInfo" class="page-info">1 / 1 <span data-i18n="result.page">page</span></span>
                 <button id="nextPage" class="page-btn" aria-label="Next page">▶</button>
             </div>
         </div>

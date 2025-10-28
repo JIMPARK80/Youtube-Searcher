@@ -11,6 +11,7 @@ import {
     searchWithSerpAPI,
     saveUserLastSearchKeyword 
 } from './api.js';
+import { t } from './i18n.js';
 
 // Global variables for pagination
 export let allVideos = [];
@@ -152,13 +153,13 @@ export async function search() {
         const loginModal = document.getElementById('loginModal');
         if (loginModal) {
             loginModal.classList.add('active');
-            alert('검색하려면 로그인이 필요합니다.');
+            alert(t('search.loginRequired'));
         }
         return;
     }
     
     if (!query) {
-        alert('검색어를 입력해주세요!');
+        alert(t('search.enterQuery'));
         return;
     }
     
@@ -166,13 +167,13 @@ export async function search() {
     const apiKeyValue = keys.youtube;
     
     if (!apiKeyValue) {
-        alert('API 키를 입력해주세요! 서버에 API 키가 저장되어 있지 않습니다.');
+        alert(t('search.apiKeyRequired'));
         return;
     }
 
     currentSearchQuery = query;
     const resultsDiv = document.getElementById('results');
-    resultsDiv.innerHTML = '<div class="loading">⏳ 검색 중...</div>';
+    resultsDiv.innerHTML = `<div class="loading">${t('search.loading')}</div>`;
     
     // Save search keyword
     if (window.currentUser && !window.isDefaultSearch && query !== 'news') {
@@ -243,7 +244,7 @@ export async function search() {
             updateSearchModeIndicator('serpapi');
             renderPage(1);
         } else {
-            resultsDiv.innerHTML = '<div class="error">❌ 검색 중 오류가 발생했습니다.</div>';
+            resultsDiv.innerHTML = `<div class="error">${t('search.error')}</div>`;
         }
     }
 }
@@ -267,7 +268,7 @@ export function renderPage(page) {
     resultsDiv.innerHTML = '';
     
     if (pageItems.length === 0) {
-        resultsDiv.innerHTML = '<div class="error">❌ 검색 결과가 없습니다.</div>';
+        resultsDiv.innerHTML = `<div class="error">${t('search.noResults')}</div>`;
         return;
     }
     
@@ -397,7 +398,9 @@ export function updatePaginationControls(totalItems) {
     const prevBtn = document.getElementById('prevPage');
     const nextBtn = document.getElementById('nextPage');
     
-    if (pageInfo) pageInfo.textContent = `${currentPage} / ${totalPages} page`;
+    if (pageInfo) {
+        pageInfo.innerHTML = `${currentPage} / ${totalPages} <span data-i18n="result.page">${t('result.page')}</span>`;
+    }
     if (totalCount) totalCount.textContent = totalItems;
     
     if (prevBtn) prevBtn.disabled = currentPage <= 1;
@@ -430,9 +433,9 @@ export function updateSearchModeIndicator(mode) {
     if (indicator) {
         const modeText = indicator.querySelector('.mode-text');
         if (mode === 'google') {
-            modeText.textContent = '현재 검색 모드: 🟢 Google API';
+            modeText.textContent = `${t('search.mode')}: ${t('search.modeGoogle')}`;
         } else {
-            modeText.textContent = '현재 검색 모드: 🟡 SerpAPI';
+            modeText.textContent = `${t('search.mode')}: ${t('search.modeSerpAPI')}`;
         }
     }
 }
