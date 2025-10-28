@@ -18,9 +18,16 @@ service cloud.firestore {
       allow write: if true; // Anyone can write to cache (public caching)
     }
     
+    // Online users tracking (for real-time user count) - 개선된 보안 규칙
+    match /onlineUsers/{uid} {
+      allow read: if true;  // Anyone can read online status (for user count display)
+      allow write: if request.auth != null && request.auth.uid == uid;  // Only owner can write
+    }
+    
     // User-specific data (e.g., favorites, recent searches, filter presets, username)
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && request.auth.uid == uid;
     }
     
     // Optional: Restrict to authenticated users only
