@@ -276,7 +276,7 @@ export async function search() {
 
 async function performFullGoogleSearch(query, apiKeyValue) {
     try {
-        console.log('🌐 Google API 전체 검색 (최대 100개)');
+        console.log('🌐 Google API 전체 검색 (최대 300개)');
         const result = await searchYouTubeAPI(query, apiKeyValue);
         console.log(`🎯 fetch 완료: ${result.videos.length}개`);
         allVideos = result.videos;
