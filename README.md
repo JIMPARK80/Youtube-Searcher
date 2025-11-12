@@ -29,7 +29,6 @@ A web application to search YouTube videos and view detailed information with ad
 - **Daily Views** - Views per day calculation
 
 ### 🔍 Search & Filters
-- **Dual Search Mode** - YouTube API (primary) / SerpAPI (backup)
 - **Velocity Filter** - Filter by video growth rate (hot/normal/cold)
 - **Subscriber Filter** - Filter by channel size (0-10K, 10K-100K, 100K+)
 - **Upload Date Filter** - Filter by upload time (any/hour/today/week/month/year)
@@ -60,11 +59,6 @@ A web application to search YouTube videos and view detailed information with ad
 5. Enable YouTube Data API v3
 6. Copy the generated API key
 
-#### SerpAPI (Optional)
-1. Go to [SerpAPI](https://serpapi.com/manage-api-key)
-2. Create a free account (250 searches/month)
-3. Copy the API key
-
 ### 2. 🔐 Store API Keys on Server (Recommended)
 
 Storing API keys in Firebase eliminates the need for individual users to enter keys.
@@ -77,7 +71,6 @@ Storing API keys in Firebase eliminates the need for individual users to enter k
 5. Document ID: `apiKeys`
 6. Add fields:
    - Field name: `youtubeApiKey`, Type: string, Value: (Your YouTube API Key)
-   - Field name: `serpApiKey`, Type: string, Value: (Your SerpAPI Key)
 7. Click "Save"
 
 **Configure Security Rules:**
@@ -113,32 +106,17 @@ const firebaseConfig = {
    - Copy rules from `FIREBASE_SECURITY_RULES.txt` and paste
    - Click "Publish"
 
-### 4. SerpAPI Proxy Server (New)
-
-To avoid CORS errors when using SerpAPI, run the bundled Express proxy:
-
-1. Open a terminal in the `server` directory.
-2. Copy `.env.example` to `.env` and set `SERPAPI_KEY`.
-3. Install dependencies: `npm install`
-4. Start the proxy: `npm start`
-5. The proxy runs at `http://localhost:3001/api/serp`
-
-You can change the port via the `PORT` variable in `.env` and, if needed, set `window.SERPAPI_PROXY_BASE_URL` before loading scripts.
-
-### 5. How to Run the Frontend
+### 4. How to Run the Frontend
 
 1. Serve the project using a local server (e.g., Live Server in VS Code)
 2. Open `http://localhost:5500` (or your server's URL)
 3. Enter your search query and click search
-
-**Note**: SerpAPI mode requires the proxy server above to be running.
 
 ## 📋 Requirements
 
 - Web browser (Chrome, Firefox, Edge, Safari, etc.)
 - Internet connection
 - YouTube Data API v3 key
-- SerpAPI key (Optional)
 - Firebase project (Optional)
 
 ## 💡 Tips
@@ -155,7 +133,6 @@ You can change the port via the `PORT` variable in `.env` and, if needed, set `w
 - CSS3 (Grid, Flexbox)
 - Vanilla JavaScript (ES6+ Modules)
 - YouTube Data API v3
-- SerpAPI (Backup)
 - Firebase Firestore (Cloud Caching & Authentication)
 
 ## 📁 Project Structure
@@ -174,9 +151,6 @@ Youtube-Searcher/
 │   └── firebase-config.js # Firebase configuration
 ├── favicon.svg            # Site favicon
 ├── README.md              # This file
-├── server/
-│   ├── index.js           # Express proxy for SerpAPI
-│   └── package.json       # Proxy server dependencies
 ├── GIT_WORKFLOW.md        # Git workflow guide
 ├── TRANSLATION_GUIDE.md   # Translation guide
 ├── JS_FILE_MAPPING.md     # Code structure documentation
@@ -221,10 +195,9 @@ Youtube-Searcher/
 **Problem:** No results or API error.
 
 **Solution:**
-1. Try switching search mode (YouTube ↔ SerpAPI)
-2. Check browser console for error messages
-3. Verify API keys are valid
-4. Try a different search query
+1. Check browser console for error messages
+2. Verify API keys are valid
+3. Try a different search query
 
 ## 📝 Version History
 
@@ -242,7 +215,6 @@ Youtube-Searcher/
 ### v1.0.0 (Initial Release)
 - ✨ Basic YouTube search functionality
 - ✨ Firebase caching system
-- ✨ Dual search mode (YouTube API / SerpAPI)
 - ✨ Filter system (velocity, subscribers, date, duration)
 - ✨ Firebase authentication
 - ✨ Pagination
@@ -310,7 +282,6 @@ Give a ⭐️ if this project helped you!
 - **하루 조회수** - 일일 조회수 증가량 계산
 
 ### 🔍 검색 & 필터
-- **이중 검색 모드** - YouTube API (기본) / SerpAPI (백업)
 - **속도 필터** - 영상 성장률 필터 (인기/보통/낮음)
 - **구독자 필터** - 채널 규모별 필터 (0-1만, 1-10만, 10만+)
 - **업로드 날짜 필터** - 업로드 시점 필터 (전체/1시간/오늘/이번주/이번달/올해)
@@ -341,11 +312,6 @@ Give a ⭐️ if this project helped you!
 5. YouTube Data API v3를 활성화
 6. 생성된 API 키를 복사
 
-#### SerpAPI (선택사항)
-1. [SerpAPI](https://serpapi.com/manage-api-key)에 접속
-2. 무료 계정 생성 (월 250회 검색)
-3. API 키 복사
-
 ### 2. 🔐 서버에 API 키 저장 (권장)
 
 Firebase에 API 키를 저장하면 다른 사용자가 개별적으로 키를 입력할 필요가 없습니다.
@@ -358,7 +324,6 @@ Firebase에 API 키를 저장하면 다른 사용자가 개별적으로 키를 �
 5. 문서 ID: `apiKeys` 입력
 6. 필드 추가:
    - 필드 이름: `youtubeApiKey`, 유형: string, 값: (YouTube API 키)
-   - 필드 이름: `serpApiKey`, 유형: string, 값: (SerpAPI 키)
 7. "저장" 클릭
 
 **Security Rules 설정:**
@@ -394,32 +359,17 @@ const firebaseConfig = {
    - `FIREBASE_SECURITY_RULES.txt` 파일의 규칙 복사하여 붙여넣기
    - "게시" 버튼 클릭
 
-### 4. SerpAPI 프록시 서버 (신규)
-
-CORS 에러를 피하려면 포함된 Express 프록시를 실행하세요.
-
-1. `server` 디렉터리에서 터미널을 엽니다.
-2. `.env.example`을 `.env`로 복사하고 `SERPAPI_KEY` 값을 설정합니다.
-3. 의존성 설치: `npm install`
-4. 프록시 실행: `npm start`
-5. 프록시는 `http://localhost:3001/api/serp` 에서 동작합니다.
-
-포트를 바꾸고 싶다면 `.env`에서 `PORT` 값을 수정하고, 필요 시 스크립트 로드 전에 `window.SERPAPI_PROXY_BASE_URL`을 설정하세요.
-
-### 5. 프런트엔드 실행 방법
+### 4. 프런트엔드 실행 방법
 
 1. 로컬 서버를 사용하여 프로젝트 실행 (예: VS Code의 Live Server)
 2. `http://localhost:5500` (또는 서버 URL) 접속
 3. 검색어 입력 후 검색 버튼 클릭
-
-**주의**: SerpAPI 모드는 위 프록시 서버가 실행 중일 때만 동작합니다.
 
 ## 📋 필수 요구사항
 
 - 웹 브라우저 (Chrome, Firefox, Edge, Safari 등)
 - 인터넷 연결
 - YouTube Data API v3 키
-- SerpAPI 키 (선택사항)
 - Firebase 프로젝트 (선택사항)
 
 ## 💡 사용 팁
@@ -436,7 +386,6 @@ CORS 에러를 피하려면 포함된 Express 프록시를 실행하세요.
 - CSS3 (Grid, Flexbox)
 - Vanilla JavaScript (ES6+ 모듈)
 - YouTube Data API v3
-- SerpAPI (백업용)
 - Firebase Firestore (클라우드 캐싱 및 인증)
 
 ## 📁 프로젝트 구조
@@ -455,9 +404,6 @@ Youtube-Searcher/
 │   └── firebase-config.js # Firebase 설정
 ├── favicon.svg            # 사이트 파비콘
 ├── README.md              # 이 파일
-├── server/
-│   ├── index.js           # SerpAPI용 Express 프록시
-│   └── package.json       # 프록시 서버 의존성
 ├── GIT_WORKFLOW.md        # Git 워크플로우 가이드
 ├── TRANSLATION_GUIDE.md   # 번역 가이드
 ├── JS_FILE_MAPPING.md     # 코드 구조 문서
@@ -502,10 +448,9 @@ Youtube-Searcher/
 **문제:** 결과 없음 또는 API 오류.
 
 **해결:**
-1. 검색 모드 전환 시도 (YouTube ↔ SerpAPI)
-2. 브라우저 콘솔에서 오류 메시지 확인
-3. API 키가 유효한지 확인
-4. 다른 검색어로 시도
+1. 브라우저 콘솔에서 오류 메시지 확인
+2. API 키가 유효한지 확인
+3. 다른 검색어로 시도
 
 ## 📝 버전 히스토리
 
@@ -523,7 +468,6 @@ Youtube-Searcher/
 ### v1.0.0 (초기 릴리스)
 - ✨ 기본 YouTube 검색 기능
 - ✨ Firebase 캐싱 시스템
-- ✨ 이중 검색 모드 (YouTube API / SerpAPI)
 - ✨ 필터 시스템 (속도, 구독자, 날짜, 재생시간)
 - ✨ Firebase 인증
 - ✨ 페이지네이션

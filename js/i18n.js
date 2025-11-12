@@ -53,9 +53,6 @@ const translations = {
         // 검색
         'search.placeholder': '검색어를 입력하세요...',
         'search.button': '검색',
-        'search.mode': '현재 검색 모드',
-        'search.modeGoogle': '🟢 Google API',
-        'search.modeSerpAPI': '🟡 SerpAPI',
         'search.loading': '⏳ 검색 중...',
         'search.noResults': '❌ 검색 결과가 없습니다.',
         'search.error': '❌ 검색 중 오류가 발생했습니다.',
@@ -163,9 +160,6 @@ const translations = {
         // Search
         'search.placeholder': 'Enter search term...',
         'search.button': 'Search',
-        'search.mode': 'Current Search Mode',
-        'search.modeGoogle': '🟢 Google API',
-        'search.modeSerpAPI': '🟡 SerpAPI',
         'search.loading': '⏳ Searching...',
         'search.noResults': '❌ No search results found.',
         'search.error': '❌ An error occurred during search.',
@@ -287,9 +281,6 @@ function updatePageTexts() {
         element.title = t(key);
     });
     
-    // 검색 모드 표시기 업데이트
-    updateSearchModeText();
-    
     // 페이지 title 업데이트
     document.title = t('app.title');
     
@@ -298,19 +289,6 @@ function updatePageTexts() {
     
     // 언어 토글 버튼 업데이트
     updateLanguageToggleButton();
-}
-
-// 검색 모드 텍스트 업데이트
-function updateSearchModeText() {
-    const indicator = document.getElementById('searchModeIndicator');
-    if (indicator) {
-        const modeText = indicator.querySelector('.mode-text');
-        if (modeText) {
-            const currentMode = modeText.textContent.includes('Google') ? 'google' : 'serpapi';
-            const modeKey = currentMode === 'google' ? 'search.modeGoogle' : 'search.modeSerpAPI';
-            modeText.textContent = `${t('search.mode')}: ${t(modeKey)}`;
-        }
-    }
 }
 
 // 언어 토글 버튼 업데이트

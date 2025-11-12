@@ -1,6 +1,6 @@
 // ============================================
 // API.JS - API 관련 함수 모음
-// YouTube API, SerpAPI, Firebase 캐싱
+// YouTube API, Firebase 캐싱
 // ============================================
 
 // 유틸: 배열을 n개씩 청크로 나누기 (기본 50개)
@@ -8,7 +8,6 @@ const chunk = (a, n = 50) => Array.from({length: Math.ceil(a.length/n)}, (_,i)=>
 
 // API 키 관리
 export let apiKey = null;
-export let serpApiKey = null;
 
 // Helper function to get API keys from Firebase server
 export async function getApiKeys() {
@@ -22,8 +21,7 @@ export async function getApiKeys() {
     if (window.serverApiKeys && window.serverApiKeys.youtube) {
         console.log('✅ Firebase에서 API 키 로드 성공');
         return {
-            youtube: window.serverApiKeys.youtube,
-            serpapi: window.serverApiKeys.serpapi
+            youtube: window.serverApiKeys.youtube
         };
     }
     
@@ -31,8 +29,7 @@ export async function getApiKeys() {
     console.error('❌ Firebase API 키 로드 실패');
     alert('API 키를 Firebase에서 가져올 수 없습니다. 서버 환경에서 실행해주세요.');
     return {
-        youtube: null,
-        serpapi: null
+        youtube: null
     };
 }
 
@@ -40,21 +37,18 @@ export async function getApiKeys() {
 export async function initializeApiKeys() {
     const keys = await getApiKeys();
     apiKey = keys.youtube;
-    serpApiKey = keys.serpapi;
     
     // DOM에 hidden input 동적 생성 (HTML에 노출 방지)
     createHiddenApiKeyInputs(keys);
     
-    return { apiKey, serpApiKey };
+    return { apiKey };
 }
 
 // Hidden input 생성 함수 (베스트 프랙티스)
 function createHiddenApiKeyInputs(keys) {
     // 기존 input이 있으면 제거
     const existingApiKey = document.getElementById('apiKey');
-    const existingSerpApiKey = document.getElementById('serpApiKey');
     if (existingApiKey) existingApiKey.remove();
-    if (existingSerpApiKey) existingSerpApiKey.remove();
     
     // YouTube API 키
     if (keys.youtube) {
@@ -64,16 +58,7 @@ function createHiddenApiKeyInputs(keys) {
         apiKeyInput.value = keys.youtube;
         document.body.appendChild(apiKeyInput);
     }
-    
-    // SerpAPI 키
-    if (keys.serpapi) {
-        const serpApiKeyInput = document.createElement('input');
-        serpApiKeyInput.type = 'hidden';
-        serpApiKeyInput.id = 'serpApiKey';
-        serpApiKeyInput.value = keys.serpapi;
-        document.body.appendChild(serpApiKeyInput);
-    }
-    
+
     console.log('🔐 API 키 hidden input 생성 완료');
 }
 
@@ -168,13 +153,7 @@ export async function saveToFirebase(query, videos, channels, items, dataSource 
             publishedAt: v.snippet?.publishedAt,
             viewCount: v.statistics?.viewCount ?? null,
             likeCount: v.statistics?.likeCount ?? null,
-            duration: v.contentDetails?.duration ?? null,
-            serp: v.serpData ? {
-                subs: v.serpData.channelSubscribers ?? null,
-                views: v.serpData.views ?? null,
-                link: v.serpData.link ?? null,
-                extracted_date: v.serpData.extracted_date_from_description ?? null
-            } : null
+            duration: v.contentDetails?.duration ?? null
         });
 
         const shrinkItem = x => ({
@@ -275,8 +254,7 @@ export function mergeCacheWithMore(cache, newVideos, newChannelsMap) {
         publishedAt: v.snippet?.publishedAt,
         viewCount: v.statistics?.viewCount ?? null,
         likeCount: v.statistics?.likeCount ?? null,
-        duration: v.contentDetails?.duration ?? null,
-        serp: null
+        duration: v.contentDetails?.duration ?? null
     });
     
     // videos: 기존 압축 데이터 + 새 압축 데이터
@@ -356,102 +334,6 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
     }
 }
 
-// ============================================
-// SERPAPI 검색 (백업용)
-// ============================================
-
-export async function searchWithSerpAPI(query) {
-    const serpApiKeyValue = serpApiKey || window.serverApiKeys?.serpapi;
-    const defaultProxyBase = typeof window !== 'undefined' && window.location
-        ? `${window.location.protocol}//${window.location.hostname}:3001`
-        : 'http://localhost:3001';
-    const proxyBase = (window && window.SERPAPI_PROXY_BASE_URL) || defaultProxyBase;
-    const normalizedProxyBase = proxyBase.replace(/\/+$/, '');
-    const proxyUrl = `${normalizedProxyBase}/api/serp?q=${encodeURIComponent(query)}`;
-
-    async function fetchViaProxy() {
-        const response = await fetch(proxyUrl, { headers: { 'Accept': 'application/json' } });
-        if (!response.ok) {
-            throw new Error(`SerpAPI proxy HTTP ${response.status}`);
-        }
-        return response.json();
-    }
-
-    async function fetchDirect() {
-        if (!serpApiKeyValue) {
-            throw new Error('Missing SerpAPI key for direct fallback.');
-        }
-        const serpUrl = `https://serpapi.com/search.json?engine=youtube&search_query=${encodeURIComponent(query)}&api_key=${serpApiKeyValue}`;
-        const response = await fetch(serpUrl);
-        if (!response.ok) {
-            throw new Error(`SerpAPI HTTP ${response.status}`);
-        }
-        return response.json();
-    }
-
-    let serpData = null;
-
-    try {
-        console.log('🔍 SerpAPI 프록시로 검색 중...');
-        serpData = await fetchViaProxy();
-    } catch (proxyError) {
-        console.warn('⚠️ SerpAPI 프록시 호출 실패:', proxyError.message);
-        if (serpApiKeyValue) {
-            try {
-                console.log('🔁 프록시 실패 → 직접 SerpAPI 호출 시도');
-                serpData = await fetchDirect();
-            } catch (directError) {
-                console.error('❌ SerpAPI 직접 호출도 실패:', directError);
-                return [];
-            }
-        } else {
-            return [];
-        }
-    }
-
-    if (serpData?.video_results) {
-        return serpData.video_results.map(video => {
-            // Parse relative date
-            let publishedAt = new Date().toISOString();
-            if (video.published_date) {
-                const relativeDate = parseRelativeDate(video.published_date);
-                if (relativeDate) {
-                    publishedAt = relativeDate.toISOString();
-                }
-            }
-
-            return {
-                id: video.link?.split('v=')[1]?.split('&')[0] || '',
-                snippet: {
-                    title: video.title || '',
-                    channelId: video.channel?.link?.split('channel/')[1] || '',
-                    channelTitle: video.channel?.name || '',
-                    publishedAt: publishedAt,
-                    thumbnails: {
-                        default: { url: video.thumbnail?.static || '' },
-                        medium: { url: video.thumbnail?.static || '' },
-                        high: { url: video.thumbnail?.static || '' }
-                    }
-                },
-                statistics: {
-                    viewCount: video.views || 0,
-                    likeCount: 0
-                },
-                contentDetails: {
-                    duration: null
-                },
-                serpData: {
-                    views: video.views || 0,
-                    link: video.link || '',
-                    channelSubscribers: video.channel?.subscribers || null,
-                    extracted_date_from_description: video.published_date || null
-                }
-            };
-        });
-        }
-
-        return [];
-}
 
 // Parse relative date strings (e.g., "3 days ago")
 function parseRelativeDate(relativeDateStr) {

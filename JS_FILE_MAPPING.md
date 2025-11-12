@@ -47,8 +47,6 @@ js/
 | `saveToFirebase()` | `js/api.js` | Firebase 직접 저장 |
 | `saveUserLastSearchKeyword()` | `js/api.js` | 사용자 마지막 검색어 저장 |
 | `loadUserLastSearchKeyword()` | `js/api.js` | 사용자 마지막 검색어 로드 |
-| `searchWithSerpAPI()` | `js/api.js` | SerpAPI 검색 |
-| `updateSearchModeIndicator()` | `js/ui.js` | 검색 모드 표시 업데이트 |
 | `updateFilterStatusIndicators()` | `js/ui.js` | 필터 상태 표시 |
 | `resetAllFilters()` | `js/ui.js` | 필터 리셋 |
 | `initializeModal()` | `js/auth.js` | 모달 초기화 |
@@ -68,16 +66,13 @@ js/
 ### 1️⃣ `js/api.js` (328줄)
 **역할**: API 관련 모든 함수
 - YouTube Data API 호출
-- SerpAPI 백업 검색
 - Firebase 캐싱 (저장/로드)
 - API 키 관리
 
 **포함 함수**:
 ```javascript
 - export let apiKey = null;
-- export let serpApiKey = null;
 - export async function getApiKeys()
-- export async function searchWithSerpAPI(query)
 - export async function loadSearchData(query)
 - export async function saveSearchData(query, videos, channels)
 - export async function loadFromFirebase(query)

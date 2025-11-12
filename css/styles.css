@@ -432,52 +432,6 @@ body {
     box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
 }
 
-/* SerpAPI specific styles */
-.serp-badge {
-    position: absolute;
-    top: 6px;
-    left: 6px;
-    background: rgba(0, 123, 255, 0.9);
-    color: white;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 10px;
-    font-weight: bold;
-}
-
-.serp-stats {
-    margin: 6px 0;
-    padding: 6px;
-    background: rgba(0, 123, 255, 0.1);
-    border-radius: 6px;
-    font-size: 0.75em;
-}
-
-.serp-info {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.serp-date, .serp-duration, .serp-date-diff {
-    color: #666;
-    font-size: 0.8em;
-}
-
-.serp-date {
-    color: #007bff;
-}
-
-.serp-duration {
-    color: #28a745;
-}
-
-.serp-date-diff {
-    color: #ff6b6b;
-    font-weight: bold;
-    font-size: 0.75em;
-}
-
 /* Filter status indicators */
 .filter-status {
     font-size: 0.8em;
@@ -584,30 +538,6 @@ body {
     margin-left: 4px;
 }
 
-
-.search-mode-indicator {
-    text-align: center;
-    margin: 10px 0;
-    padding: 8px 15px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    font-size: 14px;
-    font-weight: 500;
-    color: white;
-    backdrop-filter: blur(10px);
-}
-
-.search-mode-indicator.serpapi {
-    background: rgba(0, 123, 255, 0.2);
-    border: 1px solid rgba(0, 123, 255, 0.3);
-}
-
-.search-mode-indicator .mode-text {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
 
 /* Filter Section Styles */
 .filter-section {
