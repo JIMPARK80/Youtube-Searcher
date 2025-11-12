@@ -38,6 +38,27 @@ window.firebaseOnSnapshot = onSnapshot;
 console.log('✅ Firebase initialized successfully');
 console.log('✅ Firebase Auth initialized:', auth);
 
+// Notify the rest of the app that Firebase is ready
+window.firebaseReady = true;
+
+// Resolve any existing promise waiter
+if (typeof window.__resolveFirebaseReady === 'function') {
+    window.__resolveFirebaseReady();
+}
+
+// Ensure firebaseReadyPromise exists for consumers
+if (!(window.firebaseReadyPromise instanceof Promise)) {
+    window.firebaseReadyPromise = Promise.resolve();
+} else {
+    // Clean up resolver reference after the promise settles
+    window.firebaseReadyPromise.finally(() => {
+        window.__resolveFirebaseReady = undefined;
+    });
+}
+
+// Dispatch a custom event so listeners can react immediately
+window.dispatchEvent(new Event('firebase-ready'));
+
 // Helper function to sanitize document IDs
 function toDocId(s) {
     return (s || '')

@@ -22,3 +22,9 @@ npm-debug.log*
 # Temporary files
 *.tmp
 *.temp
+
+# Node.js server artifacts
+node_modules/
+server/node_modules/
+server/package-lock.json
+server/.env
