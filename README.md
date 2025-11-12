@@ -113,13 +113,25 @@ const firebaseConfig = {
    - Copy rules from `FIREBASE_SECURITY_RULES.txt` and paste
    - Click "Publish"
 
-### 4. How to Run
+### 4. SerpAPI Proxy Server (New)
+
+To avoid CORS errors when using SerpAPI, run the bundled Express proxy:
+
+1. Open a terminal in the `server` directory.
+2. Copy `.env.example` to `.env` and set `SERPAPI_KEY`.
+3. Install dependencies: `npm install`
+4. Start the proxy: `npm start`
+5. The proxy runs at `http://localhost:3001/api/serp`
+
+You can change the port via the `PORT` variable in `.env` and, if needed, set `window.SERPAPI_PROXY_BASE_URL` before loading scripts.
+
+### 5. How to Run the Frontend
 
 1. Serve the project using a local server (e.g., Live Server in VS Code)
 2. Open `http://localhost:5500` (or your server's URL)
 3. Enter your search query and click search
 
-**No Installation Required**: All features work with simple HTML/CSS/JavaScript!
+**Note**: SerpAPI mode requires the proxy server above to be running.
 
 ## 📋 Requirements
 
@@ -162,6 +174,9 @@ Youtube-Searcher/
 │   └── firebase-config.js # Firebase configuration
 ├── favicon.svg            # Site favicon
 ├── README.md              # This file
+├── server/
+│   ├── index.js           # Express proxy for SerpAPI
+│   └── package.json       # Proxy server dependencies
 ├── GIT_WORKFLOW.md        # Git workflow guide
 ├── TRANSLATION_GUIDE.md   # Translation guide
 ├── JS_FILE_MAPPING.md     # Code structure documentation
@@ -379,13 +394,25 @@ const firebaseConfig = {
    - `FIREBASE_SECURITY_RULES.txt` 파일의 규칙 복사하여 붙여넣기
    - "게시" 버튼 클릭
 
-### 4. 실행 방법
+### 4. SerpAPI 프록시 서버 (신규)
+
+CORS 에러를 피하려면 포함된 Express 프록시를 실행하세요.
+
+1. `server` 디렉터리에서 터미널을 엽니다.
+2. `.env.example`을 `.env`로 복사하고 `SERPAPI_KEY` 값을 설정합니다.
+3. 의존성 설치: `npm install`
+4. 프록시 실행: `npm start`
+5. 프록시는 `http://localhost:3001/api/serp` 에서 동작합니다.
+
+포트를 바꾸고 싶다면 `.env`에서 `PORT` 값을 수정하고, 필요 시 스크립트 로드 전에 `window.SERPAPI_PROXY_BASE_URL`을 설정하세요.
+
+### 5. 프런트엔드 실행 방법
 
 1. 로컬 서버를 사용하여 프로젝트 실행 (예: VS Code의 Live Server)
 2. `http://localhost:5500` (또는 서버 URL) 접속
 3. 검색어 입력 후 검색 버튼 클릭
 
-**설치 불필요**: 간단한 HTML/CSS/JavaScript로 모든 기능이 작동합니다!
+**주의**: SerpAPI 모드는 위 프록시 서버가 실행 중일 때만 동작합니다.
 
 ## 📋 필수 요구사항
 
@@ -428,6 +455,9 @@ Youtube-Searcher/
 │   └── firebase-config.js # Firebase 설정
 ├── favicon.svg            # 사이트 파비콘
 ├── README.md              # 이 파일
+├── server/
+│   ├── index.js           # SerpAPI용 Express 프록시
+│   └── package.json       # 프록시 서버 의존성
 ├── GIT_WORKFLOW.md        # Git 워크플로우 가이드
 ├── TRANSLATION_GUIDE.md   # 번역 가이드
 ├── JS_FILE_MAPPING.md     # 코드 구조 문서

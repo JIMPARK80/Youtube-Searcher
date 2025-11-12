@@ -22,6 +22,24 @@ async function initializeApp() {
     console.log('🚀 애플리케이션 초기화 시작...');
     
     try {
+        // Ignore external extension errors (e.g., MetaMask) to prevent noisy logs
+        window.addEventListener('error', (event) => {
+            const source = event?.filename || '';
+            const message = event?.message || '';
+            if (source.includes('inpage.js') || message.includes('MetaMask')) {
+                console.warn('⚠️ 외부 확장 프로그램(MetaMask) 오류 무시:', message || source);
+                event.preventDefault();
+            }
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+            const message = event.reason?.message || '';
+            if (message.includes('MetaMask')) {
+                console.warn('⚠️ 외부 확장 프로그램(MetaMask) 오류 무시:', message);
+                event.preventDefault();
+            }
+        });
+
         // Wait for Firebase to be fully loaded
         await waitForFirebase();
         
@@ -52,22 +70,49 @@ async function initializeApp() {
 // Firebase 로딩 대기
 // ============================================
 
-function waitForFirebase() {
+function waitForFirebase(timeout = 10000) {
+    const isFirebaseReady = () => Boolean(window.firebaseDb && window.firebaseAuth);
+
+    if (isFirebaseReady()) {
+        console.log('✅ Firebase 준비 완료');
+        return Promise.resolve();
+    }
+
     return new Promise((resolve) => {
-        const checkFirebase = setInterval(() => {
-            if (window.firebaseDb && window.firebaseAuth) {
-                clearInterval(checkFirebase);
+        let settled = false;
+
+        const finish = (didTimeout = false) => {
+            if (settled) return;
+            settled = true;
+
+            window.removeEventListener('firebase-ready', onReady);
+            clearTimeout(timeoutId);
+
+            if (didTimeout) {
+                console.warn('⚠️ Firebase 로딩 타임아웃');
+            } else {
                 console.log('✅ Firebase 준비 완료');
-                resolve();
             }
-        }, 100);
-        
-        // Timeout after 10 seconds
-        setTimeout(() => {
-            clearInterval(checkFirebase);
-            console.warn('⚠️ Firebase 로딩 타임아웃');
+
             resolve();
-        }, 10000);
+        };
+
+        const onReady = () => finish(false);
+
+        window.addEventListener('firebase-ready', onReady, { once: true });
+
+        // If firebaseReadyPromise exists, use it
+        if (window.firebaseReadyPromise instanceof Promise) {
+            window.firebaseReadyPromise.then(() => finish(false)).catch(() => finish(true));
+        } else {
+            // Create a promise bridge so firebase-config can resolve it
+            window.firebaseReadyPromise = new Promise((promiseResolve) => {
+                window.__resolveFirebaseReady = promiseResolve;
+            });
+            window.firebaseReadyPromise.then(() => finish(false)).catch(() => finish(true));
+        }
+
+        const timeoutId = setTimeout(() => finish(true), timeout);
     });
 }
 

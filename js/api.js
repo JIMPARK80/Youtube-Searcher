@@ -93,7 +93,7 @@ export async function loadFromFirebase(query) {
         console.log(`🔍 Firebase 캐시 확인 중: "${query}" -> "${docId}"`);
         
         const mainRef = window.firebaseDoc(window.firebaseDb, 'searchCache', docId);
-        const partRefs = [2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => 
+        const partRefs = [2, 3, 4, 5, 6].map(i => 
             window.firebaseDoc(window.firebaseDb, 'searchCache', `${docId}_p${i}`)
         );
         
@@ -117,7 +117,7 @@ export async function loadFromFirebase(query) {
         const cacheVersion = mainData.cacheVersion || '1.0';
         if (cacheVersion < CURRENT_VERSION) {
             console.warn(`🔄 구버전 캐시 발견 (v${cacheVersion} → v${CURRENT_VERSION})`);
-            console.warn(`♻️ 캐시 업그레이드: 새로 fetch하여 500개 저장합니다`);
+            console.warn(`♻️ 캐시 업그레이드: 새로 fetch하여 300개 저장합니다`);
             return null; // 캐시 무효화 → 새로 fetch
         }
         
@@ -195,11 +195,7 @@ export async function saveToFirebase(query, videos, channels, items, dataSource 
             { videos: videos.slice(100, 150), items: items.slice(100, 150), part: 3 },
             { videos: videos.slice(150, 200), items: items.slice(150, 200), part: 4 },
             { videos: videos.slice(200, 250), items: items.slice(200, 250), part: 5 },
-            { videos: videos.slice(250, 300), items: items.slice(250, 300), part: 6 },
-            { videos: videos.slice(300, 350), items: items.slice(300, 350), part: 7 },
-            { videos: videos.slice(350, 400), items: items.slice(350, 400), part: 8 },
-            { videos: videos.slice(400, 450), items: items.slice(400, 450), part: 9 },
-            { videos: videos.slice(450, 500), items: items.slice(450, 500), part: 10 }
+            { videos: videos.slice(250, 300), items: items.slice(250, 300), part: 6 }
         ];
 
         for (const chunk of chunks) {
@@ -301,11 +297,11 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
     try {
         console.log('🌐 Google API 호출 중...');
         
-        // ① Step 1: Search for videos (최대 500개, 50개씩 10페이지)
+        // ① Step 1: Search for videos (최대 300개, 50개씩 6페이지)
         let searchItems = [];
         let nextPageToken = null;
         
-        for (let page = 0; page < 10; page++) {
+        for (let page = 0; page < 6; page++) {
             const pageParam = nextPageToken ? `&pageToken=${nextPageToken}` : '';
             const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(query)}&order=relevance&key=${apiKeyValue}${pageParam}`;
             const searchResponse = await fetch(searchUrl);
@@ -366,64 +362,95 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
 
 export async function searchWithSerpAPI(query) {
     const serpApiKeyValue = serpApiKey || window.serverApiKeys?.serpapi;
-    
-    if (!serpApiKeyValue) {
-        console.warn('⚠️ SerpAPI 키가 없습니다.');
-        return [];
+    const defaultProxyBase = typeof window !== 'undefined' && window.location
+        ? `${window.location.protocol}//${window.location.hostname}:3001`
+        : 'http://localhost:3001';
+    const proxyBase = (window && window.SERPAPI_PROXY_BASE_URL) || defaultProxyBase;
+    const normalizedProxyBase = proxyBase.replace(/\/+$/, '');
+    const proxyUrl = `${normalizedProxyBase}/api/serp?q=${encodeURIComponent(query)}`;
+
+    async function fetchViaProxy() {
+        const response = await fetch(proxyUrl, { headers: { 'Accept': 'application/json' } });
+        if (!response.ok) {
+            throw new Error(`SerpAPI proxy HTTP ${response.status}`);
+        }
+        return response.json();
     }
 
-    try {
-        console.log('🔍 SerpAPI로 검색 중...');
+    async function fetchDirect() {
+        if (!serpApiKeyValue) {
+            throw new Error('Missing SerpAPI key for direct fallback.');
+        }
         const serpUrl = `https://serpapi.com/search.json?engine=youtube&search_query=${encodeURIComponent(query)}&api_key=${serpApiKeyValue}`;
-        const serpResponse = await fetch(serpUrl);
-        const serpData = await serpResponse.json();
+        const response = await fetch(serpUrl);
+        if (!response.ok) {
+            throw new Error(`SerpAPI HTTP ${response.status}`);
+        }
+        return response.json();
+    }
 
-        if (serpData.video_results) {
-            return serpData.video_results.map(video => {
-                // Parse relative date
-                let publishedAt = new Date().toISOString();
-                if (video.published_date) {
-                    const relativeDate = parseRelativeDate(video.published_date);
-                    if (relativeDate) {
-                        publishedAt = relativeDate.toISOString();
-                    }
+    let serpData = null;
+
+    try {
+        console.log('🔍 SerpAPI 프록시로 검색 중...');
+        serpData = await fetchViaProxy();
+    } catch (proxyError) {
+        console.warn('⚠️ SerpAPI 프록시 호출 실패:', proxyError.message);
+        if (serpApiKeyValue) {
+            try {
+                console.log('🔁 프록시 실패 → 직접 SerpAPI 호출 시도');
+                serpData = await fetchDirect();
+            } catch (directError) {
+                console.error('❌ SerpAPI 직접 호출도 실패:', directError);
+                return [];
+            }
+        } else {
+            return [];
+        }
+    }
+
+    if (serpData?.video_results) {
+        return serpData.video_results.map(video => {
+            // Parse relative date
+            let publishedAt = new Date().toISOString();
+            if (video.published_date) {
+                const relativeDate = parseRelativeDate(video.published_date);
+                if (relativeDate) {
+                    publishedAt = relativeDate.toISOString();
                 }
+            }
 
-                return {
-                    id: video.link?.split('v=')[1]?.split('&')[0] || '',
-                    snippet: {
-                        title: video.title || '',
-                        channelId: video.channel?.link?.split('channel/')[1] || '',
-                        channelTitle: video.channel?.name || '',
-                        publishedAt: publishedAt,
-                        thumbnails: {
-                            default: { url: video.thumbnail?.static || '' },
-                            medium: { url: video.thumbnail?.static || '' },
-                            high: { url: video.thumbnail?.static || '' }
-                        }
-                    },
-                    statistics: {
-                        viewCount: video.views || 0,
-                        likeCount: 0
-                    },
-                    contentDetails: {
-                        duration: null
-                    },
-                    serpData: {
-                        views: video.views || 0,
-                        link: video.link || '',
-                        channelSubscribers: video.channel?.subscribers || null,
-                        extracted_date_from_description: video.published_date || null
+            return {
+                id: video.link?.split('v=')[1]?.split('&')[0] || '',
+                snippet: {
+                    title: video.title || '',
+                    channelId: video.channel?.link?.split('channel/')[1] || '',
+                    channelTitle: video.channel?.name || '',
+                    publishedAt: publishedAt,
+                    thumbnails: {
+                        default: { url: video.thumbnail?.static || '' },
+                        medium: { url: video.thumbnail?.static || '' },
+                        high: { url: video.thumbnail?.static || '' }
                     }
-                };
-            });
+                },
+                statistics: {
+                    viewCount: video.views || 0,
+                    likeCount: 0
+                },
+                contentDetails: {
+                    duration: null
+                },
+                serpData: {
+                    views: video.views || 0,
+                    link: video.link || '',
+                    channelSubscribers: video.channel?.subscribers || null,
+                    extracted_date_from_description: video.published_date || null
+                }
+            };
+        });
         }
 
         return [];
-    } catch (error) {
-        console.error('❌ SerpAPI 오류:', error);
-        return [];
-    }
 }
 
 // Parse relative date strings (e.g., "3 days ago")
