@@ -83,8 +83,7 @@ async function loadApiKeysFromFirebase() {
             
             // Store in memory (not localStorage for security)
             window.serverApiKeys = {
-                youtube: keysData.youtubeApiKey,
-                serpapi: keysData.serpApiKey
+                youtube: keysData.youtubeApiKey
             };
             
             return true;

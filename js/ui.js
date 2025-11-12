@@ -3,12 +3,11 @@
 // 검색, 필터링, 페이지네이션, 렌더링
 // ============================================
 
-import { 
-    getApiKeys, 
-    loadFromFirebase, 
-    saveToFirebase, 
-    searchYouTubeAPI, 
-    searchWithSerpAPI,
+import {
+    getApiKeys,
+    loadFromFirebase,
+    saveToFirebase,
+    searchYouTubeAPI,
     saveUserLastSearchKeyword,
     fetchNext50WithToken,
     hydrateDetailsOnlyForNew,
@@ -23,8 +22,6 @@ export const pageSize = 8;
 export let currentPage = 1;
 export let allChannelMap = {};
 export let currentSearchQuery = '';
-export let currentSearchMode = 'google';
-export let currentDataSource = 'google';
 
 // ============================================
 // 유틸리티 함수
@@ -194,7 +191,6 @@ export async function search() {
     // 캐시 로직: 스마트 캐시 전략
     // ============================================
     
-    const DESIRED_COUNT = 100;
     const firebaseData = await loadFromFirebase(query);
     
     if (firebaseData) {
@@ -206,68 +202,35 @@ export async function search() {
         
         console.log(`📦 캐시 정보: ${count}개, 소스=${cacheSource}, 만료=${isExpired ? 'Y' : 'N'}`);
         
-        // A) 현재 모드 = Google API
-        if (currentSearchMode === 'google') {
-            // A-1) 캐시 없음 → 전체 검색
-            if (!firebaseData) {
-                console.log('🔍 캐시 없음 → Google API 전체 검색');
-                await performFullGoogleSearch(query, apiKeyValue);
-                return;
-            }
-            
-            // A-2) 캐시가 SerpAPI → Google로 갱신
-            if (cacheSource === 'serpapi') {
-                console.log('🔄 SerpAPI 캐시 → Google API로 갱신');
-                await performFullGoogleSearch(query, apiKeyValue);
-                return;
-            }
-            
-            // A-3) Google 캐시 + 24시간 이내 → 그대로 사용
-            if (cacheSource === 'google' && !isExpired) {
-                console.log('✅ 신선한 Google 캐시 사용 (호출 0)');
-                restoreFromCache(firebaseData);
-                updateSearchModeIndicator('google');
-                renderPage(1);
-                return;
-            }   
-            
-            // A-4) Google 캐시 + 24시간 경과 + 50개 + nextPageToken → 토핑
-            if (cacheSource === 'google' && isExpired && count === 50 && meta.nextPageToken) {
-                console.log('🔝 토핑 모드: 추가 50개만 fetch');
-                await performTopUpUpdate(query, apiKeyValue, firebaseData);
-                return;
-            }
-            
-            // A-5) Google 캐시 + 24시간 경과 + 기타 → 전체 갱신
-            console.log('🔄 Google 캐시 만료 → 전체 갱신');
+        // Google 데이터가 아닌 캐시는 최신 Google 데이터로 갱신
+        if (cacheSource !== 'google') {
+            console.log('🔄 Google 외 캐시 감지 → 전체 갱신');
             await performFullGoogleSearch(query, apiKeyValue);
             return;
         }
         
-        // B) 현재 모드 = SerpAPI
-        if (currentSearchMode === 'serpapi') {
-            // B-1) 신선한 Google 캐시가 있으면 그대로 사용 (보너스!)
-            if (cacheSource === 'google' && !isExpired) {
-                console.log('🎁 보너스: 신선한 Google 캐시 사용 (SerpAPI 호출 0)');
-                restoreFromCache(firebaseData);
-                updateSearchModeIndicator('google'); // Google 데이터임을 표시
-                renderPage(1);
-                return;
-            }
-            
-            // B-2) 그 외 → SerpAPI 호출
-            console.log('🔍 SerpAPI 검색');
-            await performSerpAPISearch(query);
+        // 신선한 Google 캐시 사용
+        if (!isExpired) {
+            console.log('✅ 신선한 Google 캐시 사용 (호출 0)');
+            restoreFromCache(firebaseData);
+            renderPage(1);
             return;
         }
-    } else {
-        // 캐시 없음
-        if (currentSearchMode === 'google') {
-            await performFullGoogleSearch(query, apiKeyValue);
-        } else {
-            await performSerpAPISearch(query);
+        
+        // 24시간 경과 + pagination 토큰 존재 → 토핑
+        if (count === 50 && meta.nextPageToken) {
+            console.log('🔝 토핑 모드: 추가 50개만 fetch');
+            await performTopUpUpdate(query, apiKeyValue, firebaseData);
+            return;
         }
+        
+        console.log('🔄 Google 캐시 만료 → 전체 갱신');
+        await performFullGoogleSearch(query, apiKeyValue);
+        return;
     }
+
+    // 캐시 없음 → 전체 검색
+    await performFullGoogleSearch(query, apiKeyValue);
 }
 
 // ============================================
@@ -301,17 +264,12 @@ async function performFullGoogleSearch(query, apiKeyValue) {
 
         // Save to Firebase with nextPageToken
         await saveToFirebase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken);
-        updateSearchModeIndicator('google');
         renderPage(1);
 
     } catch (googleError) {
-        if (googleError.message === "quotaExceeded") {
-            console.log('🔄 할당량 초과 → SerpAPI로 전환');
-            await performSerpAPISearch(query);
-        } else {
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = `<div class="error">${t('search.error')}</div>`;
-        }
+        console.error('❌ YouTube API 오류:', googleError);
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = `<div class="error">${t('search.error')}</div>`;
     }
 }
 
@@ -351,8 +309,7 @@ async function performTopUpUpdate(query, apiKeyValue, firebaseData) {
             },
             contentDetails: {
                 duration: v.duration || 'PT0S'
-            },
-            serpData: v.serp || null
+            }
         }));
         
         allVideos = restoredVideos;
@@ -377,7 +334,6 @@ async function performTopUpUpdate(query, apiKeyValue, firebaseData) {
         
         // 6) Firebase 저장 (meta 업데이트)
         await saveToFirebase(query, restoredVideos, allChannelMap, allItems, 'google', more.nextPageToken);
-        updateSearchModeIndicator('google');
         renderPage(1);
         
     } catch (error) {
@@ -386,33 +342,6 @@ async function performTopUpUpdate(query, apiKeyValue, firebaseData) {
     }
 }
 
-async function performSerpAPISearch(query) {
-    try {
-        console.log('🔍 SerpAPI 검색');
-        const serpVideos = await searchWithSerpAPI(query);
-        allVideos = serpVideos;
-        allChannelMap = {};
-        
-        allItems = serpVideos.map(video => {
-            const vpd = viewVelocityPerDay(video);
-            return {
-                raw: video,
-                vpd: vpd,
-                vclass: classifyVelocity(vpd),
-                cband: 'hidden',
-                subs: 0
-            };
-        });
-
-        await saveToFirebase(query, allVideos, allChannelMap, allItems, 'serpapi', null);
-        updateSearchModeIndicator('serpapi');
-        renderPage(1);
-    } catch (error) {
-        console.error('❌ SerpAPI 검색 실패:', error);
-        const resultsDiv = document.getElementById('results');
-        resultsDiv.innerHTML = `<div class="error">${t('search.error')}</div>`;
-    }
-}
 
 // ============================================
 // 렌더링 함수
@@ -646,19 +575,6 @@ export function setupPaginationHandlers() {
 // 검색 모드 표시기
 // ============================================
 
-export function updateSearchModeIndicator(mode) {
-    currentSearchMode = mode;
-    const indicator = document.getElementById('searchModeIndicator');
-    if (indicator) {
-        const modeText = indicator.querySelector('.mode-text');
-        if (mode === 'google') {
-            modeText.textContent = `${t('search.mode')}: ${t('search.modeGoogle')}`;
-        } else {
-            modeText.textContent = `${t('search.mode')}: ${t('search.modeSerpAPI')}`;
-        }
-    }
-}
-
 // ============================================
 // 캐시 복원
 // ============================================
@@ -686,8 +602,7 @@ function restoreFromCache(firebaseData) {
         },
         contentDetails: {
             duration: v.duration || 'PT0S'
-        },
-        serpData: v.serp || null
+        }
     }));
     
     allVideos = restoredVideos;
@@ -704,11 +619,6 @@ function restoreFromCache(firebaseData) {
     })).filter(item => item.raw); // Remove items without matching video
     
     console.log(`✅ Firebase 캐시 복원 완료: ${allItems.length}개 항목`);
-    
-    if (firebaseData.dataSource) {
-        currentDataSource = firebaseData.dataSource;
-        updateSearchModeIndicator(firebaseData.dataSource);
-    }
 }
 
 // ============================================
