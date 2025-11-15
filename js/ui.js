@@ -353,6 +353,15 @@ export function renderPage(page) {
     // Apply filters
     const filteredItems = applyFilters(allItems);
     
+    // Sort by views per day if requested
+    const sortSelect = document.getElementById('sortVpdSelect');
+    const sortValue = sortSelect?.value || 'none';
+    if (sortValue === 'asc') {
+        filteredItems.sort((a, b) => (a.vpd || 0) - (b.vpd || 0));
+    } else if (sortValue === 'desc') {
+        filteredItems.sort((a, b) => (b.vpd || 0) - (a.vpd || 0));
+    }
+    
     // Pagination
     const startIdx = (page - 1) * pageSize;
     const endIdx = startIdx + pageSize;
@@ -703,6 +712,11 @@ export function setupEventListeners() {
     
     // Pagination
     setupPaginationHandlers();
+    
+    // Sort controls
+    document.getElementById('sortVpdSelect')?.addEventListener('change', () => {
+        renderPage(1);
+    });
 }
 
 // ============================================
