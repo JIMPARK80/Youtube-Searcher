@@ -185,6 +185,14 @@
             <div class="result-summary" id="resultSummary">
                 <span data-i18n="result.summary">검색 결과</span>: <span id="totalCount">0</span><span data-i18n="result.count">개</span>
             </div>
+                <div class="sort-controls">
+                    <label for="sortVpdSelect" data-i18n="sort.vpd">조회수/Day 정렬</label>
+                    <select id="sortVpdSelect">
+                        <option value="none" data-i18n="sort.vpd.none">기본</option>
+                        <option value="desc" data-i18n="sort.vpd.desc">높은 순</option>
+                        <option value="asc" data-i18n="sort.vpd.asc">낮은 순</option>
+                    </select>
+                </div>
             <div class="pagination-bar">
                 <button id="prevPage" class="page-btn" aria-label="Previous page">◀</button>
                 <span id="pageInfo" class="page-info">1 / 1 <span data-i18n="result.page">page</span></span>

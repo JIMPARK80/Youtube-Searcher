@@ -59,6 +59,10 @@ const translations = {
         'search.loginRequired': '검색하려면 로그인이 필요합니다.',
         'search.enterQuery': '검색어를 입력해주세요!',
         'search.apiKeyRequired': 'API 키를 입력해주세요! 서버에 API 키가 저장되어 있지 않습니다.',
+        'sort.vpd': '조회수/Day 정렬',
+        'sort.vpd.none': '기본',
+        'sort.vpd.asc': '낮은 순',
+        'sort.vpd.desc': '높은 순',
         
         // 필터
         'filter.viewCount': '조회수 필터',
@@ -166,6 +170,10 @@ const translations = {
         'search.loginRequired': 'Login is required to search.',
         'search.enterQuery': 'Please enter a search term!',
         'search.apiKeyRequired': 'Please enter an API key! No API key is stored on the server.',
+        'sort.vpd': 'Views/Day Sort',
+        'sort.vpd.none': 'Default',
+        'sort.vpd.asc': 'Lowest First',
+        'sort.vpd.desc': 'Highest First',
         
         // Filters
         'filter.viewCount': 'View Count Filter',
