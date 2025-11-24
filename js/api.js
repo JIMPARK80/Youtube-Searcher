@@ -12,28 +12,51 @@ export const CACHE_TTL_MS = CACHE_TTL_HOURS * 60 * 60 * 1000;
 // API 키 관리
 export let apiKey = null;
 
-// Helper function to get API keys from Firebase server
+// Helper function to get API keys from Supabase
 export async function getApiKeys() {
-    // Try to load API keys from Firebase if not already loaded
-    if (!window.serverApiKeys && window.loadApiKeysFromFirebase) {
-        console.log('🔄 Firebase에서 API 키 로드 시도 중...');
-        await window.loadApiKeysFromFirebase();
-    }
-    
-    // Check if API keys are available
-    if (window.serverApiKeys && window.serverApiKeys.youtube) {
-        console.log('✅ Firebase에서 API 키 로드 성공');
+    try {
+        const { supabase } = await import('./supabase-config.js');
+        
+        // Load API keys from Supabase config table
+        const { data, error } = await supabase
+            .from('config')
+            .select('value')
+            .eq('key', 'apiKeys')
+            .single();
+        
+        if (error) {
+            console.warn('⚠️ Supabase에서 API 키 로드 실패:', error);
+            // Fallback: Try to use cached keys
+            if (window.serverApiKeys && window.serverApiKeys.youtube) {
+                console.log('✅ 캐시된 API 키 사용');
+                return {
+                    youtube: window.serverApiKeys.youtube
+                };
+            }
+            return {
+                youtube: null
+            };
+        }
+        
+        if (data && data.value && data.value.youtube) {
+            console.log('✅ Supabase에서 API 키 로드 성공');
+            // Cache for future use
+            window.serverApiKeys = data.value;
+            return {
+                youtube: data.value.youtube
+            };
+        }
+        
+        console.warn('⚠️ Supabase에 API 키가 설정되지 않음');
         return {
-            youtube: window.serverApiKeys.youtube
+            youtube: null
+        };
+    } catch (error) {
+        console.error('❌ API 키 로드 중 오류:', error);
+        return {
+            youtube: null
         };
     }
-    
-    // Firebase 로딩 실패 시 에러 표시
-    console.error('❌ Firebase API 키 로드 실패');
-    alert('API 키를 Firebase에서 가져올 수 없습니다. 서버 환경에서 실행해주세요.');
-    return {
-        youtube: null
-    };
 }
 
 // Initialize API keys
