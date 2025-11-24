@@ -501,15 +501,16 @@ export async function saveUserLastSearchKeyword(uid, keyword) {
     try {
         const { supabase } = await import('./supabase-config.js');
         
+        // users table uses 'uid' field (TEXT) to store Supabase Auth user.id
         const { error } = await supabase
             .from('users')
             .upsert({
-                id: uid,
+                uid: uid, // Supabase Auth user.id as string
                 last_search_keyword: keyword,
-                last_search_time: new Date().toISOString(),
+                last_search_time: Date.now(),
                 updated_at: new Date().toISOString()
             }, {
-                onConflict: 'id'
+                onConflict: 'uid'
             });
         
         if (error) throw error;

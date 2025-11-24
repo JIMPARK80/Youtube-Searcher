@@ -209,15 +209,22 @@ async function handleSignup() {
         console.log('✅ 회원가입 성공:', data.user?.email);
         window.currentUser = data.user;
         
-        // Save username to Firestore
-        const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', userCredential.user.uid);
-        await window.firebaseSetDoc(userDocRef, {
-            username: username,
-            email: email,
-            createdAt: Date.now()
-        });
-        
-        console.log('✅ 사용자 정보 저장 완료');
+        // Save user to Supabase users table (username is in user_metadata)
+        if (data.user) {
+            try {
+                await supabase
+                    .from('users')
+                    .upsert({
+                        uid: data.user.id, // Supabase Auth user.id
+                        updated_at: new Date().toISOString()
+                    }, {
+                        onConflict: 'uid'
+                    });
+                console.log('✅ 사용자 정보 저장 완료');
+            } catch (userError) {
+                console.warn('⚠️ 사용자 테이블 저장 실패 (무시 가능):', userError);
+            }
+        }
         
         // Close modal
         document.getElementById('signupModal').classList.remove('active');
@@ -227,18 +234,14 @@ async function handleSignup() {
         console.error('❌ 회원가입 실패:', error);
         
         let errorMessage = t('auth.signupFailed');
-        switch(error.code) {
-            case 'auth/email-already-in-use':
-                errorMessage += t('auth.error.emailInUse');
-                break;
-            case 'auth/invalid-email':
-                errorMessage += t('auth.error.invalidEmail');
-                break;
-            case 'auth/weak-password':
-                errorMessage += t('auth.error.weakPassword');
-                break;
-            default:
-                errorMessage += error.message;
+        if (error.message?.includes('already registered')) {
+            errorMessage += t('auth.error.emailInUse');
+        } else if (error.message?.includes('Invalid email')) {
+            errorMessage += t('auth.error.invalidEmail');
+        } else if (error.message?.includes('Password')) {
+            errorMessage += t('auth.error.weakPassword');
+        } else {
+            errorMessage += error.message;
         }
         
         alert(errorMessage);
@@ -388,22 +391,18 @@ export function setupAuthStateObserver() {
             signupBtn.style.display = 'none';
             userInfo.style.display = 'flex';
             
-            // Load username from Supabase
+            // Load username from Supabase (users table uses uid field)
             try {
                 const { data: userData, error } = await supabase
                     .from('users')
-                    .select('username')
-                    .eq('id', user.id)
+                    .select('*')
+                    .eq('uid', user.id)
                     .single();
                 
-                if (!error && userData) {
-                    const displayName = userData.username || user.user_metadata?.username || user.email;
-                    userName.textContent = displayName;
-                    console.log('✅ 사용자 로그인 중:', displayName);
-                } else {
-                    userName.textContent = user.user_metadata?.username || user.email;
-                    console.log('✅ 사용자 로그인 중:', user.user_metadata?.username || user.email);
-                }
+                // Username is stored in user_metadata, not in users table
+                const displayName = user.user_metadata?.username || user.email;
+                userName.textContent = displayName;
+                console.log('✅ 사용자 로그인 중:', displayName);
             } catch (error) {
                 console.warn('⚠️ 사용자 정보 로드 실패:', error);
                 userName.textContent = user.user_metadata?.username || user.email;
