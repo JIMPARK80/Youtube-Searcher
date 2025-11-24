@@ -1,10 +1,10 @@
 // ============================================
 // VIEW-HISTORY.JS - View snapshot helpers
-// Handles Firestore viewHistory collection + VPH calculations
+// Handles Supabase view_history table + VPH calculations
 // ============================================
 
-const VIEW_HISTORY_COLLECTION = 'viewHistory';
-const VIEW_TRACKING_CONFIG_PATH = ['config', 'viewTracking'];
+import { supabase } from './supabase-config.js';
+
 const DEFAULT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_INTERVAL_MINUTES = 60;
 const DEFAULT_RETENTION_HOURS = 240; // 10 days
@@ -12,27 +12,23 @@ const DEFAULT_RETENTION_HOURS = 240; // 10 days
 const velocityCache = new Map();
 let browserTrackerTimer = null;
 
-const firebaseDepsReady = () =>
-    Boolean(
-        window.firebaseDb &&
-        window.firebaseCollection &&
-        window.firebaseQuery &&
-        window.firebaseOrderBy &&
-        window.firebaseLimit &&
-        window.firebaseGetDocs &&
-        window.firebaseWriteBatch &&
-        window.firebaseTimestamp &&
-        window.firebaseSetDoc &&
-        window.firebaseDoc
-    );
-
 async function getViewTrackingConfig() {
-    if (!firebaseDepsReady()) return null;
     try {
-        const configRef = window.firebaseDoc(window.firebaseDb, ...VIEW_TRACKING_CONFIG_PATH);
-        const snap = await window.firebaseGetDoc(configRef);
-        if (!snap.exists()) return null;
-        return snap.data();
+        const { data, error } = await supabase
+            .from('view_tracking_config')
+            .select('*')
+            .limit(1)
+            .single();
+        
+        if (error || !data) return null;
+        
+        return {
+            videoIds: data.video_ids || [],
+            retentionHours: data.retention_hours || DEFAULT_RETENTION_HOURS,
+            maxEntries: data.max_entries || 240,
+            browserFallbackEnabled: true, // Supabase에서는 항상 활성화
+            intervalMinutes: DEFAULT_INTERVAL_MINUTES
+        };
     } catch (error) {
         console.warn('⚠️ viewTracking 설정 로드 실패:', error);
         return null;
@@ -40,30 +36,24 @@ async function getViewTrackingConfig() {
 }
 
 async function fetchHistorySnapshots(videoId, limitCount = 2) {
-    if (!firebaseDepsReady()) return [];
-    const historyCol = window.firebaseCollection(
-        window.firebaseDb,
-        VIEW_HISTORY_COLLECTION,
-        videoId,
-        'history'
-    );
-    const q = window.firebaseQuery(
-        historyCol,
-        window.firebaseOrderBy('fetchedAt', 'desc'),
-        window.firebaseLimit(limitCount)
-    );
-    const snap = await window.firebaseGetDocs(q);
-    return snap.docs.map((docSnap) => {
-        const data = docSnap.data();
-        const fetchedAtRaw = data.fetchedAt;
-        const fetchedAt =
-            fetchedAtRaw?.toDate?.() ||
-            (typeof fetchedAtRaw === 'number' ? new Date(fetchedAtRaw) : new Date());
-        return {
-            viewCount: Number(data.viewCount ?? 0),
-            fetchedAt,
-        };
-    });
+    try {
+        const { data, error } = await supabase
+            .from('view_history')
+            .select('view_count, fetched_at')
+            .eq('video_id', videoId)
+            .order('fetched_at', { ascending: false })
+            .limit(limitCount);
+        
+        if (error || !data) return [];
+        
+        return data.map(item => ({
+            viewCount: Number(item.view_count || 0),
+            fetchedAt: new Date(item.fetched_at)
+        }));
+    } catch (error) {
+        console.warn('⚠️ 히스토리 스냅샷 로드 실패:', error);
+        return [];
+    }
 }
 
 function computeRecentVph(latest, previous) {
@@ -84,6 +74,8 @@ function computeRecentVph(latest, previous) {
     };
 }
 
+// Note: This function is kept for backward compatibility
+// ui.js uses getRecentVelocityForVideo from supabase-api.js
 export async function getRecentVelocityForVideo(videoId, { cacheTtl = DEFAULT_CACHE_TTL } = {}) {
     if (!videoId) return null;
     const cached = velocityCache.get(videoId);
@@ -101,47 +93,39 @@ export async function getRecentVelocityForVideo(videoId, { cacheTtl = DEFAULT_CA
 }
 
 async function persistSnapshot(videoId, viewCount, fetchedAt = new Date()) {
-    if (!firebaseDepsReady()) return;
-    const db = window.firebaseDb;
-    const timestamp = window.firebaseTimestamp.fromDate(fetchedAt);
-    const docRef = window.firebaseDoc(db, VIEW_HISTORY_COLLECTION, videoId);
-    const historyDocId = String(fetchedAt.getTime());
-    const historyRef = window.firebaseDoc(db, VIEW_HISTORY_COLLECTION, videoId, 'history', historyDocId);
-    const batch = window.firebaseWriteBatch(db);
-    batch.set(historyRef, {
-        viewCount,
-        fetchedAt: timestamp,
-    });
-    batch.set(
-        docRef,
-        {
-            latestViewCount: viewCount,
-            latestFetchAt: timestamp,
-            updatedAt: timestamp,
-        },
-        { merge: true }
-    );
-    await batch.commit();
+    try {
+        const { error } = await supabase
+            .from('view_history')
+            .insert({
+                video_id: videoId,
+                view_count: Number(viewCount),
+                fetched_at: fetchedAt.toISOString()
+            });
+        
+        if (error) {
+            console.warn('⚠️ 스냅샷 저장 실패:', error);
+        }
+    } catch (error) {
+        console.warn('⚠️ 스냅샷 저장 실패:', error);
+    }
 }
 
 async function pruneHistory(videoId, retentionHours = DEFAULT_RETENTION_HOURS) {
-    if (!firebaseDepsReady()) return;
-    const cutoff = Date.now() - retentionHours * 60 * 60 * 1000;
-    const cutoffTs = window.firebaseTimestamp.fromMillis(cutoff);
-    const historyCol = window.firebaseCollection(window.firebaseDb, VIEW_HISTORY_COLLECTION, videoId, 'history');
-    const q = window.firebaseQuery(historyCol, window.firebaseOrderBy('fetchedAt', 'asc'));
-    const snap = await window.firebaseGetDocs(q);
-    const deletions = snap.docs.filter((docSnap) => {
-        const data = docSnap.data();
-        const fetchedAt = data.fetchedAt?.toDate?.() || null;
-        return fetchedAt && fetchedAt.getTime() < cutoff;
-    });
-    if (!deletions.length) return;
-    const batch = window.firebaseWriteBatch(window.firebaseDb);
-    deletions.forEach((docSnap) => {
-        batch.delete(docSnap.ref);
-    });
-    await batch.commit();
+    try {
+        const cutoff = new Date(Date.now() - retentionHours * 60 * 60 * 1000).toISOString();
+        
+        const { error } = await supabase
+            .from('view_history')
+            .delete()
+            .eq('video_id', videoId)
+            .lt('fetched_at', cutoff);
+        
+        if (error) {
+            console.warn('⚠️ 히스토리 정리 실패:', error);
+        }
+    } catch (error) {
+        console.warn('⚠️ 히스토리 정리 실패:', error);
+    }
 }
 
 async function captureViewsForIds(videoIds = [], apiKey) {
@@ -171,7 +155,6 @@ async function captureViewsForIds(videoIds = [], apiKey) {
 }
 
 export async function initializeViewTrackingFallback() {
-    if (!firebaseDepsReady()) return;
     const config = await getViewTrackingConfig();
     if (!config?.browserFallbackEnabled) {
         console.log('ℹ️ Browser view tracker disabled');
