@@ -481,23 +481,38 @@ body {
 
 .sort-controls {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    align-items: flex-end;
+    gap: 16px;
     font-size: 0.9em;
     color: #f5f5f5;
     justify-content: center;
+    flex-wrap: wrap;
 }
 
-.sort-controls select {
+.sort-control {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 150px;
+}
+
+.sort-control label {
+    font-size: 0.85em;
+    color: rgba(255,255,255,0.85);
+    text-align: left;
+}
+
+.sort-control select {
     background: #ffffff;
     border: 1px solid rgba(255, 255, 255, 0.4);
     border-radius: 8px;
     color: #1a1a1a;
     padding: 6px 14px;
     font-weight: 600;
+    font-size: 0.95em;
 }
 
-.sort-controls select:focus {
+.sort-control select:focus {
     outline: none;
     border-color: #6a82fb;
     box-shadow: 0 0 0 2px rgba(106, 130, 251, 0.25);
