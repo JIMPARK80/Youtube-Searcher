@@ -212,12 +212,31 @@ export async function search() {
     allChannelMap = {};
 
     // ============================================
-    // 캐시 로직: 스마트 캐시 전략
+    // 캐시 로직: 스마트 캐시 전략 (API 요청 최소화)
+    // 1순위: 로컬 캐시 (localStorage)
+    // 2순위: Supabase 캐시
     // ============================================
     
-    const cacheData = await loadFromSupabase(query);
+    // 1️⃣ 로컬 캐시 먼저 확인 (브라우저 localStorage)
+    console.log(`💾 로컬 캐시 확인 중: "${query}"`);
+    let cacheData = loadFromLocalCache(query);
     
     if (cacheData) {
+        console.log(`✅ 로컬 캐시 발견! API 호출 생략`);
+        restoreFromCache(cacheData);
+        renderPage(1);
+        return; // 로컬 캐시 사용, 즉시 반환
+    }
+    
+    // 2️⃣ 로컬 캐시 없음 → Supabase 캐시 확인
+    console.log(`🔍 Supabase 캐시 확인 중: "${query}"`);
+    cacheData = await loadFromSupabase(query);
+    
+    if (cacheData) {
+        console.log(`✅ Supabase 캐시 발견! API 호출 생략`);
+        
+        // Supabase 캐시를 로컬 캐시에도 저장 (다음번 빠른 접근)
+        saveToLocalCache(query, cacheData);
         const age = Date.now() - cacheData.timestamp;
         const isExpired = age >= CACHE_TTL_MS;
         const count = cacheData.videos?.length || 0;
@@ -256,7 +275,8 @@ export async function search() {
         return;
     }
 
-    // 캐시 없음 → 전체 검색
+    // 캐시 없음 → 전체 검색 (API 호출 필요)
+    console.log(`❌ Supabase 캐시 없음 → YouTube API 호출 필요`);
     await performFullGoogleSearch(query, apiKeyValue);
 }
 
@@ -291,6 +311,30 @@ async function performFullGoogleSearch(query, apiKeyValue) {
 
         // Save to Supabase with nextPageToken
         await saveToSupabase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken);
+        
+        // 로컬 캐시에도 저장
+        const cacheData = {
+            videos: allVideos.map(v => ({
+                id: v.id,
+                title: v.snippet?.title,
+                channelId: v.snippet?.channelId,
+                channelTitle: v.snippet?.channelTitle,
+                publishedAt: v.snippet?.publishedAt,
+                viewCount: v.statistics?.viewCount || '0',
+                likeCount: v.statistics?.likeCount || '0',
+                duration: v.contentDetails?.duration || 'PT0S'
+            })),
+            channels: allChannelMap,
+            items: allItems,
+            dataSource: 'google',
+            meta: {
+                total: allVideos.length,
+                nextPageToken: result.nextPageToken,
+                source: 'google'
+            }
+        };
+        saveToLocalCache(query, cacheData);
+        
         renderPage(1);
 
     } catch (googleError) {
@@ -685,6 +729,129 @@ export function setupPaginationHandlers() {
 // ============================================
 // 검색 모드 표시기
 // ============================================
+
+// ============================================
+// 로컬 캐시 (localStorage)
+// ============================================
+
+const LOCAL_CACHE_PREFIX = 'youtube_searcher_cache_';
+const LOCAL_CACHE_VERSION = '1.32';
+
+// 로컬 캐시에서 데이터 로드
+function loadFromLocalCache(query) {
+    try {
+        const keyword = query.trim().toLowerCase();
+        const cacheKey = `${LOCAL_CACHE_PREFIX}${keyword}`;
+        const cachedData = localStorage.getItem(cacheKey);
+        
+        if (!cachedData) {
+            console.log(`💾 로컬 캐시 없음: "${keyword}"`);
+            return null;
+        }
+        
+        const parsed = JSON.parse(cachedData);
+        
+        // 캐시 버전 확인
+        if (parsed.cacheVersion !== LOCAL_CACHE_VERSION) {
+            console.log(`🔄 로컬 캐시 버전 불일치 (${parsed.cacheVersion} → ${LOCAL_CACHE_VERSION})`);
+            localStorage.removeItem(cacheKey);
+            return null;
+        }
+        
+        // 만료 시간 확인
+        const age = Date.now() - parsed.timestamp;
+        if (age >= CACHE_TTL_MS) {
+            console.log(`⏰ 로컬 캐시 만료 (${(age / (1000 * 60 * 60)).toFixed(1)}시간 경과)`);
+            localStorage.removeItem(cacheKey);
+            return null;
+        }
+        
+        console.log(`✅ 로컬 캐시 발견: ${parsed.videos?.length || 0}개 항목, ${(age / (1000 * 60 * 60)).toFixed(1)}시간 전`);
+        return parsed;
+    } catch (error) {
+        console.warn('⚠️ 로컬 캐시 로드 실패:', error);
+        return null;
+    }
+}
+
+// 로컬 캐시에 데이터 저장
+function saveToLocalCache(query, cacheData) {
+    try {
+        const keyword = query.trim().toLowerCase();
+        const cacheKey = `${LOCAL_CACHE_PREFIX}${keyword}`;
+        
+        const dataToSave = {
+            ...cacheData,
+            cacheVersion: LOCAL_CACHE_VERSION,
+            timestamp: Date.now()
+        };
+        
+        // localStorage 크기 제한 고려 (약 5-10MB)
+        const dataString = JSON.stringify(dataToSave);
+        if (dataString.length > 5 * 1024 * 1024) { // 5MB 초과 시 저장 안 함
+            console.warn('⚠️ 로컬 캐시 크기 초과, 저장 생략');
+            return;
+        }
+        
+        localStorage.setItem(cacheKey, dataString);
+        console.log(`💾 로컬 캐시 저장 완료: "${keyword}"`);
+    } catch (error) {
+        // localStorage 용량 초과 등 에러 처리
+        if (error.name === 'QuotaExceededError') {
+            console.warn('⚠️ 로컬 캐시 용량 초과, 오래된 캐시 삭제 시도');
+            // 오래된 캐시 삭제
+            clearOldLocalCache();
+            try {
+                saveToLocalCache(query, cacheData);
+            } catch (retryError) {
+                console.warn('⚠️ 로컬 캐시 저장 재시도 실패');
+            }
+        } else {
+            console.warn('⚠️ 로컬 캐시 저장 실패:', error);
+        }
+    }
+}
+
+// 오래된 로컬 캐시 정리
+function clearOldLocalCache() {
+    try {
+        const keys = Object.keys(localStorage);
+        const cacheKeys = keys.filter(k => k.startsWith(LOCAL_CACHE_PREFIX));
+        const now = Date.now();
+        
+        // 만료된 캐시 삭제
+        cacheKeys.forEach(key => {
+            try {
+                const data = JSON.parse(localStorage.getItem(key));
+                if (now - data.timestamp >= CACHE_TTL_MS) {
+                    localStorage.removeItem(key);
+                }
+            } catch (e) {
+                // 파싱 실패 시 삭제
+                localStorage.removeItem(key);
+            }
+        });
+        
+        // 여전히 용량 초과면 가장 오래된 것부터 삭제
+        if (cacheKeys.length > 10) {
+            const cacheWithTime = cacheKeys.map(key => {
+                try {
+                    const data = JSON.parse(localStorage.getItem(key));
+                    return { key, timestamp: data.timestamp };
+                } catch {
+                    return { key, timestamp: 0 };
+                }
+            }).sort((a, b) => a.timestamp - b.timestamp);
+            
+            // 가장 오래된 5개 삭제
+            cacheWithTime.slice(0, 5).forEach(({ key }) => {
+                localStorage.removeItem(key);
+            });
+        }
+    } catch (error) {
+        console.warn('⚠️ 로컬 캐시 정리 실패:', error);
+    }
+}
 
 // ============================================
 // 캐시 복원

@@ -393,11 +393,29 @@ export function setupAuthStateObserver() {
             
             // Load username from Supabase (users table uses uid field)
             try {
+                // Use maybeSingle() instead of single() to handle missing records gracefully
                 const { data: userData, error } = await supabase
                     .from('users')
                     .select('*')
                     .eq('uid', user.id)
-                    .single();
+                    .maybeSingle();
+                
+                // If user record doesn't exist, create it
+                if (!userData && !error) {
+                    const { error: insertError } = await supabase
+                        .from('users')
+                        .insert({
+                            uid: user.id,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        });
+                    
+                    if (insertError) {
+                        console.warn('⚠️ 사용자 레코드 생성 실패:', insertError);
+                    } else {
+                        console.log('✅ 사용자 레코드 자동 생성됨');
+                    }
+                }
                 
                 // Username is stored in user_metadata, not in users table
                 const displayName = user.user_metadata?.username || user.email;

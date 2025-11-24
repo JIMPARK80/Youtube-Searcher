@@ -393,15 +393,25 @@ export function mergeCacheWithMore(cache, newVideos, newChannelsMap) {
 // YOUTUBE API 검색
 // ============================================
 
+// Throttle helper: API 요청 사이 딜레이 추가
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const API_THROTTLE_MS = 200; // 요청 사이 200ms 딜레이
+
 export async function searchYouTubeAPI(query, apiKeyValue) {
     try {
         console.log('🌐 Google API 호출 중...');
         
-        // ① Step 1: Search for videos (최대 300개, 50개씩 6페이지)
+        // ① Step 1: Search for videos (최대 70개, 50개씩 2페이지)
         let searchItems = [];
         let nextPageToken = null;
+        const MAX_RESULTS = 70;
         
-        for (let page = 0; page < 6; page++) {
+        for (let page = 0; page < 2 && searchItems.length < MAX_RESULTS; page++) {
+            // Throttle: 첫 페이지 이후 딜레이 추가
+            if (page > 0) {
+                await delay(API_THROTTLE_MS);
+            }
+            
             const pageParam = nextPageToken ? `&pageToken=${nextPageToken}` : '';
             const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(query)}&order=relevance&key=${apiKeyValue}${pageParam}`;
             const searchResponse = await fetch(searchUrl);
@@ -416,16 +426,26 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
             searchItems.push(...(searchData.items || []));
             nextPageToken = searchData.nextPageToken;
             
-            if (!nextPageToken) break; // 더 이상 결과 없음
+            if (!nextPageToken || searchItems.length >= MAX_RESULTS) break; // 더 이상 결과 없음 또는 70개 도달
         }
+        
+        // 70개로 제한
+        searchItems = searchItems.slice(0, MAX_RESULTS);
         
         console.log(`✅ Google API 정상 작동 (${searchItems.length}개 검색 결과)`);
 
-        // ② Step 2: Get detailed video information (50개씩 배치)
+        // ② Step 2: Get detailed video information (50개씩 배치, throttle 적용)
         const videoIds = searchItems.map(item => item.id.videoId).filter(Boolean);
         console.log(`📋 비디오 ID 추출: ${videoIds.length}개`);
         let videoDetails = [];
-        for (const ids of chunk(videoIds, 50)) {
+        const videoIdChunks = chunk(videoIds, 50);
+        for (let i = 0; i < videoIdChunks.length; i++) {
+            // Throttle: 배치 사이 딜레이
+            if (i > 0) {
+                await delay(API_THROTTLE_MS);
+            }
+            
+            const ids = videoIdChunks[i];
             const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${ids.join(",")}&key=${apiKeyValue}`;
             const r = await fetch(url);
             const d = await r.json();
@@ -433,10 +453,17 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
         }
         console.log(`📹 비디오 상세 정보: ${videoDetails.length}개`);
 
-        // ③ Step 3: Get channel information (50개씩 배치)
+        // ③ Step 3: Get channel information (50개씩 배치, throttle 적용)
         const channelIds = [...new Set(videoDetails.map(v => v.snippet.channelId))];
         let channelsMap = {};
-        for (const ids of chunk(channelIds, 50)) {
+        const channelIdChunks = chunk(channelIds, 50);
+        for (let i = 0; i < channelIdChunks.length; i++) {
+            // Throttle: 배치 사이 딜레이
+            if (i > 0) {
+                await delay(API_THROTTLE_MS);
+            }
+            
+            const ids = channelIdChunks[i];
             const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${ids.join(",")}&key=${apiKeyValue}`;
             const r = await fetch(url);
             const d = await r.json();
