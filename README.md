@@ -143,7 +143,15 @@ const firebaseConfig = {
 #### Browser fallback (optional)
 - Enable `browserFallbackEnabled: true` in `config/viewTracking`
 - Keep the dashboard open; a `setInterval` will refresh snapshots every `intervalMinutes`
-- Useful for local demos when Cloud Functions aren’t available
+- Useful for local demos when Cloud Functions aren't available
+
+#### 🎁 Cursor AI Auto-Setup
+
+For Cursor AI automation, use this sentence:
+
+> "Cursor, create the hourlyViewTracker scheduled Cloud Function that reads config/viewTracking.videoIds, fetches each video's view count using the secret YOUTUBE_DATA_API_KEY, and stores it in Firestore under viewHistory/{videoId}/history/{timestamp}. Retain only the latest N snapshots based on retentionHours or maxEntries."
+
+See `DEPLOYMENT_GUIDE.md` for detailed deployment steps.
 
 ## 📋 Requirements
 
