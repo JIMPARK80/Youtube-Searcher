@@ -63,6 +63,9 @@ const translations = {
         'sort.vpd.none': '기본',
         'sort.vpd.asc': '낮은 순',
         'sort.vpd.desc': '높은 순',
+        'sort.velocityMetric': '표시 단위',
+        'sort.velocityMetric.day': '일간(VPD)',
+        'sort.velocityMetric.hour': '시간당(VPH)',
         
         // 필터
         'filter.viewCount': '조회수 필터',
@@ -174,6 +177,9 @@ const translations = {
         'sort.vpd.none': 'Default',
         'sort.vpd.asc': 'Lowest First',
         'sort.vpd.desc': 'Highest First',
+        'sort.velocityMetric': 'Velocity Unit',
+        'sort.velocityMetric.day': 'Per Day (VPD)',
+        'sort.velocityMetric.hour': 'Per Hour (VPH)',
         
         // Filters
         'filter.viewCount': 'View Count Filter',

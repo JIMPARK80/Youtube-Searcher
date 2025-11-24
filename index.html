@@ -113,7 +113,7 @@
 
         <div class="search-box">
             <div class="search-input-group">
-                <input type="text" id="searchInput" placeholder="검색어를 입력하세요..." data-i18n="search.placeholder" value="news" />
+                <input type="text" id="searchInput" placeholder="검색어를 입력하세요..." data-i18n="search.placeholder" value="인생사연" />
                 <button id="searchBtn" data-i18n="search.button">검색</button>
             </div>
             <!-- API 키는 JavaScript에서 동적으로 생성됨 (보안 향상) -->
@@ -185,14 +185,23 @@
             <div class="result-summary" id="resultSummary">
                 <span data-i18n="result.summary">검색 결과</span>: <span id="totalCount">0</span><span data-i18n="result.count">개</span>
             </div>
-                <div class="sort-controls">
-                    <label for="sortVpdSelect" data-i18n="sort.vpd">조회수/Day 정렬</label>
+            <div class="sort-controls">
+                <div class="sort-control">
+                    <label for="sortVpdSelect" data-i18n="sort.vpd">조회수/정렬</label>
                     <select id="sortVpdSelect">
                         <option value="none" data-i18n="sort.vpd.none">기본</option>
                         <option value="desc" data-i18n="sort.vpd.desc">높은 순</option>
                         <option value="asc" data-i18n="sort.vpd.asc">낮은 순</option>
                     </select>
                 </div>
+                <div class="sort-control">
+                    <label for="velocityMetricSelect" data-i18n="sort.velocityMetric">표시 단위</label>
+                    <select id="velocityMetricSelect">
+                        <option value="day" data-i18n="sort.velocityMetric.day">일간(VPD)</option>
+                        <option value="hour" data-i18n="sort.velocityMetric.hour">시간당(VPH)</option>
+                    </select>
+                </div>
+            </div>
             <div class="pagination-bar">
                 <button id="prevPage" class="page-btn" aria-label="Previous page">◀</button>
                 <span id="pageInfo" class="page-info">1 / 1 <span data-i18n="result.page">page</span></span>

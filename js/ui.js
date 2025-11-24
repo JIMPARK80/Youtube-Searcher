@@ -22,6 +22,9 @@ export const pageSize = 8;
 export let currentPage = 1;
 export let allChannelMap = {};
 export let currentSearchQuery = '';
+let currentVelocityMetric = 'day';
+const PUBLIC_DEFAULT_QUERY = '인생사연';
+const PUBLIC_DEFAULT_QUERY_NORMALIZED = PUBLIC_DEFAULT_QUERY.toLowerCase();
 
 // ============================================
 // 유틸리티 함수
@@ -83,6 +86,10 @@ export function getPublishedAfterDate(period) {
     return date.toISOString();
 }
 
+function isPublicDefaultQuery(value) {
+    return (value || '').trim().toLowerCase() === PUBLIC_DEFAULT_QUERY_NORMALIZED;
+}
+
 // ============================================
 // 속도 계산 함수
 // ============================================
@@ -110,6 +117,19 @@ export function viewVelocityPerDay(video) {
         return (views / hours) * 24;
     }
     return views / days;
+}
+
+function getVelocityValue(item, metric = currentVelocityMetric) {
+    const base = Number(item?.vpd || 0);
+    if (metric === 'hour') {
+        return base / 24;
+    }
+    return base;
+}
+
+function formatVelocityBadge(value, metric = currentVelocityMetric) {
+    const unit = metric === 'hour' ? '/hr' : '/day';
+    return `+${formatNumber(value)}${unit}`;
 }
 
 export function classifyVelocity(vpd) {
@@ -149,8 +169,8 @@ export async function search() {
     window.isDefaultSearch = false;
     
     // Check if user is logged in
-    const isNewsQuery = query.toLowerCase() === 'news';
-    if (!window.currentUser && !wasDefaultSearch && !isNewsQuery) {
+    const isDefaultPublicQuery = isPublicDefaultQuery(query);
+    if (!window.currentUser && !wasDefaultSearch && !isDefaultPublicQuery) {
         const loginModal = document.getElementById('loginModal');
         if (loginModal) {
             loginModal.classList.add('active');
@@ -177,7 +197,7 @@ export async function search() {
     resultsDiv.innerHTML = `<div class="loading">${t('search.loading')}</div>`;
     
     // Save search keyword
-    if (window.currentUser && !window.isDefaultSearch && query !== 'news') {
+    if (window.currentUser && !window.isDefaultSearch && !isDefaultPublicQuery) {
         saveUserLastSearchKeyword(window.currentUser.uid, query);
     }
     
@@ -347,25 +367,45 @@ async function performTopUpUpdate(query, apiKeyValue, firebaseData) {
 // 렌더링 함수
 // ============================================
 
+function dedupeItemsByVideo(items) {
+    const seen = new Set();
+    const result = [];
+    for (const item of items) {
+        const videoId = item?.raw?.id;
+        if (!videoId) continue;
+        if (seen.has(videoId)) continue;
+        seen.add(videoId);
+        result.push(item);
+    }
+    return result;
+}
+
+function getFilteredDedupedItems() {
+    const filteredItems = applyFilters(allItems);
+    return dedupeItemsByVideo(filteredItems);
+}
+
 export function renderPage(page) {
     currentPage = page;
     
-    // Apply filters
-    const filteredItems = applyFilters(allItems);
+    // Apply filters and dedupe results
+    const dedupedItems = getFilteredDedupedItems();
+    const velocityMetricSelect = document.getElementById('velocityMetricSelect');
+    currentVelocityMetric = velocityMetricSelect?.value || 'day';
     
     // Sort by views per day if requested
     const sortSelect = document.getElementById('sortVpdSelect');
     const sortValue = sortSelect?.value || 'none';
     if (sortValue === 'asc') {
-        filteredItems.sort((a, b) => (a.vpd || 0) - (b.vpd || 0));
+        dedupedItems.sort((a, b) => getVelocityValue(a) - getVelocityValue(b));
     } else if (sortValue === 'desc') {
-        filteredItems.sort((a, b) => (b.vpd || 0) - (a.vpd || 0));
+        dedupedItems.sort((a, b) => getVelocityValue(b) - getVelocityValue(a));
     }
     
     // Pagination
     const startIdx = (page - 1) * pageSize;
     const endIdx = startIdx + pageSize;
-    const pageItems = filteredItems.slice(startIdx, endIdx);
+    const pageItems = dedupedItems.slice(startIdx, endIdx);
     
     const resultsDiv = document.getElementById('results');
     resultsDiv.innerHTML = '';
@@ -394,7 +434,7 @@ export function renderPage(page) {
     resultsDiv.appendChild(gridContainer);
     
     // Update pagination
-    updatePaginationControls(filteredItems.length);
+    updatePaginationControls(dedupedItems.length);
 }
 
 function createVideoCard(video, item) {
@@ -416,11 +456,12 @@ function createVideoCard(video, item) {
     const uploadedDays = ageDays(video.snippet.publishedAt);
     const daysText = uploadedDays < 1 ? '< 1d' : `${Math.floor(uploadedDays)}d`;
     
+    const velocityValue = getVelocityValue(item);
     card.innerHTML = `
         <div class="thumbnail-container">
             <img src="${thumbnail}" alt="${video.snippet.title}" loading="lazy">
             ${video.contentDetails?.duration ? `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
-            <div class="vpd-badge">+${formatNumber(item.vpd)}/day</div>
+            <div class="vpd-badge">${formatVelocityBadge(velocityValue)}</div>
         </div>
         <div class="video-info">
             <h3 class="video-title">${video.snippet.title}</h3>
@@ -572,8 +613,8 @@ export function setupPaginationHandlers() {
     });
     
     document.getElementById('nextPage')?.addEventListener('click', () => {
-        const filteredItems = applyFilters(allItems);
-        const totalPages = Math.ceil(filteredItems.length / pageSize);
+        const dedupedItems = getFilteredDedupedItems();
+        const totalPages = Math.ceil(dedupedItems.length / pageSize);
         if (currentPage < totalPages) {
             renderPage(currentPage + 1);
         }
@@ -715,6 +756,9 @@ export function setupEventListeners() {
     
     // Sort controls
     document.getElementById('sortVpdSelect')?.addEventListener('change', () => {
+        renderPage(1);
+    });
+    document.getElementById('velocityMetricSelect')?.addEventListener('change', () => {
         renderPage(1);
     });
 }
