@@ -221,8 +221,11 @@ export async function search() {
         const count = firebaseData.videos?.length || 0;
         const meta = firebaseData.meta || {};
         const cacheSource = firebaseData.dataSource || meta.source || 'unknown';
+        const savedAt = new Date(firebaseData.timestamp);
+        const savedAtLabel = savedAt.toLocaleString();
         
-        console.log(`📦 캐시 정보: ${count}개, 소스=${cacheSource}, 만료=${isExpired ? 'Y' : 'N'}`);
+        console.log(`📂 로컬 검색어 캐시 확인: "${query}" (총 ${count}개, 소스=${cacheSource})`);
+        console.log(`⏳ 72시간 경과 여부: ${isExpired ? '만료' : '유효'} (저장 시각: ${savedAtLabel})`);
         
         // Google 데이터가 아닌 캐시는 최신 Google 데이터로 갱신
         if (cacheSource !== 'google') {
@@ -233,7 +236,7 @@ export async function search() {
         
         // 신선한 Google 캐시 사용
         if (!isExpired) {
-            console.log('✅ 신선한 Google 캐시 사용 (호출 0)');
+            console.log(`✅ 로컬 캐시 사용 (기준 시각: ${savedAtLabel})`);
             restoreFromCache(firebaseData);
             renderPage(1);
             return;
@@ -246,7 +249,7 @@ export async function search() {
             return;
         }
         
-        console.log('🔄 Google 캐시 만료 → 전체 갱신');
+        console.log('⏰ 로컬 캐시 만료 → Firebase 서버 재호출');
         await performFullGoogleSearch(query, apiKeyValue);
         return;
     }
@@ -490,12 +493,17 @@ function createVideoCard(video, item) {
         </div>
     `;
 
-    hydrateVelocityPanel(videoId, card.querySelector('.velocity-panel'), item.vpd);
+    hydrateVelocityPanel(
+        videoId,
+        card.querySelector('.velocity-panel'),
+        item.vpd,
+        video.snippet.title
+    );
     
     return card;
 }
 
-function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0) {
+function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '') {
     if (!panelEl) return;
     const recentEl = panelEl.querySelector('.recent-vph');
     const dailyEl = panelEl.querySelector('.daily-vpd');
@@ -510,6 +518,7 @@ function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0) {
         .then((stats) => {
             if (!stats) {
                 if (recentEl) recentEl.textContent = t('velocity.unavailable');
+                console.log(`⚪ VPH 데이터 없음: ${label || videoId}`);
                 return;
             }
             if (recentEl) {
@@ -518,6 +527,11 @@ function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0) {
             if (dailyEl) {
                 dailyEl.textContent = `${formatNumber(stats.vpd || baseVpd || 0)}/day`;
             }
+            const latestTs = stats.latest?.fetchedAt?.toLocaleString?.() || 'N/A';
+            const prevTs = stats.previous?.fetchedAt?.toLocaleString?.() || 'N/A';
+            console.log(
+                `🕒 VPH 스냅샷 [${label || videoId}] 최신=${latestTs}, 이전=${prevTs}, Δ=${stats.diffHours?.toFixed?.(2) || '0'}h`
+            );
         })
         .catch((error) => {
             console.warn('⚠️ 최근 VPH 로드 실패:', error);
