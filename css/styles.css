@@ -259,6 +259,37 @@ body {
     flex-wrap: wrap;
 }
 
+.velocity-panel {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.65);
+    border: 1px solid rgba(102, 126, 234, 0.2);
+    font-size: 0.8em;
+}
+
+.velocity-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #222;
+    margin-bottom: 4px;
+}
+
+.velocity-row:last-child {
+    margin-bottom: 0;
+}
+
+.velocity-row .label {
+    font-weight: 600;
+    color: #555;
+}
+
+.velocity-row .value {
+    font-weight: 700;
+    color: #1a1a1a;
+}
+
 .stat-item {
     display: flex;
     align-items: center;

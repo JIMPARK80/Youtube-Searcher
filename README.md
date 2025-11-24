@@ -27,6 +27,7 @@ A web application to search YouTube videos and view detailed information with ad
 - **Subscribers** - Channel subscriber count
 - **Channel Info** - Channel name and icon
 - **Daily Views** - Views per day calculation
+- **Recent VPH & Daily Velocity** - Hourly tracked acceleration metrics
 
 ### 🔍 Search & Filters
 - **Velocity Filter** - Filter by video growth rate (hot/normal/cold)
@@ -37,9 +38,15 @@ A web application to search YouTube videos and view detailed information with ad
 
 ### 🔐 Authentication & Storage
 - **Firebase Authentication** - Secure user login/signup
-- **Cloud Caching** - Automatic search result caching (24-hour auto-update)
+- **Cloud Caching** - Automatic search result caching (72-hour auto-update)
 - **API Key Management** - Server-side API key storage
 - **Session Persistence** - Remember user preferences
+
+### 🕒 View History Tracking
+- **Hourly View Snapshots** - Cloud Function (or browser fallback) writes to `viewHistory/{videoId}/history/{timestamp}`
+- **Quota Friendly** - Uses only `videos.list` (1 quota) with 50 IDs per batch
+- **Automatic Pruning** - Keeps the last ~10 days of hourly records
+- **Realtime UI** - Cards display “Recent VPH” and “Daily Velocity” using the latest two snapshots
 
 ### ⚡ Performance
 - **Pagination** - 8 results per page for optimal loading
@@ -112,6 +119,32 @@ const firebaseConfig = {
 2. Open `http://localhost:5500` (or your server's URL)
 3. Enter your search query and click search
 
+### 5. Recent VPH Tracker Setup
+
+#### Firestore schema
+- `config/viewTracking`
+  - `videoIds`: string array of video IDs to monitor (keep ≤ 400 to stay under 200 quota/day)
+  - `browserFallbackEnabled`: boolean (optional) – run browser-based tracker when Cloud Functions unavailable
+  - `intervalMinutes`: number (optional) – fallback poll interval (default 60)
+  - `retentionHours`, `maxEntries`: optional pruning controls
+- `viewHistory/{videoId}`
+  - `latestViewCount`, `latestFetchAt`, `updatedAt`
+  - Subcollection `history/{timestamp}` storing `{ viewCount, fetchedAt }`
+
+#### Cloud Functions (recommended)
+1. Install Firebase tools and initialize functions (`firebase init functions` if needed)
+2. Deploy the provided `functions/index.js`
+3. Set the API key used by the function:
+   ```bash
+   firebase functions:secrets:set YOUTUBE_DATA_API_KEY
+   ```
+4. Deploy: `firebase deploy --only functions:hourlyViewTracker`
+
+#### Browser fallback (optional)
+- Enable `browserFallbackEnabled: true` in `config/viewTracking`
+- Keep the dashboard open; a `setInterval` will refresh snapshots every `intervalMinutes`
+- Useful for local demos when Cloud Functions aren’t available
+
 ## 📋 Requirements
 
 - Web browser (Chrome, Firefox, Edge, Safari, etc.)
@@ -125,7 +158,7 @@ const firebaseConfig = {
 - Click on any card to open the YouTube video in a new tab
 - Works perfectly on mobile devices
 - Firebase caching allows search results from the first user to be shared with others
-- Cache automatically refreshes after 24 hours
+- Cache automatically refreshes after 72 hours
 
 ## 🔧 Tech Stack
 
@@ -290,7 +323,7 @@ Give a ⭐️ if this project helped you!
 
 ### 🔐 인증 & 저장소
 - **Firebase 인증** - 안전한 사용자 로그인/회원가입
-- **클라우드 캐싱** - 검색 결과 자동 캐싱 (24시간 자동 갱신)
+- **클라우드 캐싱** - 검색 결과 자동 캐싱 (72시간 자동 갱신)
 - **API 키 관리** - 서버측 API 키 저장
 - **세션 유지** - 사용자 설정 기억
 
@@ -378,7 +411,7 @@ const firebaseConfig = {
 - 카드를 클릭하면 해당 유튜브 비디오 페이지가 새 탭에서 열립니다
 - 모바일 기기에서도 완벽하게 작동합니다
 - Firebase 캐싱을 사용하면 첫 사용자가 검색한 결과가 다른 사용자들과 공유됩니다
-- 캐시는 24시간 후 자동으로 갱신됩니다
+- 캐시는 72시간 후 자동으로 갱신됩니다
 
 ## 🔧 기술 스택
 

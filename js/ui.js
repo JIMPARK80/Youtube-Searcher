@@ -11,9 +11,11 @@ import {
     saveUserLastSearchKeyword,
     fetchNext50WithToken,
     hydrateDetailsOnlyForNew,
-    mergeCacheWithMore
+    mergeCacheWithMore,
+    CACHE_TTL_MS
 } from './api.js';
 import { t } from './i18n.js';
+import { getRecentVelocityForVideo } from './view-history.js';
 
 // Global variables for pagination
 export let allVideos = [];
@@ -215,7 +217,7 @@ export async function search() {
     
     if (firebaseData) {
         const age = Date.now() - firebaseData.timestamp;
-        const isExpired = age >= 24 * 60 * 60 * 1000;
+        const isExpired = age >= CACHE_TTL_MS;
         const count = firebaseData.videos?.length || 0;
         const meta = firebaseData.meta || {};
         const cacheSource = firebaseData.dataSource || meta.source || 'unknown';
@@ -237,7 +239,7 @@ export async function search() {
             return;
         }
         
-        // 24시간 경과 + pagination 토큰 존재 → 토핑
+        // 72시간 경과 + pagination 토큰 존재 → 토핑
         if (count === 50 && meta.nextPageToken) {
             console.log('🔝 토핑 모드: 추가 50개만 fetch');
             await performTopUpUpdate(query, apiKeyValue, firebaseData);
@@ -457,6 +459,7 @@ function createVideoCard(video, item) {
     const daysText = uploadedDays < 1 ? '< 1d' : `${Math.floor(uploadedDays)}d`;
     
     const velocityValue = getVelocityValue(item);
+    const videoId = video.id || video?.raw?.id || item?.raw?.id;
     card.innerHTML = `
         <div class="thumbnail-container">
             <img src="${thumbnail}" alt="${video.snippet.title}" loading="lazy">
@@ -474,10 +477,52 @@ function createVideoCard(video, item) {
                 <span class="stat-item">👥 ${formatNumber(item.subs || 0)}</span>
                 <span class="stat-item">📅 ${daysText}</span>
             </div>
+            <div class="velocity-panel">
+                <div class="velocity-row">
+                    <span class="label" data-i18n="velocity.recent">${t('velocity.recent')}</span>
+                    <span class="value recent-vph">${t('velocity.loading')}</span>
+                </div>
+                <div class="velocity-row">
+                    <span class="label" data-i18n="velocity.daily">${t('velocity.daily')}</span>
+                    <span class="value daily-vpd">${formatNumber(item.vpd || 0)}/day</span>
+                </div>
+            </div>
         </div>
     `;
+
+    hydrateVelocityPanel(videoId, card.querySelector('.velocity-panel'), item.vpd);
     
     return card;
+}
+
+function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0) {
+    if (!panelEl) return;
+    const recentEl = panelEl.querySelector('.recent-vph');
+    const dailyEl = panelEl.querySelector('.daily-vpd');
+    if (dailyEl) {
+        dailyEl.textContent = `${formatNumber(baseVpd || 0)}/day`;
+    }
+    if (!videoId) {
+        if (recentEl) recentEl.textContent = t('velocity.unavailable');
+        return;
+    }
+    getRecentVelocityForVideo(videoId)
+        .then((stats) => {
+            if (!stats) {
+                if (recentEl) recentEl.textContent = t('velocity.unavailable');
+                return;
+            }
+            if (recentEl) {
+                recentEl.textContent = `${formatNumber(stats.vph || 0)}/hr`;
+            }
+            if (dailyEl) {
+                dailyEl.textContent = `${formatNumber(stats.vpd || baseVpd || 0)}/day`;
+            }
+        })
+        .catch((error) => {
+            console.warn('⚠️ 최근 VPH 로드 실패:', error);
+            if (recentEl) recentEl.textContent = t('velocity.unavailable');
+        });
 }
 
 // ============================================

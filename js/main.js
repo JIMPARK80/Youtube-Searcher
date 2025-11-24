@@ -6,6 +6,7 @@ import { initializeApiKeys } from './api.js';
 import { initializeUI } from './ui.js';
 import { initializeAuth } from './auth.js';
 import { initializeI18n } from './i18n.js';
+import { initializeViewTrackingFallback } from './view-history.js';
 
 // ============================================
 // 전역 변수 초기화
@@ -58,6 +59,9 @@ async function initializeApp() {
         // Initialize UI
         console.log('🎨 UI 초기화 중...');
         initializeUI();
+
+        // Optional browser-based view tracking fallback
+        initializeViewTrackingFallback();
         
         console.log('✅ 애플리케이션 초기화 완료!');
         

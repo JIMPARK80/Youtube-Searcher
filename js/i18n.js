@@ -66,6 +66,10 @@ const translations = {
         'sort.velocityMetric': '표시 단위',
         'sort.velocityMetric.day': '일간(VPD)',
         'sort.velocityMetric.hour': '시간당(VPH)',
+        'velocity.recent': '최근 VPH',
+        'velocity.daily': '일간 속도',
+        'velocity.unavailable': '데이터 없음',
+        'velocity.loading': '계산 중...',
         
         // 필터
         'filter.viewCount': '조회수 필터',
@@ -180,6 +184,10 @@ const translations = {
         'sort.velocityMetric': 'Velocity Unit',
         'sort.velocityMetric.day': 'Per Day (VPD)',
         'sort.velocityMetric.hour': 'Per Hour (VPH)',
+        'velocity.recent': 'Recent VPH',
+        'velocity.daily': 'Daily Velocity',
+        'velocity.unavailable': 'Not available',
+        'velocity.loading': 'Calculating...',
         
         // Filters
         'filter.viewCount': 'View Count Filter',

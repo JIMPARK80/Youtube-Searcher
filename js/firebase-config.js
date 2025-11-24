@@ -1,6 +1,20 @@
 // Import Firebase
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import {
+    getFirestore,
+    doc,
+    getDoc,
+    setDoc,
+    onSnapshot,
+    collection,
+    query,
+    orderBy,
+    limit,
+    getDocs,
+    writeBatch,
+    Timestamp,
+    deleteDoc
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
 // Firebase configuration
@@ -34,6 +48,14 @@ window.firebaseDoc = doc;
 window.firebaseGetDoc = getDoc;
 window.firebaseSetDoc = setDoc;
 window.firebaseOnSnapshot = onSnapshot;
+window.firebaseCollection = collection;
+window.firebaseQuery = query;
+window.firebaseOrderBy = orderBy;
+window.firebaseLimit = limit;
+window.firebaseGetDocs = getDocs;
+window.firebaseWriteBatch = writeBatch;
+window.firebaseTimestamp = Timestamp;
+window.firebaseDeleteDoc = deleteDoc;
 
 console.log('✅ Firebase initialized successfully');
 console.log('✅ Firebase Auth initialized:', auth);

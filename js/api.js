@@ -6,6 +6,9 @@
 // 유틸: 배열을 n개씩 청크로 나누기 (기본 50개)
 const chunk = (a, n = 50) => Array.from({length: Math.ceil(a.length/n)}, (_,i)=>a.slice(i*n, (i+1)*n));
 
+export const CACHE_TTL_HOURS = 72;
+export const CACHE_TTL_MS = CACHE_TTL_HOURS * 60 * 60 * 1000;
+
 // API 키 관리
 export let apiKey = null;
 
@@ -118,12 +121,12 @@ export async function loadFromFirebase(query) {
         console.log(`☁️ Firebase 캐시 발견 (${totalParts}개 파트 병합): ${ageHours.toFixed(1)}시간 전`);
         console.log(`📊 병합된 캐시: 총 ${mainData.videos.length}개 항목, 소스: ${mainData.dataSource || 'unknown'}`);
         
-        // 24시간 이내면 유효
-        if (age < 24 * 60 * 60 * 1000) {
+        // 72시간 이내면 유효
+        if (age < CACHE_TTL_MS) {
             console.log('✅ 유효한 Firebase 캐시 사용');
             return mainData;
         } else {
-            console.log('⏰ Firebase 캐시 만료 (24시간 초과)');
+            console.log(`⏰ Firebase 캐시 만료 (${CACHE_TTL_HOURS}시간 초과)`);
             return null;
         }
         
