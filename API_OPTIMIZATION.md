@@ -59,11 +59,15 @@ Each cache entry stores:
 | `next_page_token` | TEXT | 다음 페이지 토큰 |
 | `updated_at` | TIMESTAMPTZ | 마지막 업데이트 시간 |
 
-### videos Table
+**Key Point**: The app only refreshes the cache if the data is older than 72 hours.
 
-Stores actual video data for each keyword:
+앱은 데이터가 72시간 이상 오래됐을 때만 캐시를 갱신합니다.
 
-각 키워드별 실제 비디오 데이터를 저장:
+### videos Table (Latest View Count Storage)
+
+Stores actual video data including the **latest known view_count** for each video:
+
+각 영상의 **최근 조회수**를 포함한 실제 비디오 데이터를 저장:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -72,10 +76,14 @@ Stores actual video data for each keyword:
 | `title` | TEXT | 비디오 제목 |
 | `channel_id` | TEXT | 채널 ID |
 | `channel_title` | TEXT | 채널명 |
-| `view_count` | BIGINT | 조회수 |
+| `view_count` | BIGINT | **최근 조회수 (재사용됨)** |
 | `like_count` | BIGINT | 좋아요 수 |
 | `duration` | TEXT | 영상 길이 |
 | `thumbnail_url` | TEXT | 썸네일 URL |
+
+**Key Benefit**: When the same video appears in a new search, its stored `view_count` is reused. This eliminates the need to call the YouTube `videos.list` API repeatedly.
+
+같은 영상이 다시 검색 결과에 나오면 기록된 조회수가 재사용됩니다. 이 기능 덕분에 YouTube의 `videos.list` API를 반복 호출할 필요가 없습니다.
 
 ### Cache TTL (Time To Live)
 
@@ -191,9 +199,9 @@ const videos = await supabase
 
 ### view_history Table
 
-Tracks view count changes over time:
+The system records view count changes in `view_history`:
 
-시간에 따른 조회수 변화를 추적:
+시스템은 조회수 변동을 `view_history`에 기록합니다:
 
 ```sql
 CREATE TABLE view_history (
@@ -217,22 +225,116 @@ CREATE TABLE view_tracking_config (
 );
 ```
 
+### Smart View Count Sync
+
+**Key Strategy**: If a video's view count difference is large, only then a YouTube API call is triggered.
+
+영상 조회수 차이가 클 때만 YouTube API가 호출됩니다.
+
+This avoids unnecessary sync calls.
+
+이 방식은 불필요한 동기화 호출을 피합니다.
+
 ### View History Update Strategy
 
-- **Update interval**: Every 60 minutes
+- **Update interval**: Every 60 minutes (via Edge Function or browser fallback)
 - **Retention**: 10 days (240 hours)
 - **Storage**: Sliding window (always keeps latest 240 snapshots)
 - **Auto-cleanup**: Removes data older than 10 days
+- **Update mechanism**: 
+  - Primary: Supabase Edge Function (scheduled via pg_cron)
+  - Fallback: Browser-based tracking (if Edge Function unavailable)
 
 ### Benefits
 
 - **No repeated API calls**: View count stored in cache
 - **Real-time VPH calculation**: Uses view_history snapshots
 - **Efficient storage**: Only keeps latest 10 days
+- **Smart sync**: Only updates when significant changes detected
 
 ---
 
-## 6. API Call Optimization
+## 6. Edge Function Layer (Batching)
+
+### Current Implementation
+
+**Note**: Currently, the system calls YouTube API directly from the client. However, the architecture supports Edge Function batching for future optimization.
+
+**참고**: 현재는 클라이언트에서 YouTube API를 직접 호출하지만, 향후 최적화를 위해 Edge Function 배칭을 지원하는 구조입니다.
+
+### Edge Function for View Tracking
+
+The system uses Supabase Edge Functions for view history tracking:
+
+시스템은 조회수 추적을 위해 Supabase Edge Function을 사용합니다:
+
+```typescript
+// supabase/functions/hourly-view-tracker/index.ts
+// Runs every 60 minutes via pg_cron
+serve(async (req) => {
+  // Batch process video IDs (50 at a time)
+  // Update view_history table
+  // Auto-cleanup old records
+});
+```
+
+### Benefits of Edge Function Approach
+
+- ✅ **API key protection**: Keys stored server-side (environment variables)
+- ✅ **Batch processing**: Processes multiple videos efficiently
+- ✅ **Reduced quota usage**: Optimized API calls
+- ✅ **Scheduled execution**: Automatic updates without user interaction
+
+### Future Enhancement
+
+For search operations, an Edge Function could:
+- Batch multiple search requests
+- Update cache centrally
+- Return results to clients
+- Further reduce API quota usage
+
+---
+
+## 7. Scheduled Refresh (Cron Jobs)
+
+### View History Auto-Update
+
+A scheduled function refreshes view counts every 60 minutes:
+
+예약된 함수가 60분마다 조회수를 갱신합니다:
+
+```sql
+-- pg_cron schedule
+SELECT cron.schedule(
+  'hourly-view-tracker',
+  '0 * * * *',  -- Every hour
+  $$
+  SELECT net.http_post(
+    url := 'https://your-project.supabase.co/functions/v1/hourly-view-tracker',
+    headers := '{"Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb
+  );
+  $$
+);
+```
+
+### Benefits
+
+- **Users no longer trigger expensive queries**: Automatic background updates
+- **Consistent data**: Regular view count snapshots
+- **Efficient**: Batch processing reduces API calls
+
+### Search Cache Refresh
+
+**Current behavior**: Search cache refreshes automatically when:
+- Cache expires (> 72 hours)
+- User performs a new search
+- Cache version mismatch
+
+**Future enhancement**: Could add scheduled refresh for popular keywords to pre-warm cache.
+
+---
+
+## 8. API Call Optimization
 
 ### Current Implementation
 
@@ -276,7 +378,7 @@ for (let i = 0; i < chunks.length; i++) {
 
 ---
 
-## 7. Cache Refresh Strategy
+## 9. Cache Refresh Strategy
 
 ### Smart Cache Refresh
 
@@ -303,7 +405,7 @@ When cache expires but has pagination token:
 
 ---
 
-## 8. Architecture Summary
+## 10. Architecture Summary
 
 ### Complete Flow Diagram
 
@@ -363,7 +465,7 @@ When cache expires but has pagination token:
 
 ---
 
-## 9. Production Readiness
+## 11. Production Readiness
 
 ### Scalability
 
@@ -386,7 +488,7 @@ When cache expires but has pagination token:
 
 ---
 
-## 10. Best Practices
+## 12. Best Practices
 
 ### For Developers
 
