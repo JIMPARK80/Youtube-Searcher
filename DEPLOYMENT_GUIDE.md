@@ -50,9 +50,13 @@ Only deploy the scheduled function:
 firebase deploy --only functions:hourlyViewTracker
 ```
 
-## 🗄️ Firestore Setup (Required)
+## 🗄️ Firestore Setup (Required - CRITICAL!)
 
-Create:
+⚠️ **IMPORTANT:** Without this document, the Cloud Function will **NOT execute** even if deployment succeeded!
+
+The function reads `config/viewTracking.videoIds` to know which videos to track. If this document doesn't exist, the scheduler runs but immediately exits with no work.
+
+**Create:**
 
 **Collection:** `config`  
 **Document ID:** `viewTracking`  
@@ -60,12 +64,12 @@ Create:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `videoIds` | array | List of YouTube video IDs to track (max ~400 recommended) |
+| `videoIds` | array | **REQUIRED** - List of YouTube video IDs to track (max ~400 recommended) |
 | `retentionHours` | number (optional) | How long you store historical snapshots (default 240h = 10 days) |
 | `maxEntries` | number (optional) | Maximum number of snapshot entries to retain |
-| `youtubeApiKey` | string (optional) | Only if NOT using Secret |
+| `youtubeApiKey` | string (optional) | Only if NOT using Secret (Functions prefer Secret) |
 
-**Example:**
+**Example JSON:**
 
 ```json
 {
@@ -78,13 +82,31 @@ Create:
 }
 ```
 
+**What happens when you create this document:**
+
+- ✅ Cloud Scheduler → starts executing every 60 minutes
+- ✅ Function reads `videoIds` list
+- ✅ Saves snapshots to `viewHistory/{videoId}/history/{timestamp}`
+- ✅ After 2 snapshots (2 hours) → VPH calculation becomes available
+- ✅ Works even if browser tabs are closed
+- ✅ No user interaction needed
+
+**Note:** `config/apiKeys` is for **frontend** search API calls. Cloud Functions use the **Secret** (`YOUTUBE_DATA_API_KEY`) instead, so make sure you've set that secret in step 4.
+
 ## 🔎 Confirm Deployment
 
 1. **Firebase Console → Functions** → ensure `hourlyViewTracker` exists
 2. **Firebase Console → Scheduler** → ensure an hourly job exists
-3. **Firestore** → After 1 hour you should see:
-   - `viewHistory/{videoId}/history/{timestamp}`
+3. **Firestore → config/viewTracking** → **CRITICAL:** This document must exist with `videoIds` array
+4. **Firestore** → After 1 hour you should see:
+   - `viewHistory/{videoId}/history/{timestamp}` documents appearing
    - With fields: `viewCount`, `fetchedAt`
+
+**Troubleshooting:** If no snapshots appear after 1 hour, check:
+- ✅ `config/viewTracking` document exists
+- ✅ `videoIds` array is not empty
+- ✅ Secret `YOUTUBE_DATA_API_KEY` is set
+- ✅ Check Functions logs: `firebase functions:log --only hourlyViewTracker`
 
 ## 🧪 Test Manually (Optional)
 
