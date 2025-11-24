@@ -138,7 +138,7 @@ const firebaseConfig = {
    ```bash
    firebase functions:secrets:set YOUTUBE_DATA_API_KEY
    ```
-4. Deploy: `firebase deploy --only functions:hourlyViewTracker`
+4. Deploy: `firebase deploy --only functions:hourlyViewTracker,functions:updateTrendingVideoIds`
 
 #### Browser fallback (optional)
 - Enable `browserFallbackEnabled: true` in `config/viewTracking`
@@ -149,7 +149,7 @@ const firebaseConfig = {
 
 For Cursor AI automation, use this sentence:
 
-> "Cursor, create the hourlyViewTracker scheduled Cloud Function that reads config/viewTracking.videoIds, fetches each video's view count using the secret YOUTUBE_DATA_API_KEY, and stores it in Firestore under viewHistory/{videoId}/history/{timestamp}. Retain only the latest N snapshots based on retentionHours or maxEntries."
+> "Cursor, create the hourlyViewTracker scheduled Cloud Function that reads config/viewTracking.videoIds, fetches each video's view count using the secret YOUTUBE_DATA_API_KEY, and stores it in Firestore under viewHistory/{videoId}/history/{timestamp}. Retain only the latest N snapshots based on retentionHours or maxEntries. Also create the updateTrendingVideoIds job that refreshes the top keywords every 72 hours and merges their video IDs into config/viewTracking."
 
 See `DEPLOYMENT_GUIDE.md` for detailed deployment steps.
 

@@ -42,12 +42,12 @@ npm install
 cd ..
 ```
 
-## ✅ 6. Deploy Cloud Function
+## ✅ 6. Deploy Cloud Functions
 
-Only deploy the scheduled function:
+Deploy both scheduled functions:
 
 ```bash
-firebase deploy --only functions:hourlyViewTracker
+firebase deploy --only functions:hourlyViewTracker,functions:updateTrendingVideoIds
 ```
 
 ## 🗄️ Firestore Setup (Required - CRITICAL!)
@@ -95,8 +95,8 @@ The function reads `config/viewTracking.videoIds` to know which videos to track.
 
 ## 🔎 Confirm Deployment
 
-1. **Firebase Console → Functions** → ensure `hourlyViewTracker` exists
-2. **Firebase Console → Scheduler** → ensure an hourly job exists
+1. **Firebase Console → Functions** → ensure `hourlyViewTracker` and `updateTrendingVideoIds` exist
+2. **Firebase Console → Scheduler** → ensure jobs for both hourly (view tracking) and 72-hour (trending) schedules exist
 3. **Firestore → config/viewTracking** → **CRITICAL:** This document must exist with `videoIds` array
 4. **Firestore** → After 1 hour you should see:
    - `viewHistory/{videoId}/history/{timestamp}` documents appearing

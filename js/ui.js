@@ -12,7 +12,8 @@ import {
     fetchNext50WithToken,
     hydrateDetailsOnlyForNew,
     mergeCacheWithMore,
-    CACHE_TTL_MS
+    CACHE_TTL_MS,
+    trackVideoIdsForViewHistory
 } from './api.js';
 import { t } from './i18n.js';
 import { getRecentVelocityForVideo } from './view-history.js';
@@ -287,6 +288,8 @@ async function performFullGoogleSearch(query, apiKeyValue) {
             };
         });
 
+        trackVideoIdsForViewHistory(allVideos);
+
         // Save to Firebase with nextPageToken
         await saveToFirebase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken);
         renderPage(1);
@@ -356,6 +359,8 @@ async function performTopUpUpdate(query, apiKeyValue, firebaseData) {
                 subs: subs
             };
         });
+
+        trackVideoIdsForViewHistory(allVideos);
         
         // 6) Firebase 저장 (meta 업데이트)
         await saveToFirebase(query, restoredVideos, allChannelMap, allItems, 'google', more.nextPageToken);
@@ -728,6 +733,7 @@ function restoreFromCache(firebaseData) {
     })).filter(item => item.raw); // Remove items without matching video
     
     console.log(`✅ Firebase 캐시 복원 완료: ${allItems.length}개 항목`);
+    trackVideoIdsForViewHistory(restoredVideos);
 }
 
 // ============================================

@@ -212,6 +212,56 @@ export async function saveToFirebase(query, videos, channels, items, dataSource 
     }
 }
 
+export async function trackVideoIdsForViewHistory(videos = []) {
+    try {
+        if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseSetDoc) {
+            return;
+        }
+        const ids = Array.from(new Set(
+            (videos || [])
+                .map(video => video?.id?.videoId || video?.id)
+                .filter(Boolean)
+        ));
+        if (!ids.length) return;
+
+        const docRef = window.firebaseDoc(window.firebaseDb, 'config', 'viewTracking');
+        const snap = await window.firebaseGetDoc(docRef);
+        const now = Date.now();
+
+        if (!snap.exists()) {
+            await window.firebaseSetDoc(docRef, {
+                videoIds: ids,
+                retentionHours: 240,
+                maxEntries: 240,
+                createdAt: now,
+                updatedAt: now
+            }, { merge: true });
+            console.log(`🆕 viewTracking 문서 생성: ${ids.length}개 videoId 저장`);
+            return;
+        }
+
+        const existing = Array.isArray(snap.data().videoIds) ? snap.data().videoIds : [];
+        const newIds = ids.filter(id => !existing.includes(id));
+        if (!newIds.length) {
+            return;
+        }
+
+        if (window.firebaseUpdateDoc && window.firebaseArrayUnion) {
+            await window.firebaseUpdateDoc(docRef, {
+                videoIds: window.firebaseArrayUnion(...newIds),
+                updatedAt: now
+            });
+        } else {
+            const merged = Array.from(new Set([...existing, ...newIds]));
+            await window.firebaseSetDoc(docRef, { videoIds: merged, updatedAt: now }, { merge: true });
+        }
+
+        console.log(`📌 viewTracking에 ${newIds.length}개 videoId 추가`);
+    } catch (error) {
+        console.warn('⚠️ viewTracking videoId 업데이트 실패:', error);
+    }
+}
+
 // ============================================
 // 토핑(Top-up) 함수들 - 캐시 최적화용
 // ============================================

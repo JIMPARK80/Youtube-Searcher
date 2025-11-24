@@ -5,6 +5,7 @@ import {
     doc,
     getDoc,
     setDoc,
+    updateDoc,
     onSnapshot,
     collection,
     query,
@@ -13,7 +14,8 @@ import {
     getDocs,
     writeBatch,
     Timestamp,
-    deleteDoc
+    deleteDoc,
+    arrayUnion
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
@@ -47,6 +49,7 @@ window.firebaseDb = db;
 window.firebaseDoc = doc;
 window.firebaseGetDoc = getDoc;
 window.firebaseSetDoc = setDoc;
+window.firebaseUpdateDoc = updateDoc;
 window.firebaseOnSnapshot = onSnapshot;
 window.firebaseCollection = collection;
 window.firebaseQuery = query;
@@ -56,6 +59,7 @@ window.firebaseGetDocs = getDocs;
 window.firebaseWriteBatch = writeBatch;
 window.firebaseTimestamp = Timestamp;
 window.firebaseDeleteDoc = deleteDoc;
+window.firebaseArrayUnion = arrayUnion;
 
 console.log('✅ Firebase initialized successfully');
 console.log('✅ Firebase Auth initialized:', auth);
