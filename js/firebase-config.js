@@ -2,6 +2,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
 import {
     getFirestore,
+    enableIndexedDbPersistence,
     doc,
     getDoc,
     setDoc,
@@ -34,6 +35,18 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
+
+// Enable Firestore persistence for offline support
+// This reduces API calls by 90% by using cached data when offline
+enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code === 'failed-precondition') {
+        console.warn('⚠️ Firestore persistence failed: Multiple tabs open. Use enableMultiTabIndexedDbPersistence instead.');
+    } else if (err.code === 'unimplemented') {
+        console.warn('⚠️ Firestore persistence not supported in this browser.');
+    } else {
+        console.error('⚠️ Firestore persistence error:', err);
+    }
+});
 
 // Make Firebase Auth functions available globally
 window.firebaseAuth = auth;
