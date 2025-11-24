@@ -86,10 +86,30 @@ export async function loadFromFirebase(query) {
         );
         
 
-        const [mainSnap, ...partSnaps] = await Promise.all([
-            window.firebaseGetDoc(mainRef),
-            ...partRefs.map(ref => window.firebaseGetDoc(ref))
-        ]);
+        let mainSnap, partSnaps;
+        try {
+            // Try to read from server first
+            [mainSnap, ...partSnaps] = await Promise.all([
+                window.firebaseGetDoc(mainRef),
+                ...partRefs.map(ref => window.firebaseGetDoc(ref))
+            ]);
+        } catch (offlineError) {
+            // If offline, try reading from cache
+            if (offlineError.code === 'unavailable' || offlineError.message?.includes('offline')) {
+                console.log('📴 오프라인 상태 감지 → 캐시에서 읽기 시도');
+                try {
+                    [mainSnap, ...partSnaps] = await Promise.all([
+                        window.firebaseGetDocFromCache(mainRef),
+                        ...partRefs.map(ref => window.firebaseGetDocFromCache(ref))
+                    ]);
+                } catch (cacheError) {
+                    console.warn('⚠️ 캐시에도 데이터 없음:', cacheError);
+                    return null;
+                }
+            } else {
+                throw offlineError;
+            }
+        }
 
         if (!mainSnap.exists()) {
             console.log(`🔭 Firebase 캐시 없음 (문서 ID: "${docId}")`);
@@ -225,18 +245,37 @@ export async function trackVideoIdsForViewHistory(videos = []) {
         if (!ids.length) return;
 
         const docRef = window.firebaseDoc(window.firebaseDb, 'config', 'viewTracking');
-        const snap = await window.firebaseGetDoc(docRef);
+        let snap;
+        try {
+            snap = await window.firebaseGetDoc(docRef);
+        } catch (offlineError) {
+            // 오프라인 상태에서는 videoId 업데이트 건너뛰기 (나중에 자동 동기화됨)
+            if (offlineError.code === 'unavailable' || offlineError.message?.includes('offline')) {
+                console.log('📴 오프라인 상태: viewTracking 업데이트 건너뛰기');
+                return;
+            }
+            throw offlineError;
+        }
+        
         const now = Date.now();
 
         if (!snap.exists()) {
-            await window.firebaseSetDoc(docRef, {
-                videoIds: ids,
-                retentionHours: 240,
-                maxEntries: 240,
-                createdAt: now,
-                updatedAt: now
-            }, { merge: true });
-            console.log(`🆕 viewTracking 문서 생성: ${ids.length}개 videoId 저장`);
+            try {
+                await window.firebaseSetDoc(docRef, {
+                    videoIds: ids,
+                    retentionHours: 240,
+                    maxEntries: 240,
+                    createdAt: now,
+                    updatedAt: now
+                }, { merge: true });
+                console.log(`🆕 viewTracking 문서 생성: ${ids.length}개 videoId 저장`);
+            } catch (writeError) {
+                if (writeError.code === 'unavailable' || writeError.message?.includes('offline')) {
+                    console.log('📴 오프라인 상태: viewTracking 문서 생성 건너뛰기');
+                } else {
+                    throw writeError;
+                }
+            }
             return;
         }
 
@@ -246,17 +285,24 @@ export async function trackVideoIdsForViewHistory(videos = []) {
             return;
         }
 
-        if (window.firebaseUpdateDoc && window.firebaseArrayUnion) {
-            await window.firebaseUpdateDoc(docRef, {
-                videoIds: window.firebaseArrayUnion(...newIds),
-                updatedAt: now
-            });
-        } else {
-            const merged = Array.from(new Set([...existing, ...newIds]));
-            await window.firebaseSetDoc(docRef, { videoIds: merged, updatedAt: now }, { merge: true });
+        try {
+            if (window.firebaseUpdateDoc && window.firebaseArrayUnion) {
+                await window.firebaseUpdateDoc(docRef, {
+                    videoIds: window.firebaseArrayUnion(...newIds),
+                    updatedAt: now
+                });
+            } else {
+                const merged = Array.from(new Set([...existing, ...newIds]));
+                await window.firebaseSetDoc(docRef, { videoIds: merged, updatedAt: now }, { merge: true });
+            }
+            console.log(`📌 viewTracking에 ${newIds.length}개 videoId 추가`);
+        } catch (writeError) {
+            if (writeError.code === 'unavailable' || writeError.message?.includes('offline')) {
+                console.log('📴 오프라인 상태: viewTracking 업데이트 건너뛰기 (나중에 자동 동기화)');
+            } else {
+                console.error('❌ viewTracking videoId 업데이트 실패:', writeError);
+            }
         }
-
-        console.log(`📌 viewTracking에 ${newIds.length}개 videoId 추가`);
     } catch (error) {
         console.warn('⚠️ viewTracking videoId 업데이트 실패:', error);
     }

@@ -5,6 +5,7 @@ import {
     enableIndexedDbPersistence,
     doc,
     getDoc,
+    getDocFromCache,
     setDoc,
     updateDoc,
     onSnapshot,
@@ -61,6 +62,7 @@ window.googleProvider = googleProvider;
 window.firebaseDb = db;
 window.firebaseDoc = doc;
 window.firebaseGetDoc = getDoc;
+window.firebaseGetDocFromCache = getDocFromCache;
 window.firebaseSetDoc = setDoc;
 window.firebaseUpdateDoc = updateDoc;
 window.firebaseOnSnapshot = onSnapshot;
