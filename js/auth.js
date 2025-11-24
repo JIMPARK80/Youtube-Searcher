@@ -4,6 +4,7 @@
 // ============================================
 
 import { t } from './i18n.js';
+import { supabase } from './supabase-config.js';
 
 // ============================================
 // 비밀번호 토글 함수
@@ -135,12 +136,15 @@ async function handleLogin() {
     }
     
     try {
-        const userCredential = await window.signInWithEmailAndPassword(
-            window.firebaseAuth, 
-            email, 
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
             password
-        );
-        console.log('✅ 로그인 성공:', userCredential.user.email);
+        });
+        
+        if (error) throw error;
+        
+        console.log('✅ 로그인 성공:', data.user.email);
+        window.currentUser = data.user;
         
         // Close modal
         document.getElementById('loginModal').classList.remove('active');
@@ -150,21 +154,12 @@ async function handleLogin() {
         console.error('❌ 로그인 실패:', error);
         
         let errorMessage = t('auth.loginFailed');
-        switch(error.code) {
-            case 'auth/user-not-found':
-                errorMessage += t('auth.error.userNotFound');
-                break;
-            case 'auth/wrong-password':
-                errorMessage += t('auth.error.wrongPassword');
-                break;
-            case 'auth/invalid-email':
-                errorMessage += t('auth.error.invalidEmail');
-                break;
-            case 'auth/too-many-requests':
-                errorMessage += t('auth.error.tooManyRequests');
-                break;
-            default:
-                errorMessage += error.message;
+        if (error.message?.includes('Invalid login credentials')) {
+            errorMessage += t('auth.error.wrongPassword');
+        } else if (error.message?.includes('Email not confirmed')) {
+            errorMessage += '이메일 인증이 필요합니다.';
+        } else {
+            errorMessage += error.message;
         }
         
         alert(errorMessage);
@@ -199,13 +194,20 @@ async function handleSignup() {
     
     try {
         // Create user
-        const userCredential = await window.createUserWithEmailAndPassword(
-            window.firebaseAuth, 
-            email, 
-            password
-        );
+        const { data, error: signupError } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    username: username
+                }
+            }
+        });
         
-        console.log('✅ 회원가입 성공:', userCredential.user.email);
+        if (signupError) throw signupError;
+        
+        console.log('✅ 회원가입 성공:', data.user?.email);
+        window.currentUser = data.user;
         
         // Save username to Firestore
         const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', userCredential.user.uid);
@@ -252,7 +254,8 @@ export function setupLogout() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async () => {
             try {
-                await window.signOut(window.firebaseAuth);
+                await supabase.auth.signOut();
+                window.currentUser = null;
                 console.log('✅ 로그아웃 성공');
                 alert(t('auth.logoutSuccess'));
             } catch (error) {
@@ -368,13 +371,15 @@ export function setupProfileEditModal() {
 // ============================================
 
 export function setupAuthStateObserver() {
-    window.onAuthStateChanged(window.firebaseAuth, async (user) => {
+    supabase.auth.onAuthStateChange(async (event, session) => {
         const authSection = document.getElementById('authSection');
         const loginBtn = document.getElementById('loginBtn');
         const signupBtn = document.getElementById('signupBtn');
         const userInfo = document.getElementById('userInfo');
         const userName = document.getElementById('userName');
         const userAvatar = document.getElementById('userAvatar');
+        
+        const user = session?.user;
         
         if (user) {
             // User is signed in
@@ -383,23 +388,25 @@ export function setupAuthStateObserver() {
             signupBtn.style.display = 'none';
             userInfo.style.display = 'flex';
             
-            // Load username from Firestore
+            // Load username from Supabase
             try {
-                const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', user.uid);
-                const userDocSnap = await window.firebaseGetDoc(userDocRef);
+                const { data: userData, error } = await supabase
+                    .from('users')
+                    .select('username')
+                    .eq('id', user.id)
+                    .single();
                 
-                if (userDocSnap.exists()) {
-                    const userData = userDocSnap.data();
-                    const displayName = userData.username || user.displayName || user.email;
+                if (!error && userData) {
+                    const displayName = userData.username || user.user_metadata?.username || user.email;
                     userName.textContent = displayName;
                     console.log('✅ 사용자 로그인 중:', displayName);
                 } else {
-                    userName.textContent = user.displayName || user.email;
-                    console.log('✅ 사용자 로그인 중:', user.displayName || user.email);
+                    userName.textContent = user.user_metadata?.username || user.email;
+                    console.log('✅ 사용자 로그인 중:', user.user_metadata?.username || user.email);
                 }
             } catch (error) {
                 console.warn('⚠️ 사용자 정보 로드 실패:', error);
-                userName.textContent = user.displayName || user.email;
+                userName.textContent = user.user_metadata?.username || user.email;
             }
             
             // Set avatar (placeholder)

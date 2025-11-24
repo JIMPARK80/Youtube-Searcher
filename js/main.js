@@ -6,7 +6,7 @@ import { initializeApiKeys } from './api.js';
 import { initializeUI } from './ui.js';
 import { initializeAuth } from './auth.js';
 import { initializeI18n } from './i18n.js';
-import { initializeViewTrackingFallback } from './view-history.js';
+import { supabase } from './supabase-config.js';
 
 // ============================================
 // 전역 변수 초기화
@@ -41,8 +41,8 @@ async function initializeApp() {
             }
         });
 
-        // Wait for Firebase to be fully loaded
-        await waitForFirebase();
+        // Supabase is already initialized in supabase-config.js
+        console.log('✅ Supabase 준비 완료');
         
         // Initialize i18n (다국어 시스템)
         console.log('🌐 다국어 시스템 초기화 중...');
@@ -59,65 +59,12 @@ async function initializeApp() {
         // Initialize UI
         console.log('🎨 UI 초기화 중...');
         initializeUI();
-
-        // Optional browser-based view tracking fallback
-        initializeViewTrackingFallback();
         
         console.log('✅ 애플리케이션 초기화 완료!');
         
     } catch (error) {
         console.error('❌ 초기화 실패:', error);
     }
-}
-
-// ============================================
-// Firebase 로딩 대기
-// ============================================
-
-function waitForFirebase(timeout = 10000) {
-    const isFirebaseReady = () => Boolean(window.firebaseDb && window.firebaseAuth);
-
-    if (isFirebaseReady()) {
-        console.log('✅ Firebase 준비 완료');
-        return Promise.resolve();
-    }
-
-    return new Promise((resolve) => {
-        let settled = false;
-
-        const finish = (didTimeout = false) => {
-            if (settled) return;
-            settled = true;
-
-            window.removeEventListener('firebase-ready', onReady);
-            clearTimeout(timeoutId);
-
-            if (didTimeout) {
-                console.warn('⚠️ Firebase 로딩 타임아웃');
-            } else {
-                console.log('✅ Firebase 준비 완료');
-            }
-
-            resolve();
-        };
-
-        const onReady = () => finish(false);
-
-        window.addEventListener('firebase-ready', onReady, { once: true });
-
-        // If firebaseReadyPromise exists, use it
-        if (window.firebaseReadyPromise instanceof Promise) {
-            window.firebaseReadyPromise.then(() => finish(false)).catch(() => finish(true));
-        } else {
-            // Create a promise bridge so firebase-config can resolve it
-            window.firebaseReadyPromise = new Promise((promiseResolve) => {
-                window.__resolveFirebaseReady = promiseResolve;
-            });
-            window.firebaseReadyPromise.then(() => finish(false)).catch(() => finish(true));
-        }
-
-        const timeoutId = setTimeout(() => finish(true), timeout);
-    });
 }
 
 // ============================================

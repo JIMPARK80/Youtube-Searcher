@@ -476,15 +476,20 @@ function parseRelativeDate(relativeDateStr) {
 
 export async function saveUserLastSearchKeyword(uid, keyword) {
     try {
-        if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseSetDoc) {
-            return;
-        }
+        const { supabase } = await import('./supabase-config.js');
         
-        const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', uid);
-        await window.firebaseSetDoc(userDocRef, {
-            lastSearchKeyword: keyword,
-            lastSearchTime: Date.now()
-        }, { merge: true });
+        const { error } = await supabase
+            .from('users')
+            .upsert({
+                id: uid,
+                last_search_keyword: keyword,
+                last_search_time: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            }, {
+                onConflict: 'id'
+            });
+        
+        if (error) throw error;
         
         console.log('✅ 사용자 검색어 저장:', keyword);
     } catch (error) {

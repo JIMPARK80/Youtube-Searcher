@@ -5,18 +5,19 @@
 
 import {
     getApiKeys,
-    loadFromFirebase,
-    saveToFirebase,
     searchYouTubeAPI,
     saveUserLastSearchKeyword,
     fetchNext50WithToken,
     hydrateDetailsOnlyForNew,
-    mergeCacheWithMore,
-    CACHE_TTL_MS,
-    trackVideoIdsForViewHistory
+    mergeCacheWithMore
 } from './api.js';
+import {
+    loadFromSupabase,
+    saveToSupabase,
+    getRecentVelocityForVideo,
+    CACHE_TTL_MS
+} from './supabase-api.js';
 import { t } from './i18n.js';
-import { getRecentVelocityForVideo } from './view-history.js';
 
 // Global variables for pagination
 export let allVideos = [];
@@ -214,15 +215,15 @@ export async function search() {
     // 캐시 로직: 스마트 캐시 전략
     // ============================================
     
-    const firebaseData = await loadFromFirebase(query);
+    const cacheData = await loadFromSupabase(query);
     
-    if (firebaseData) {
-        const age = Date.now() - firebaseData.timestamp;
+    if (cacheData) {
+        const age = Date.now() - cacheData.timestamp;
         const isExpired = age >= CACHE_TTL_MS;
-        const count = firebaseData.videos?.length || 0;
-        const meta = firebaseData.meta || {};
-        const cacheSource = firebaseData.dataSource || meta.source || 'unknown';
-        const savedAt = new Date(firebaseData.timestamp);
+        const count = cacheData.videos?.length || 0;
+        const meta = cacheData.meta || {};
+        const cacheSource = cacheData.dataSource || meta.source || 'unknown';
+        const savedAt = new Date(cacheData.timestamp);
         const savedAtLabel = savedAt.toLocaleString();
         
         console.log(`📂 로컬 검색어 캐시 확인: "${query}" (총 ${count}개, 소스=${cacheSource})`);
@@ -238,7 +239,7 @@ export async function search() {
         // 신선한 Google 캐시 사용
         if (!isExpired) {
             console.log(`✅ 로컬 캐시 사용 (기준 시각: ${savedAtLabel})`);
-            restoreFromCache(firebaseData);
+            restoreFromCache(cacheData);
             renderPage(1);
             return;
         }
@@ -246,11 +247,11 @@ export async function search() {
         // 72시간 경과 + pagination 토큰 존재 → 토핑
         if (count === 50 && meta.nextPageToken) {
             console.log('🔝 토핑 모드: 추가 50개만 fetch');
-            await performTopUpUpdate(query, apiKeyValue, firebaseData);
+            await performTopUpUpdate(query, apiKeyValue, cacheData);
             return;
         }
         
-        console.log('⏰ 로컬 캐시 만료 → Firebase 서버 재호출');
+        console.log('⏰ 로컬 캐시 만료 → Supabase 서버 재호출');
         await performFullGoogleSearch(query, apiKeyValue);
         return;
     }
@@ -288,10 +289,8 @@ async function performFullGoogleSearch(query, apiKeyValue) {
             };
         });
 
-        trackVideoIdsForViewHistory(allVideos);
-
-        // Save to Firebase with nextPageToken
-        await saveToFirebase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken);
+        // Save to Supabase with nextPageToken
+        await saveToSupabase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken);
         renderPage(1);
 
     } catch (googleError) {
@@ -360,10 +359,8 @@ async function performTopUpUpdate(query, apiKeyValue, firebaseData) {
             };
         });
 
-        trackVideoIdsForViewHistory(allVideos);
-        
-        // 6) Firebase 저장 (meta 업데이트)
-        await saveToFirebase(query, restoredVideos, allChannelMap, allItems, 'google', more.nextPageToken);
+        // 6) Supabase 저장 (meta 업데이트)
+        await saveToSupabase(query, restoredVideos, allChannelMap, allItems, 'google', more.nextPageToken);
         renderPage(1);
         
     } catch (error) {
