@@ -380,14 +380,18 @@ function dedupeItemsByVideo(items) {
     return result;
 }
 
+function getFilteredDedupedItems() {
+    const filteredItems = applyFilters(allItems);
+    return dedupeItemsByVideo(filteredItems);
+}
+
 export function renderPage(page) {
     currentPage = page;
     
-    // Apply filters
-    const filteredItems = applyFilters(allItems);
+    // Apply filters and dedupe results
+    const dedupedItems = getFilteredDedupedItems();
     const velocityMetricSelect = document.getElementById('velocityMetricSelect');
     currentVelocityMetric = velocityMetricSelect?.value || 'day';
-    const dedupedItems = dedupeItemsByVideo(filteredItems);
     
     // Sort by views per day if requested
     const sortSelect = document.getElementById('sortVpdSelect');
@@ -609,8 +613,8 @@ export function setupPaginationHandlers() {
     });
     
     document.getElementById('nextPage')?.addEventListener('click', () => {
-        const filteredItems = applyFilters(allItems);
-        const totalPages = Math.ceil(filteredItems.length / pageSize);
+        const dedupedItems = getFilteredDedupedItems();
+        const totalPages = Math.ceil(dedupedItems.length / pageSize);
         if (currentPage < totalPages) {
             renderPage(currentPage + 1);
         }
