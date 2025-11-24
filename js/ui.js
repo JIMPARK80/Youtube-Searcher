@@ -23,6 +23,8 @@ export let currentPage = 1;
 export let allChannelMap = {};
 export let currentSearchQuery = '';
 let currentVelocityMetric = 'day';
+const PUBLIC_DEFAULT_QUERY = '인생사연';
+const PUBLIC_DEFAULT_QUERY_NORMALIZED = PUBLIC_DEFAULT_QUERY.toLowerCase();
 
 // ============================================
 // 유틸리티 함수
@@ -82,6 +84,10 @@ export function getPublishedAfterDate(period) {
     }
 
     return date.toISOString();
+}
+
+function isPublicDefaultQuery(value) {
+    return (value || '').trim().toLowerCase() === PUBLIC_DEFAULT_QUERY_NORMALIZED;
 }
 
 // ============================================
@@ -163,8 +169,8 @@ export async function search() {
     window.isDefaultSearch = false;
     
     // Check if user is logged in
-    const isNewsQuery = query.toLowerCase() === 'news';
-    if (!window.currentUser && !wasDefaultSearch && !isNewsQuery) {
+    const isDefaultPublicQuery = isPublicDefaultQuery(query);
+    if (!window.currentUser && !wasDefaultSearch && !isDefaultPublicQuery) {
         const loginModal = document.getElementById('loginModal');
         if (loginModal) {
             loginModal.classList.add('active');
@@ -191,7 +197,7 @@ export async function search() {
     resultsDiv.innerHTML = `<div class="loading">${t('search.loading')}</div>`;
     
     // Save search keyword
-    if (window.currentUser && !window.isDefaultSearch && query !== 'news') {
+    if (window.currentUser && !window.isDefaultSearch && !isDefaultPublicQuery) {
         saveUserLastSearchKeyword(window.currentUser.uid, query);
     }
     
