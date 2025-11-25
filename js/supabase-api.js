@@ -341,13 +341,15 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
             let query = supabase
                 .from('videos')
                 .select('video_id, channel_id, title, view_count, like_count, subscriber_count, duration, channel_title, published_at')
-                .or('subscriber_count.is.null,view_count.is.null,like_count.is.null,title.is.null,channel_id.is.null,duration.is.null')
+                .or('subscriber_count.is.null,view_count.is.null,like_count.is.null,title.is.null,channel_id.is.null,duration.is.null,published_at.is.null')
                 .neq('subscriber_count', -1) // 구독자 수가 숨겨진 경우(-1) 제외
                 .limit(limit);
             
             // 특정 검색어가 있으면 해당 검색어의 비디오만 체크
             if (keyword) {
-                query = query.eq('keyword', keyword.trim().toLowerCase());
+                const normalizedKeyword = keyword.trim().toLowerCase();
+                query = query.eq('keyword', normalizedKeyword);
+                console.log(`🔍 키워드 필터 적용: "${normalizedKeyword}"`);
             }
             
             // 스킵된 비디오 제외
@@ -364,15 +366,35 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
                 return { updated: 0, skipped: 0, error: fetchError };
             }
             
+            // 디버그: 조회된 비디오 정보 출력
+            if (videosWithNulls && videosWithNulls.length > 0) {
+                console.log(`📋 조회된 NULL 데이터 비디오: ${videosWithNulls.length}개`);
+                // 첫 3개만 상세 출력
+                videosWithNulls.slice(0, 3).forEach(v => {
+                    const nullFields = [];
+                    if (!v.subscriber_count && v.subscriber_count !== -1) nullFields.push('subscriber_count');
+                    if (!v.view_count) nullFields.push('view_count');
+                    if (!v.like_count) nullFields.push('like_count');
+                    if (!v.title) nullFields.push('title');
+                    if (!v.channel_id) nullFields.push('channel_id');
+                    if (!v.duration) nullFields.push('duration');
+                    console.log(`  - ${v.video_id}: NULL 필드 = [${nullFields.join(', ')}]`);
+                });
+            }
+            
             // 스킵된 비디오 필터링
             const videosToProcess = videosWithNulls?.filter(v => !skippedVideoIds.has(v.video_id)) || [];
             
             if (videosToProcess.length === 0) {
-                console.log('✅ 업데이트할 NULL 데이터 없음 (모든 데이터가 채워짐 또는 모두 스킵됨)');
+                if (videosWithNulls && videosWithNulls.length > 0) {
+                    console.log(`⏭️ NULL 데이터 비디오 ${videosWithNulls.length}개가 모두 스킵됨`);
+                } else {
+                    console.log('✅ 업데이트할 NULL 데이터 없음 (모든 데이터가 채워짐 또는 모두 스킵됨)');
+                }
                 break;
             }
             
-            console.log(`📋 NULL 데이터 비디오: ${videosToProcess.length}개`);
+            console.log(`📋 처리할 NULL 데이터 비디오: ${videosToProcess.length}개`);
             
             // 2. video_id 수집 (중복 제거)
             const videoIds = [...new Set(videosToProcess.map(v => v.video_id).filter(Boolean))];
