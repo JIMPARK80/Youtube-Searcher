@@ -240,6 +240,7 @@ export async function search(shouldReload = false) {
     
     // 새로운 검색 시작 시 VPH 계산 추적 초기화
     vphCalculatedVideos.clear();
+    window.vphCalculationsStarted = false; // 새로운 검색 시 VPH 계산 시작 플래그 초기화
     
     const searchBtn = document.getElementById('searchBtn');
     const searchInput = document.getElementById('searchInput');
@@ -826,6 +827,12 @@ export function renderPage(page) {
     // Update pagination
     updatePaginationControls(dedupedItems.length);
     
+    // 모든 항목에 대해 VPH 계산 시작 (페이지와 관계없이)
+    // 첫 페이지 렌더링 시에만 실행 (중복 계산 방지)
+    if (page === 1 && allItems.length > 0) {
+        startVphCalculationsForAllItems();
+    }
+    
     // 마지막 UI 업데이트 시간 갱신
     lastUIUpdateTime = Date.now();
     resetAutoRefreshTimer();
@@ -1034,17 +1041,10 @@ function checkAndResortWhenAllCalculated() {
 }
 
 async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', item = null) {
-    if (!panelEl) {
-        console.warn(`⚠️ executeVphCalculation: panelEl이 없습니다 (videoId="${videoId}")`);
-        return;
-    }
-    const recentEl = panelEl.querySelector('.recent-vph');
-    const dailyEl = panelEl.querySelector('.daily-vpd');
-    const badgeEl = panelEl.closest('.video-card')?.querySelector('.vpd-badge');
-    
-    if (!recentEl) {
-        console.warn(`⚠️ executeVphCalculation: .recent-vph 요소를 찾을 수 없습니다 (videoId="${videoId}")`);
-    }
+    // panelEl이 없어도 VPH 계산은 수행 (나중에 DOM이 생성될 때 업데이트됨)
+    const recentEl = panelEl?.querySelector('.recent-vph');
+    const dailyEl = panelEl?.querySelector('.daily-vpd');
+    const badgeEl = panelEl?.closest('.video-card')?.querySelector('.vpd-badge');
     
     if (dailyEl) {
         dailyEl.textContent = `${formatNumber(baseVpd || 0)}/day`;
@@ -1080,36 +1080,38 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
             return;
         }
         
+        // stats.vph가 명시적으로 설정되어 있으면 그 값을 사용 (0도 유효한 값)
+        const vphValue = (stats.vph !== null && stats.vph !== undefined) ? stats.vph : 0;
+        
+        // recentEl이 있으면 업데이트
         if (recentEl) {
-            // stats.vph가 명시적으로 설정되어 있으면 그 값을 사용 (0도 유효한 값)
-            const vphValue = (stats.vph !== null && stats.vph !== undefined) ? stats.vph : 0;
             recentEl.textContent = `${formatNumber(vphValue)}/hr`;
-            
-            // item 객체에 VPH 데이터 저장 (표시 단위 "최근 VPH" 사용 시)
-            // 0도 유효한 값이므로 명시적으로 저장 (null/undefined와 구분)
-            if (item) {
-                item.vph = vphValue;
-                
-                // 배지 업데이트 (표시 단위가 "최근 VPH"인 경우)
-                if (badgeEl && currentVelocityMetric === 'recent-vph') {
-                    const velocityValue = getVelocityValue(item);
-                    badgeEl.textContent = formatVelocityBadge(velocityValue);
-                }
-            }
-            
-            // 계산 완료 표시 (재계산 방지)
-            vphCalculatedVideos.add(videoId);
-            
-            // VPH 계산 완료 후 항상 재정렬 (표시 단위와 정렬 옵션에 따라)
-            // 재정렬 디바운싱: 마지막 재정렬 요청 후 1초 후에 실행
-            if (window.vphResortTimer) {
-                clearTimeout(window.vphResortTimer);
-            }
-            
-            window.vphResortTimer = setTimeout(() => {
-                checkAndResortWhenAllCalculated();
-            }, 1000); // 1초 딜레이로 여러 계산 완료를 기다림
         }
+        
+        // item 객체에 VPH 데이터 저장 (panelEl이 없어도 저장)
+        // 0도 유효한 값이므로 명시적으로 저장 (null/undefined와 구분)
+        if (item) {
+            item.vph = vphValue;
+            
+            // 배지 업데이트 (표시 단위가 "최근 VPH"인 경우, panelEl이 있을 때만)
+            if (badgeEl && currentVelocityMetric === 'recent-vph') {
+                const velocityValue = getVelocityValue(item);
+                badgeEl.textContent = formatVelocityBadge(velocityValue);
+            }
+        }
+        
+        // 계산 완료 표시 (재계산 방지)
+        vphCalculatedVideos.add(videoId);
+        
+        // VPH 계산 완료 후 항상 재정렬 (표시 단위와 정렬 옵션에 따라)
+        // 재정렬 디바운싱: 마지막 재정렬 요청 후 1초 후에 실행
+        if (window.vphResortTimer) {
+            clearTimeout(window.vphResortTimer);
+        }
+        
+        window.vphResortTimer = setTimeout(() => {
+            checkAndResortWhenAllCalculated();
+        }, 1000); // 1초 딜레이로 여러 계산 완료를 기다림
         
     } catch (error) {
         // 타임아웃 또는 기타 에러 처리
@@ -1142,6 +1144,38 @@ function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '', item = 
     
     // 큐에 추가 (동시 실행 제한)
     vphCalculationQueue.push({ videoId, panelEl, baseVpd, label, item });
+    
+    // 큐 처리 시작
+    processVphQueue();
+}
+
+// 모든 항목에 대해 VPH 계산 시작 (페이지와 관계없이)
+function startVphCalculationsForAllItems() {
+    // 이미 시작된 경우 중복 실행 방지
+    if (window.vphCalculationsStarted) {
+        return;
+    }
+    window.vphCalculationsStarted = true;
+    
+    // 모든 allItems에 대해 VPH 계산 시작
+    allItems.forEach(item => {
+        const videoId = item.raw?.id || item.id;
+        if (!videoId || vphCalculatedVideos.has(videoId)) {
+            return; // 이미 계산되었거나 ID가 없으면 건너뛰기
+        }
+        
+        // baseVpd 계산
+        const baseVpd = item.vpd || viewVelocityPerDay(item.raw || item);
+        
+        // panelEl은 null로 전달 (나중에 DOM이 생성될 때 업데이트됨)
+        vphCalculationQueue.push({ 
+            videoId, 
+            panelEl: null, 
+            baseVpd, 
+            label: item.raw?.snippet?.title || '', 
+            item 
+        });
+    });
     
     // 큐 처리 시작
     processVphQueue();
