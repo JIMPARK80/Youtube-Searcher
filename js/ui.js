@@ -1089,15 +1089,7 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
 }
 
 function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '', item = null) {
-    // 표시 단위가 "최근 VPH"가 아니면 VPH 계산 건너뛰기
-    if (currentVelocityMetric !== 'recent-vph') {
-        const recentEl = panelEl?.querySelector('.recent-vph');
-        if (recentEl) {
-            recentEl.textContent = t('velocity.unavailable');
-        }
-        return;
-    }
-    
+    // 표시 단위와 관계없이 항상 VPH 데이터를 계산하고 표시
     // 이미 계산된 비디오는 재계산하지 않음
     if (!videoId || vphCalculatedVideos.has(videoId)) {
         // 이미 계산된 경우 저장된 값 사용
@@ -1106,6 +1098,9 @@ function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '', item = 
             if (recentEl) {
                 recentEl.textContent = `${formatNumber(item.vph)}/hr`;
             }
+        } else {
+            // 계산된 값이 없으면 "데이터 없음" 표시하지 않고 계산 시작
+            // (아래에서 큐에 추가됨)
         }
         return;
     }
