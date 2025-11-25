@@ -240,6 +240,7 @@ export async function search(shouldReload = false) {
     
     // 새로운 검색 시작 시 VPH 계산 추적 초기화
     vphCalculatedVideos.clear();
+    vphRetryCount.clear(); // 재시도 횟수도 초기화
     window.vphCalculationsStarted = false; // 새로운 검색 시 VPH 계산 시작 플래그 초기화
     
     const searchBtn = document.getElementById('searchBtn');
@@ -907,6 +908,8 @@ let vphCalculationQueue = [];
 let vphCalculationRunning = 0;
 const MAX_CONCURRENT_VPH_CALCULATIONS = 3; // 동시 최대 3개만 실행
 const vphCalculatedVideos = new Set(); // 이미 계산된 비디오 ID 추적
+const vphRetryCount = new Map(); // 데이터 부족 시 재시도 횟수 추적 (최대 3번)
+const MAX_VPH_RETRY_COUNT = 3; // 최대 재시도 횟수
 
 // 자동 새로고침 함수
 function resetAutoRefreshTimer() {
@@ -1073,12 +1076,34 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
         
         // 스냅샷이 부족한 경우 (2개 미만)
         if (stats.insufficient) {
+            // 재시도 횟수 확인
+            const retryCount = vphRetryCount.get(videoId) || 0;
+            
             if (recentEl) {
                 recentEl.textContent = stats.message || t('velocity.unavailable');
                 recentEl.style.opacity = '0.6'; // 반투명으로 표시
             }
+            
+            // 3번 미만 시도했으면 재시도 허용 (vphCalculatedVideos에 추가하지 않음)
+            if (retryCount < MAX_VPH_RETRY_COUNT) {
+                vphRetryCount.set(videoId, retryCount + 1);
+                // 재시도를 위해 vphCalculatedVideos에서 제거 (다음에 다시 계산 시도)
+                vphCalculatedVideos.delete(videoId);
+                // 일정 시간 후 재시도 (5초 후)
+                setTimeout(() => {
+                    if (panelEl && !vphCalculatedVideos.has(videoId)) {
+                        hydrateVelocityPanel(videoId, panelEl, baseVpd, label, item);
+                    }
+                }, 5000);
+            } else {
+                // 3번 이상 시도했으면 더 이상 재시도하지 않음
+                vphCalculatedVideos.add(videoId);
+            }
             return;
         }
+        
+        // 성공적으로 계산되면 재시도 횟수 초기화
+        vphRetryCount.delete(videoId);
         
         // stats.vph가 명시적으로 설정되어 있으면 그 값을 사용 (0도 유효한 값)
         const vphValue = (stats.vph !== null && stats.vph !== undefined) ? stats.vph : 0;
@@ -1121,6 +1146,8 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
             console.warn('⚠️ 최근 VPH 로드 실패:', error);
         }
         if (recentEl) recentEl.textContent = t('velocity.unavailable');
+        // 재계산 방지 (에러 발생 시에도 무한 재시도 방지)
+        vphCalculatedVideos.add(videoId);
         // 앱이 멈추지 않도록 에러를 무시
     }
 }
