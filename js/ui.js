@@ -764,7 +764,7 @@ export function renderPage(page) {
     
     // Sort by views per day if requested
     const sortSelect = document.getElementById('sortVpdSelect');
-    const sortValue = sortSelect?.value || 'none';
+    const sortValue = sortSelect?.value || 'desc'; // 기본값: 높은 순
     if (sortValue === 'asc') {
         dedupedItems.sort((a, b) => getVelocityValue(a) - getVelocityValue(b));
     } else if (sortValue === 'desc') {
