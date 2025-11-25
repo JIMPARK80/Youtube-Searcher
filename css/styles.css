@@ -284,6 +284,9 @@ body {
     font-weight: 600;
     color: #555;
 }
+.velocity-row.recent .label {
+    color: #e63946;
+}
 
 .velocity-row .value {
     font-weight: 700;

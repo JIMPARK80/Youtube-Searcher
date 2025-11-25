@@ -549,7 +549,7 @@ function createVideoCard(video, item) {
                 <span class="stat-item">📅 ${daysText}</span>
             </div>
             <div class="velocity-panel">
-                <div class="velocity-row">
+                <div class="velocity-row recent">
                     <span class="label" data-i18n="velocity.recent">${t('velocity.recent')}</span>
                     <span class="value recent-vph">${t('velocity.loading')}</span>
                 </div>
