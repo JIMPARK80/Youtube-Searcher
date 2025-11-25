@@ -701,9 +701,9 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
         
         let searchItems = [];
         let nextPageToken = null;
-        const MAX_RESULTS = 10; // Reduced to 10 for minimal API calls
+        const MAX_RESULTS = 30; // Increased to 30 for better results
         
-        // Only fetch first page (10 results) to minimize API calls
+        // Only fetch first page (30 results) to minimize API calls
         for (let page = 0; page < 1 && searchItems.length < MAX_RESULTS; page++) {
             // Throttle: 첫 페이지 이후 딜레이 추가
             if (page > 0) {
@@ -726,7 +726,7 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
             if (!nextPageToken || searchItems.length >= MAX_RESULTS) break;
         }
         
-        // 10개로 제한
+        // 30개로 제한
         searchItems = searchItems.slice(0, MAX_RESULTS);
         
         console.log(`✅ Google API 정상 작동 (${searchItems.length}개 검색 결과)`);

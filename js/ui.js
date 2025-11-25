@@ -468,6 +468,16 @@ export async function search(shouldReload = false) {
             }
             
             restoreFromCache(cacheData);
+            
+            // 캐시가 30개 미만이고 nextPageToken이 있으면 추가로 가져오기
+            const TARGET_COUNT = 30;
+            if (count < TARGET_COUNT && meta.nextPageToken) {
+                const needed = TARGET_COUNT - count;
+                debugLog(`📈 캐시 ${count}개 → ${TARGET_COUNT}개까지 ${needed}개 추가 필요`);
+                await performIncrementalFetch(query, apiKeyValue, cacheData, needed);
+                return;
+            }
+            
             renderPage(1);
             lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
             const nextToken = meta.nextPageToken || null;
@@ -634,6 +644,146 @@ async function performFullGoogleSearch(query, apiKeyValue) {
         
         // 에러를 다시 throw하여 상위에서 처리
         throw googleError;
+    }
+}
+
+// 캐시가 30개 미만일 때 추가로 가져오기 (중복 제거)
+async function performIncrementalFetch(query, apiKeyValue, firebaseData, neededCount) {
+    const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('증분 검색 타임아웃: 60초 내에 응답이 없습니다.')), 60000);
+    });
+    
+    try {
+        const meta = firebaseData.meta || {};
+        const existingVideoIds = new Set((firebaseData.items || []).map(item => item.id || item.raw?.id).filter(Boolean));
+        
+        debugLog(`📈 증분 검색: 기존 ${existingVideoIds.size}개, 추가 필요 ${neededCount}개`);
+        
+        let nextPageToken = meta.nextPageToken;
+        let newVideos = [];
+        let newChannelsMap = {};
+        let attempts = 0;
+        const MAX_ATTEMPTS = 5; // 최대 5번 시도
+        
+        // 필요한 개수만큼 가져올 때까지 반복 (중복 제거)
+        while (newVideos.length < neededCount && nextPageToken && attempts < MAX_ATTEMPTS) {
+            attempts++;
+            
+            // 다음 페이지 가져오기
+            const more = await Promise.race([
+                fetchNext50WithToken(query, apiKeyValue, nextPageToken),
+                timeoutPromise
+            ]);
+            
+            // 중복 제거: 기존에 없는 비디오만 필터링
+            const uniqueItems = more.items.filter(item => {
+                const videoId = item.id?.videoId;
+                return videoId && !existingVideoIds.has(videoId);
+            });
+            
+            if (uniqueItems.length === 0) {
+                debugLog(`⚠️ 중복만 발견, 다음 페이지로...`);
+                nextPageToken = more.nextPageToken;
+                continue;
+            }
+            
+            // 필요한 개수만큼만 가져오기
+            const toFetch = uniqueItems.slice(0, neededCount - newVideos.length);
+            
+            // 비디오 상세 정보 가져오기
+            const { videoDetails, channelsMap } = await hydrateDetailsOnlyForNew(
+                { items: toFetch, nextPageToken: more.nextPageToken },
+                apiKeyValue
+            );
+            
+            // 중복 제거된 비디오만 추가
+            const uniqueNewVideos = videoDetails.filter(v => !existingVideoIds.has(v.id));
+            newVideos.push(...uniqueNewVideos);
+            
+            // 비디오 ID를 Set에 추가 (다음 반복에서 중복 방지)
+            uniqueNewVideos.forEach(v => existingVideoIds.add(v.id));
+            
+            // 채널 정보 병합
+            Object.assign(newChannelsMap, channelsMap);
+            
+            nextPageToken = more.nextPageToken;
+            
+            debugLog(`✅ ${uniqueNewVideos.length}개 추가 (총 ${newVideos.length}/${neededCount}개)`);
+            
+            if (newVideos.length >= neededCount) break;
+        }
+        
+        if (newVideos.length === 0) {
+            debugLog(`⚠️ 추가 비디오 없음, 기존 캐시 사용`);
+            restoreFromCache(firebaseData);
+            renderPage(1);
+            return;
+        }
+        
+        // 기존 캐시와 병합
+        const merged = mergeCacheWithMore(firebaseData, newVideos, newChannelsMap);
+        
+        // 압축된 데이터 복원
+        const restoredVideos = merged.videos.map(v => ({
+            id: v.id,
+            snippet: {
+                title: v.title,
+                channelId: v.channelId,
+                channelTitle: v.channelTitle,
+                publishedAt: v.publishedAt,
+                thumbnails: {
+                    maxres: { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` },
+                    standard: { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` },
+                    high: { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` },
+                    medium: { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` },
+                    default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
+                }
+            },
+            statistics: {
+                viewCount: v.viewCount || '0',
+                likeCount: v.likeCount || '0'
+            },
+            contentDetails: {
+                duration: v.duration || 'PT0S'
+            }
+        }));
+        
+        allVideos = restoredVideos;
+        allChannelMap = merged.channels;
+        
+        // items 재계산
+        allItems = allVideos.map(video => {
+            const channel = allChannelMap[video.snippet.channelId];
+            const vpd = viewVelocityPerDay(video);
+            const vclass = classifyVelocity(vpd);
+            const cband = channelSizeBand(channel);
+            const subs = Number(channel?.statistics?.subscriberCount ?? 0);
+            
+            return {
+                raw: video,
+                vpd: vpd,
+                vclass: vclass,
+                cband: cband,
+                subs: subs
+            };
+        });
+        
+        // Supabase 저장
+        await saveToSupabase(query, restoredVideos, allChannelMap, allItems, 'google', nextPageToken);
+        renderPage(1);
+        
+        debugLog(`✅ 증분 검색 완료: 총 ${allVideos.length}개 (추가 ${newVideos.length}개)`);
+        
+    } catch (error) {
+        console.error('❌ 증분 검색 오류:', error);
+        
+        // 에러 발생 시 기존 캐시 사용
+        restoreFromCache(firebaseData);
+        renderPage(1);
+        
+        if (error.message && error.message.includes('타임아웃')) {
+            console.warn('⏰ 증분 검색 타임아웃 발생');
+        }
     }
 }
 
