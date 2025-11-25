@@ -47,7 +47,7 @@ export async function loadFromSupabase(query) {
         // Load videos for this keyword
         const { data: videos, error: videosError } = await supabase
             .from('videos')
-            .select('*')
+            .select('video_id, channel_id, title, view_count, like_count, subscriber_count, duration, channel_title, published_at, thumbnail_url')
             .eq('keyword', keyword)
             .order('created_at', { ascending: false });
 
@@ -58,40 +58,115 @@ export async function loadFromSupabase(query) {
 
         console.log(`☁️ Supabase 캐시 발견: ${videos.length}개 항목, ${ageHours.toFixed(1)}시간 전`);
         console.log(`📊 캐시 소스: ${cacheMeta.data_source || 'unknown'}`);
+        
+        // 디버그: 구독자 수 데이터 확인 (첫 3개만)
+        const sampleVideos = videos.slice(0, 3);
+        sampleVideos.forEach(v => {
+            console.log(`📊 비디오 ${v.video_id}: subscriber_count=${v.subscriber_count} (타입: ${typeof v.subscriber_count})`);
+        });
 
         // Convert to Firestore-compatible format
+        // 채널 정보는 로컬 캐시에서 가져오거나 items에서 복원
         const channels = {};
+        
+        // 로컬 캐시에서 채널 정보 가져오기 시도
+        try {
+            const localCacheKey = `cache_${keyword}`;
+            const localCache = localStorage.getItem(localCacheKey);
+            if (localCache) {
+                const localData = JSON.parse(localCache);
+                if (localData.channels) {
+                    Object.assign(channels, localData.channels);
+                }
+            }
+        } catch (e) {
+            // 로컬 캐시 로드 실패 시 무시
+        }
+        
+        // 로컬 캐시에 없으면 기본 채널 정보만 생성 (구독자 수는 items에서 복원)
         videos.forEach(v => {
             if (v.channel_id && !channels[v.channel_id]) {
                 channels[v.channel_id] = {
                     id: v.channel_id,
                     snippet: { title: v.channel_title },
-                    statistics: {}
+                    statistics: {} // 구독자 수는 items에서 복원됨
                 };
             }
         });
 
-        const items = videos.map(v => ({
-            raw: {
-                id: v.video_id,
-                snippet: {
-                    title: v.title,
-                    channelId: v.channel_id,
-                    channelTitle: v.channel_title,
-                    publishedAt: v.published_at,
-                    thumbnails: {
-                        maxres: { url: v.thumbnail_url || `https://img.youtube.com/vi/${v.video_id}/maxresdefault.jpg` }
-                    }
-                },
-                statistics: {
-                    viewCount: String(v.view_count || 0),
-                    likeCount: String(v.like_count || 0)
-                },
-                contentDetails: {
-                    duration: v.duration || 'PT0S'
+        // 로컬 캐시에서 items 정보 가져오기 (subs 포함)
+        let localItems = null;
+        try {
+            const localCacheKey = `cache_${keyword}`;
+            const localCache = localStorage.getItem(localCacheKey);
+            if (localCache) {
+                const localData = JSON.parse(localCache);
+                if (localData.items && Array.isArray(localData.items)) {
+                    localItems = new Map(localData.items.map(item => [item.id, item]));
                 }
             }
-        }));
+        } catch (e) {
+            // 로컬 캐시 로드 실패 시 무시
+        }
+        
+        const items = videos.map(v => {
+            const localItem = localItems?.get(v.video_id);
+            const channelId = v.channel_id;
+            const channel = channels[channelId];
+            
+            // 구독자 수: Supabase 저장값 > 로컬 캐시 > 채널 정보 순으로 우선순위
+            // -1은 구독자 수가 숨겨진 경우를 의미하므로 0으로 처리
+            let subscriberCount = 0;
+            
+            // Supabase에서 구독자 수 확인 (null, undefined가 아니고 -1이 아닌 경우)
+            if (v.subscriber_count !== null && v.subscriber_count !== undefined && v.subscriber_count !== -1) {
+                subscriberCount = Number(v.subscriber_count);
+            } else if (v.subscriber_count === -1) {
+                // 숨겨진 경우
+                subscriberCount = 0;
+            } else {
+                // Supabase에 없으면 로컬 캐시나 채널 정보 사용
+                subscriberCount = localItem?.subs ?? (channel?.statistics?.subscriberCount ? Number(channel.statistics.subscriberCount) : 0);
+            }
+            
+            // 디버그: 구독자 수 로드 확인 (첫 번째 항목만)
+            if (v.video_id === videos[0]?.video_id) {
+                console.log(`🔍 구독자 수 로드: video_id=${v.video_id}, subscriber_count=${v.subscriber_count}, 최종값=${subscriberCount}`);
+            }
+            
+            // 채널 정보에 구독자 수 추가 (로컬 캐시에 없을 때)
+            if (channel && !channel.statistics?.subscriberCount && subscriberCount > 0) {
+                if (!channel.statistics) channel.statistics = {};
+                channel.statistics.subscriberCount = subscriberCount;
+            }
+            
+            return {
+                id: v.video_id,
+                vpd: localItem?.vpd ?? 0,
+                vclass: localItem?.vclass ?? 'unknown',
+                cband: localItem?.cband ?? 'unknown',
+                subs: subscriberCount, // Supabase에서 구독자 수 복원
+                raw: {
+                    id: v.video_id,
+                    snippet: {
+                        title: v.title,
+                        channelId: channelId,
+                        channelTitle: v.channel_title,
+                        publishedAt: v.published_at,
+                        thumbnails: {
+                            maxres: { url: v.thumbnail_url || `https://img.youtube.com/vi/${v.video_id}/maxresdefault.jpg` }
+                        }
+                    },
+                    statistics: {
+                        viewCount: String(v.view_count || 0),
+                        likeCount: String(v.like_count || 0)
+                    },
+                    contentDetails: {
+                        duration: v.duration || 'PT0S'
+                    }
+                }
+            };
+        });
 
         return {
             videos: videos.map(v => ({
@@ -148,27 +223,75 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
             console.error('❌ search_cache 저장 실패:', cacheError);
         }
 
+        // 기존 비디오의 구독자 수를 먼저 조회 (서버 데이터 우선 사용)
+        const existingVideoIds = videos.map(v => v.id);
+        const { data: existingVideos } = await supabase
+            .from('videos')
+            .select('video_id, subscriber_count')
+            .in('video_id', existingVideoIds);
+        
+        const existingSubscriberMap = new Map();
+        if (existingVideos) {
+            existingVideos.forEach(v => {
+                if (v.subscriber_count !== null && v.subscriber_count !== undefined && v.subscriber_count !== -1) {
+                    existingSubscriberMap.set(v.video_id, Number(v.subscriber_count));
+                }
+            });
+        }
+
         // Delete old videos for this keyword
         await supabase
             .from('videos')
             .delete()
             .eq('keyword', keyword);
 
-        // Insert new videos
-        const videoRecords = videos.map(v => ({
-            video_id: v.id,
-            keyword,
-            title: v.snippet?.title,
-            channel_id: v.snippet?.channelId,
-            channel_title: v.snippet?.channelTitle,
-            published_at: v.snippet?.publishedAt,
-            view_count: Number(v.statistics?.viewCount || 0),
-            like_count: Number(v.statistics?.likeCount || 0),
-            duration: v.contentDetails?.duration,
-            thumbnail_url: v.snippet?.thumbnails?.maxres?.url || 
-                          v.snippet?.thumbnails?.high?.url ||
-                          `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg`
-        }));
+        // Insert new videos (구독자 수 포함)
+        const videoRecords = videos.map(v => {
+            const channelId = v.snippet?.channelId;
+            const channel = channels?.[channelId];
+            
+            // 구독자 수 추출: 서버 기존 데이터 > YouTube API > null 순으로 우선순위
+            let subscriberCount = null;
+            
+            // 1. 서버에 기존 구독자 수가 있으면 우선 사용
+            if (existingSubscriberMap.has(v.id)) {
+                subscriberCount = existingSubscriberMap.get(v.id);
+            } else if (channel) {
+                // 2. YouTube API에서 가져온 채널 정보 사용
+                if (channel.statistics && channel.statistics.subscriberCount) {
+                    subscriberCount = Number(channel.statistics.subscriberCount);
+                } else if (channel.statistics && channel.statistics.hiddenSubscriberCount) {
+                    // 구독자 수가 숨겨진 경우
+                    subscriberCount = -1; // 숨겨진 경우 -1로 마킹
+                }
+            }
+            
+            // 디버그 로그는 조용히 처리 (서버에 데이터가 있으면 경고 없음)
+            if (subscriberCount && subscriberCount > 0) {
+                // 조용히 처리 (필요시 주석 해제)
+                // console.log(`💾 구독자 수 저장: ${channelId} = ${subscriberCount}`);
+            } else if (subscriberCount === -1) {
+                // 숨겨진 경우는 조용히 처리
+                // console.log(`ℹ️ 구독자 수 숨김: ${channelId}`);
+            }
+            // 경고는 제거 (서버에 데이터가 있으면 나중에 로드됨)
+            
+            return {
+                video_id: v.id,
+                keyword,
+                title: v.snippet?.title,
+                channel_id: channelId,
+                channel_title: v.snippet?.channelTitle,
+                published_at: v.snippet?.publishedAt,
+                view_count: Number(v.statistics?.viewCount || 0),
+                like_count: Number(v.statistics?.likeCount || 0),
+                subscriber_count: subscriberCount, // 구독자 수 추가
+                duration: v.contentDetails?.duration,
+                thumbnail_url: v.snippet?.thumbnails?.maxres?.url || 
+                              v.snippet?.thumbnails?.high?.url ||
+                              `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg`
+            };
+        });
 
         // Insert in batches of 1000
         for (let i = 0; i < videoRecords.length; i += 1000) {
@@ -189,6 +312,273 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
 
     } catch (error) {
         console.error('❌ Supabase 캐시 저장 실패:', error);
+    }
+}
+
+// ============================================
+// NULL 데이터 업데이트 함수 (모든 필드, 2회 시도 후 스킵)
+// ============================================
+
+export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 2, keyword = null) {
+    try {
+        const keywordFilter = keyword ? ` (검색어: "${keyword}")` : '';
+        console.log(`🔄 NULL 데이터 확인 및 업데이트 시작${keywordFilter} (최대 ${limit}개, ${maxAttempts}회 시도)`);
+        
+        const chunk = (arr, size) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, (i + 1) * size));
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        const API_THROTTLE_MS = 200;
+        
+        // 시도 횟수 추적용 Map (video_id -> attempt_count)
+        const attemptMap = new Map();
+        const skippedVideoIds = new Set();
+        let updatedCount = 0; // 전체 업데이트 카운터 (루프 밖에서 초기화)
+        
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            console.log(`\n📊 시도 ${attempt}/${maxAttempts} 시작...`);
+            
+            // 1. NULL 필드가 있는 비디오 조회 (특정 검색어가 있으면 해당 검색어만)
+            // subscriber_count가 -1인 경우는 제외 (구독자 수가 숨겨진 경우)
+            let query = supabase
+                .from('videos')
+                .select('video_id, channel_id, title, view_count, like_count, subscriber_count, duration, channel_title, published_at')
+                .or('subscriber_count.is.null,view_count.is.null,like_count.is.null,title.is.null,channel_id.is.null,duration.is.null')
+                .neq('subscriber_count', -1) // 구독자 수가 숨겨진 경우(-1) 제외
+                .limit(limit);
+            
+            // 특정 검색어가 있으면 해당 검색어의 비디오만 체크
+            if (keyword) {
+                query = query.eq('keyword', keyword.trim().toLowerCase());
+            }
+            
+            // 스킵된 비디오 제외
+            if (skippedVideoIds.size > 0) {
+                const skippedArray = Array.from(skippedVideoIds);
+                // Supabase는 .not().in()을 지원하지 않으므로, 각각 .neq()로 처리하거나
+                // 클라이언트 측에서 필터링
+            }
+            
+            const { data: videosWithNulls, error: fetchError } = await query;
+            
+            if (fetchError) {
+                console.error('❌ NULL 데이터 비디오 조회 실패:', fetchError);
+                return { updated: 0, skipped: 0, error: fetchError };
+            }
+            
+            // 스킵된 비디오 필터링
+            const videosToProcess = videosWithNulls?.filter(v => !skippedVideoIds.has(v.video_id)) || [];
+            
+            if (videosToProcess.length === 0) {
+                console.log('✅ 업데이트할 NULL 데이터 없음 (모든 데이터가 채워짐 또는 모두 스킵됨)');
+                break;
+            }
+            
+            console.log(`📋 NULL 데이터 비디오: ${videosToProcess.length}개`);
+            
+            // 2. video_id 수집 (중복 제거)
+            const videoIds = [...new Set(videosToProcess.map(v => v.video_id).filter(Boolean))];
+            console.log(`📹 고유 비디오 ID: ${videoIds.length}개`);
+            
+            if (videoIds.length === 0) {
+                console.log('⚠️ 비디오 ID가 없어서 업데이트 불가');
+                break;
+            }
+            
+            // 3. YouTube API로 비디오 정보 조회 (50개씩 배치)
+            let videoDetailsMap = {};
+            const videoIdChunks = chunk(videoIds, 50);
+            
+            for (let i = 0; i < videoIdChunks.length; i++) {
+                if (i > 0) {
+                    await delay(API_THROTTLE_MS);
+                }
+                
+                const ids = videoIdChunks[i];
+                const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${ids.join(",")}&key=${apiKeyValue}`;
+                const r = await fetch(url);
+                const d = await r.json();
+                
+                if (d.error) {
+                    console.error('❌ YouTube API 오류:', d.error);
+                    continue;
+                }
+                
+                (d.items || []).forEach(v => { 
+                    videoDetailsMap[v.id] = v;
+                });
+            }
+            
+            console.log(`✅ 비디오 정보 조회 완료: ${Object.keys(videoDetailsMap).length}개`);
+            
+            // 4. 채널 ID 수집 및 채널 정보 조회
+            const channelIds = [...new Set(
+                Object.values(videoDetailsMap)
+                    .map(v => v.snippet?.channelId)
+                    .filter(Boolean)
+            )];
+            
+            let channelsMap = {};
+            if (channelIds.length > 0) {
+                const channelIdChunks = chunk(channelIds, 50);
+                for (let i = 0; i < channelIdChunks.length; i++) {
+                    if (i > 0) {
+                        await delay(API_THROTTLE_MS);
+                    }
+                    
+                    const ids = channelIdChunks[i];
+                    const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${ids.join(",")}&key=${apiKeyValue}`;
+                    const r = await fetch(url);
+                    const d = await r.json();
+                    
+                    if (d.error) {
+                        console.error('❌ YouTube API 오류:', d.error);
+                        continue;
+                    }
+                    
+                    (d.items || []).forEach(ch => { 
+                        channelsMap[ch.id] = ch;
+                    });
+                }
+                console.log(`✅ 채널 정보 조회 완료: ${Object.keys(channelsMap).length}개`);
+            }
+            
+            // 5. Supabase 업데이트
+            // updatedCount는 루프 밖에서 이미 초기화됨
+            
+            for (const video of videosToProcess) {
+                const videoId = video.video_id;
+                const videoDetail = videoDetailsMap[videoId];
+                
+                if (!videoDetail) {
+                    // API에서 비디오를 찾을 수 없음 (삭제되었을 수 있음)
+                    attemptMap.set(videoId, (attemptMap.get(videoId) || 0) + 1);
+                    if (attemptMap.get(videoId) >= maxAttempts) {
+                        skippedVideoIds.add(videoId);
+                        console.log(`⏭️ 비디오 ${videoId} 스킵 (${maxAttempts}회 시도 후에도 API에서 찾을 수 없음)`);
+                    }
+                    continue;
+                }
+                
+                const channelId = videoDetail.snippet?.channelId;
+                const channel = channelId ? channelsMap[channelId] : null;
+                
+                // 업데이트할 필드 수집
+                const updateData = {};
+                let hasUpdate = false;
+                
+                // 비디오 정보 업데이트
+                if (!video.title && videoDetail.snippet?.title) {
+                    updateData.title = videoDetail.snippet.title;
+                    hasUpdate = true;
+                }
+                if (!video.channel_id && channelId) {
+                    updateData.channel_id = channelId;
+                    hasUpdate = true;
+                }
+                if (!video.channel_title && videoDetail.snippet?.channelTitle) {
+                    updateData.channel_title = videoDetail.snippet.channelTitle;
+                    hasUpdate = true;
+                }
+                if (!video.published_at && videoDetail.snippet?.publishedAt) {
+                    updateData.published_at = videoDetail.snippet.publishedAt;
+                    hasUpdate = true;
+                }
+                if ((video.view_count === null || video.view_count === undefined) && videoDetail.statistics?.viewCount) {
+                    updateData.view_count = Number(videoDetail.statistics.viewCount);
+                    hasUpdate = true;
+                }
+                if ((video.like_count === null || video.like_count === undefined) && videoDetail.statistics?.likeCount) {
+                    updateData.like_count = Number(videoDetail.statistics.likeCount);
+                    hasUpdate = true;
+                }
+                if (!video.duration && videoDetail.contentDetails?.duration) {
+                    updateData.duration = videoDetail.contentDetails.duration;
+                    hasUpdate = true;
+                }
+                
+                // 채널 정보 업데이트 (구독자 수)
+                if ((video.subscriber_count === null || video.subscriber_count === undefined) && channel?.statistics) {
+                    if (channel.statistics.subscriberCount) {
+                        // 구독자 수가 있는 경우
+                        updateData.subscriber_count = Number(channel.statistics.subscriberCount);
+                        hasUpdate = true;
+                    } else if (channel.statistics.hiddenSubscriberCount === true) {
+                        // 구독자 수가 숨겨진 경우: -1로 마킹하여 더 이상 업데이트 시도하지 않음
+                        updateData.subscriber_count = -1;
+                        hasUpdate = true;
+                        console.log(`🔒 비디오 ${videoId}: 구독자 수 숨김 처리 (-1로 마킹)`);
+                    }
+                }
+                
+                // 업데이트 실행
+                if (hasUpdate) {
+                    const { error: updateError } = await supabase
+                        .from('videos')
+                        .update(updateData)
+                        .eq('video_id', videoId);
+                    
+                    if (updateError) {
+                        console.error(`❌ 비디오 ${videoId} 업데이트 실패:`, updateError);
+                        attemptMap.set(videoId, (attemptMap.get(videoId) || 0) + 1);
+                        if (attemptMap.get(videoId) >= maxAttempts) {
+                            skippedVideoIds.add(videoId);
+                            console.log(`⏭️ 비디오 ${videoId} 스킵 (${maxAttempts}회 시도 후에도 업데이트 실패)`);
+                        }
+                    } else {
+                        updatedCount++;
+                        console.log(`💾 비디오 ${videoId} 업데이트 완료`);
+                        // 업데이트 성공 시 시도 횟수 초기화
+                        attemptMap.delete(videoId);
+                        skippedVideoIds.delete(videoId);
+                    }
+                } else {
+                    // 여전히 NULL 필드가 있음
+                    attemptMap.set(videoId, (attemptMap.get(videoId) || 0) + 1);
+                    if (attemptMap.get(videoId) >= maxAttempts) {
+                        skippedVideoIds.add(videoId);
+                        console.log(`⏭️ 비디오 ${videoId} 스킵 (${maxAttempts}회 시도 후에도 NULL 필드 존재)`);
+                    }
+                }
+            }
+            
+            console.log(`✅ 시도 ${attempt} 완료: ${updatedCount}개 업데이트, ${skippedVideoIds.size}개 스킵`);
+            
+            // 마지막 시도가 아니면 다음 시도를 위해 대기
+            if (attempt < maxAttempts && skippedVideoIds.size < videosToProcess.length) {
+                console.log(`⏳ 다음 시도를 위해 1초 대기...`);
+                await delay(1000);
+            }
+        }
+        
+        // 6. 2회 시도 후에도 NULL인 비디오 삭제
+        let deletedCount = 0;
+        if (skippedVideoIds.size > 0) {
+            const skippedArray = Array.from(skippedVideoIds);
+            console.log(`\n🗑️ ${maxAttempts}회 시도 후에도 NULL인 비디오 ${skippedArray.length}개 삭제 중...`);
+            
+            // 배치로 삭제 (한 번에 너무 많이 삭제하지 않도록)
+            const deleteChunks = chunk(skippedArray, 50);
+            for (let i = 0; i < deleteChunks.length; i++) {
+                const chunk = deleteChunks[i];
+                const { error: deleteError } = await supabase
+                    .from('videos')
+                    .delete()
+                    .in('video_id', chunk);
+                
+                if (deleteError) {
+                    console.error(`❌ 비디오 삭제 실패 (chunk ${i + 1}):`, deleteError);
+                } else {
+                    deletedCount += chunk.length;
+                    console.log(`✅ 비디오 ${chunk.length}개 삭제 완료 (chunk ${i + 1}/${deleteChunks.length})`);
+                }
+            }
+        }
+        
+        console.log(`\n✅ NULL 데이터 업데이트 완료: 업데이트 ${updatedCount}개, 삭제 ${deletedCount}개`);
+        return { updated: updatedCount, deleted: deletedCount, skipped: skippedVideoIds.size };
+        
+    } catch (error) {
+        console.error('❌ NULL 데이터 업데이트 실패:', error);
+        return { updated: 0, deleted: 0, skipped: 0, error };
     }
 }
 

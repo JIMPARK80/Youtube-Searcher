@@ -16,6 +16,7 @@ import {
     saveToSupabase,
     getRecentVelocityForVideo,
     trackVideoIdsForViewHistory,
+    updateMissingData,
     CACHE_TTL_MS
 } from './supabase-api.js';
 import { t } from './i18n.js';
@@ -27,6 +28,9 @@ export const pageSize = 8;
 export let currentPage = 1;
 export let allChannelMap = {};
 export let currentSearchQuery = '';
+
+// 백그라운드 업데이트 중복 실행 방지
+let isUpdatingMissingData = false;
 let currentVelocityMetric = 'recent-vph'; // 기본값: 최근 VPH
 
 // 자동 새로고침 관리
@@ -140,12 +144,16 @@ export function viewVelocityPerDay(video) {
 function getVelocityValue(item, metric = currentVelocityMetric) {
     // 최근 VPH: 서버에서 가져온 실제 VPH 데이터 사용
     if (metric === 'recent-vph') {
-        const vph = Number(item?.vph || 0);
-        // VPH 데이터가 없으면 일간 속도를 시간당으로 변환하여 폴백
-        if (vph === 0 && item?.vpd) {
+        // item.vph가 명시적으로 설정되어 있으면 (null/undefined가 아니면) 그 값을 사용
+        // 0도 유효한 값이므로 0을 반환해야 함
+        if (item?.vph !== null && item?.vph !== undefined) {
+            return Number(item.vph);
+        }
+        // VPH 데이터가 없으면 (null/undefined) 일간 속도를 시간당으로 변환하여 폴백
+        if (item?.vpd) {
             return Number(item.vpd) / 24;
         }
-        return vph;
+        return 0;
     }
     
     const base = Number(item?.vpd || 0);
@@ -296,6 +304,37 @@ export async function search(shouldReload = false) {
         if (localCount > 0 && localAge < CACHE_TTL_MS) {
         debugLog(`✅ 로컬 캐시 사용 (${localCount}개, ${(localAge / (1000 * 60 * 60)).toFixed(1)}시간 전)`);
             restoreFromCache(cacheData);
+            
+            // 로컬 캐시 사용 시에도 Supabase에서 구독자 수만 가져와서 병합
+            try {
+                const supabaseData = await loadFromSupabase(query);
+                if (supabaseData && supabaseData.items) {
+                    // Supabase의 구독자 수로 업데이트
+                    const subscriberMap = new Map();
+                    supabaseData.items.forEach(item => {
+                        if (item.subs !== undefined && item.subs !== null && item.subs > 0) {
+                            subscriberMap.set(item.id, item.subs);
+                        }
+                    });
+                    
+                    // allItems의 구독자 수 업데이트
+                    allItems = allItems.map(item => {
+                        const videoId = item.raw?.id || item.id;
+                        if (subscriberMap.has(videoId)) {
+                            return {
+                                ...item,
+                                subs: subscriberMap.get(videoId)
+                            };
+                        }
+                        return item;
+                    });
+                    
+                    console.log(`✅ Supabase 구독자 수 병합 완료: ${subscriberMap.size}개 업데이트`);
+                }
+            } catch (err) {
+                console.warn('⚠️ Supabase 구독자 수 병합 실패:', err);
+            }
+            
             renderPage(1);
             lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
         const nextToken = cacheData.meta?.nextPageToken || null;
@@ -309,6 +348,14 @@ export async function search(shouldReload = false) {
         };
         saveToLocalCache(query, updatedCacheData);
         debugLog(`💾 로컬 캐시 timestamp 업데이트 완료`);
+        
+        // 백그라운드에서 NULL 데이터 자동 업데이트 (로컬 캐시 사용 시에도, 현재 검색어 우선)
+        if (apiKeyValue) {
+            updateMissingDataInBackground(apiKeyValue, 50, query).catch(err => {
+                console.warn('⚠️ NULL 데이터 자동 업데이트 실패:', err);
+            });
+        }
+        
             return; // 로컬 캐시 사용, 즉시 반환
         }
         debugLog('⚠️ 로컬 캐시가 비어있거나 만료됨 → Supabase 확인');
@@ -350,6 +397,12 @@ export async function search(shouldReload = false) {
             const nextToken = meta.nextPageToken || null;
             saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'supa-cache', nextToken)
                 .catch(err => console.warn('⚠️ Supabase 캐시 기반 저장 실패:', err));
+            
+            // 백그라운드에서 NULL 데이터 자동 업데이트 (캐시 사용 시에도, 현재 검색어 우선)
+            updateMissingDataInBackground(apiKeyValue, 50, query).catch(err => {
+                console.warn('⚠️ NULL 데이터 자동 업데이트 실패:', err);
+            });
+            
             return;
         }
         
@@ -445,6 +498,11 @@ async function performFullGoogleSearch(query, apiKeyValue) {
         // Track video IDs for view history (VPH 추적 시작)
         trackVideoIdsForViewHistory(allVideos)
             .catch(err => console.warn('⚠️ Video ID 추적 실패:', err));
+        
+        // 백그라운드에서 NULL 데이터 자동 업데이트 (검색 성능에 영향 없음, 현재 검색어 우선)
+        updateMissingDataInBackground(apiKeyValue, 50, query).catch(err => {
+            console.warn('⚠️ NULL 데이터 자동 업데이트 실패:', err);
+        });
         
         // 로컬 캐시에도 저장
         const cacheData = {
@@ -880,10 +938,12 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
         }
         
         if (recentEl) {
-            const vphValue = stats.vph || 0;
+            // stats.vph가 명시적으로 설정되어 있으면 그 값을 사용 (0도 유효한 값)
+            const vphValue = (stats.vph !== null && stats.vph !== undefined) ? stats.vph : 0;
             recentEl.textContent = `${formatNumber(vphValue)}/hr`;
             
             // item 객체에 VPH 데이터 저장 (표시 단위 "최근 VPH" 사용 시)
+            // 0도 유효한 값이므로 명시적으로 저장 (null/undefined와 구분)
             if (item) {
                 item.vph = vphValue;
                 
@@ -922,6 +982,50 @@ function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '', item = 
     
     // 큐 처리 시작
     processVphQueue();
+}
+
+// ============================================
+// NULL 데이터 자동 업데이트 (백그라운드)
+// ============================================
+
+// 백그라운드에서 NULL 데이터 업데이트 (검색 성능에 영향 없음)
+// keyword가 있으면 해당 검색어의 비디오만 우선 업데이트
+async function updateMissingDataInBackground(apiKeyValue, limit = 50, keyword = null) {
+    // 이미 업데이트 중이면 중복 실행 방지
+    if (isUpdatingMissingData) {
+        console.log('⏸️ 백그라운드 업데이트가 이미 실행 중입니다. 중복 실행 방지.');
+        return;
+    }
+    
+    try {
+        // 짧은 지연 후 실행 (검색 완료 후)
+        setTimeout(async () => {
+            if (isUpdatingMissingData) {
+                console.log('⏸️ 백그라운드 업데이트가 이미 실행 중입니다. 중복 실행 방지.');
+                return;
+            }
+            
+            isUpdatingMissingData = true;
+            try {
+                const keywordFilter = keyword ? ` (검색어: "${keyword}")` : '';
+                console.log(`🔄 백그라운드: NULL 데이터 자동 업데이트 시작${keywordFilter}...`);
+                const result = await updateMissingData(apiKeyValue, limit, 2, keyword);
+                if (result.updated > 0 || result.deleted > 0 || result.skipped > 0) {
+                    console.log(`✅ 백그라운드 업데이트 완료: 업데이트 ${result.updated}개, 삭제 ${result.deleted || 0}개`);
+                    // 업데이트된 경우 페이지 새로고침 없이 데이터만 갱신 (선택사항)
+                    // renderPage(currentPage); // 필요시 주석 해제
+                }
+            } catch (error) {
+                // 백그라운드 작업이므로 에러는 조용히 처리
+                console.warn('⚠️ 백그라운드 NULL 데이터 업데이트 실패:', error);
+            } finally {
+                isUpdatingMissingData = false;
+            }
+        }, 2000); // 2초 후 실행 (검색 완료 후)
+    } catch (error) {
+        // 에러 무시 (백그라운드 작업)
+        isUpdatingMissingData = false;
+    }
 }
 
 // ============================================
@@ -1244,68 +1348,97 @@ function clearOldLocalCache() {
 // ============================================
 
 function restoreFromCache(firebaseData) {
-    // Restore videos from compressed cache
-    const restoredVideos = firebaseData.videos.map(v => ({
-        id: v.id,
-        snippet: {
-            title: v.title,
-            channelId: v.channelId,
-            channelTitle: v.channelTitle,
-            publishedAt: v.publishedAt,
-            thumbnails: {
-                maxres: { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` },
-                standard: { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` },
-                high: { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` },
-                medium: { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` },
-                default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
+    // loadFromSupabase가 반환하는 items 구조를 직접 사용 (raw와 subs 포함)
+    if (firebaseData.items && firebaseData.items.length > 0 && firebaseData.items[0].raw) {
+        // Supabase에서 로드한 데이터 (items에 raw 필드 포함)
+        allVideos = firebaseData.items.map(item => item.raw).filter(Boolean);
+        allChannelMap = firebaseData.channels || {};
+        allItems = firebaseData.items.map(item => {
+            const video = item.raw;
+            if (!video) return null;
+            const channel = allChannelMap[video.snippet?.channelId];
+            const computedVpd = viewVelocityPerDay(video);
+            
+            // 구독자 수: item.subs가 있으면 우선 사용 (Supabase에서 로드한 값)
+            const subs = item.subs !== undefined && item.subs !== null ? Number(item.subs) : Number(channel?.statistics?.subscriberCount ?? 0);
+            
+            // 디버그: 첫 번째 항목만 로그
+            if (item.id === firebaseData.items[0]?.id) {
+                console.log(`🔍 캐시 복원: video_id=${item.id}, item.subs=${item.subs}, channel.subs=${channel?.statistics?.subscriberCount}, 최종값=${subs}`);
             }
-        },
-        statistics: {
-            viewCount: v.viewCount || '0',
-            likeCount: v.likeCount || '0'
-        },
-        contentDetails: {
-            duration: v.duration || 'PT0S'
-        }
-    }));
-    
-    allVideos = restoredVideos;
-    allChannelMap = firebaseData.channels || {};
-    
-    // Restore items with proper video mapping by ID
-    const videoById = new Map(restoredVideos.map(v => [v.id, v]));
-    const restoredItems = (firebaseData.items || []).map(item => {
-        const video = videoById.get(item.id);
-        if (!video) return null;
-        const channel = allChannelMap[video.snippet.channelId];
-        const computedVpd = viewVelocityPerDay(video);
-        return {
-            raw: video,
-            vpd: item.vpd ?? computedVpd,
-            vclass: item.vclass || classifyVelocity(computedVpd),
-            cband: item.cband || channelSizeBand(channel),
-            subs: item.subs ?? Number(channel?.statistics?.subscriberCount ?? 0)
-        };
-    }).filter(Boolean);
-
-    if (restoredItems.length > 0) {
-        allItems = restoredItems;
-    } else {
-        allItems = restoredVideos.map(video => {
-            const channel = allChannelMap[video.snippet.channelId];
-            const vpd = viewVelocityPerDay(video);
+            
             return {
                 raw: video,
-                vpd,
-                vclass: classifyVelocity(vpd),
-                cband: channelSizeBand(channel),
-                subs: Number(channel?.statistics?.subscriberCount ?? 0)
+                vpd: item.vpd ?? computedVpd,
+                vclass: item.vclass || classifyVelocity(computedVpd),
+                cband: item.cband || channelSizeBand(channel),
+                subs: subs // 구독자 수는 items에서 가져옴
             };
-        });
+        }).filter(Boolean);
+    } else {
+        // 기존 로컬 캐시 형식 (videos 배열 사용)
+        const restoredVideos = firebaseData.videos.map(v => ({
+            id: v.id,
+            snippet: {
+                title: v.title,
+                channelId: v.channelId,
+                channelTitle: v.channelTitle,
+                publishedAt: v.publishedAt,
+                thumbnails: {
+                    maxres: { url: `https://img.youtube.com/vi/${v.id}/maxresdefault.jpg` },
+                    standard: { url: `https://img.youtube.com/vi/${v.id}/sddefault.jpg` },
+                    high: { url: `https://img.youtube.com/vi/${v.id}/hqdefault.jpg` },
+                    medium: { url: `https://img.youtube.com/vi/${v.id}/mqdefault.jpg` },
+                    default: { url: `https://img.youtube.com/vi/${v.id}/default.jpg` }
+                }
+            },
+            statistics: {
+                viewCount: v.viewCount || '0',
+                likeCount: v.likeCount || '0'
+            },
+            contentDetails: {
+                duration: v.duration || 'PT0S'
+            }
+        }));
+        
+        allVideos = restoredVideos;
+        allChannelMap = firebaseData.channels || {};
+        
+        // Restore items with proper video mapping by ID
+        const videoById = new Map(restoredVideos.map(v => [v.id, v]));
+        const restoredItems = (firebaseData.items || []).map(item => {
+            const video = videoById.get(item.id);
+            if (!video) return null;
+            const channel = allChannelMap[video.snippet.channelId];
+            const computedVpd = viewVelocityPerDay(video);
+            return {
+                raw: video,
+                vpd: item.vpd ?? computedVpd,
+                vclass: item.vclass || classifyVelocity(computedVpd),
+                cband: item.cband || channelSizeBand(channel),
+                subs: item.subs ?? Number(channel?.statistics?.subscriberCount ?? 0)
+            };
+        }).filter(Boolean);
+
+        if (restoredItems.length > 0) {
+            allItems = restoredItems;
+        } else {
+            allItems = restoredVideos.map(video => {
+                const channel = allChannelMap[video.snippet.channelId];
+                const vpd = viewVelocityPerDay(video);
+                return {
+                    raw: video,
+                    vpd,
+                    vclass: classifyVelocity(vpd),
+                    cband: channelSizeBand(channel),
+                    subs: Number(channel?.statistics?.subscriberCount ?? 0)
+                };
+            });
+        }
     }
     
-    console.log(`✅ Firebase 캐시 복원 완료: ${allItems.length}개 항목`);
-    trackVideoIdsForViewHistory(restoredVideos);
+    console.log(`✅ 캐시 복원 완료: ${allItems.length}개 항목`);
+    trackVideoIdsForViewHistory(allVideos);
 }
 
 // ============================================
