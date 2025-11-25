@@ -237,6 +237,9 @@ export async function search(shouldReload = false) {
         return;
     }
     
+    // 새로운 검색 시작 시 VPH 계산 추적 초기화
+    vphCalculatedVideos.clear();
+    
     const searchBtn = document.getElementById('searchBtn');
     const searchInput = document.getElementById('searchInput');
     
@@ -699,6 +702,8 @@ export function renderPage(page) {
     currentPage = page;
     
     // VPH 계산 큐 초기화 (이전 페이지의 큐 정리)
+    // 주의: 계산된 비디오 추적은 유지 (같은 검색 결과에서 페이지 이동 시 재계산 방지)
+    // 새로운 검색 시에는 search 함수에서 초기화됨
     vphCalculationQueue = [];
     vphCalculationRunning = 0;
     
@@ -834,6 +839,7 @@ function createVideoCard(video, item) {
 let vphCalculationQueue = [];
 let vphCalculationRunning = 0;
 const MAX_CONCURRENT_VPH_CALCULATIONS = 3; // 동시 최대 3개만 실행
+const vphCalculatedVideos = new Set(); // 이미 계산된 비디오 ID 추적
 
 // 자동 새로고침 함수
 function resetAutoRefreshTimer() {
@@ -980,6 +986,9 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
                     badgeEl.textContent = formatVelocityBadge(velocityValue);
                 }
             }
+            
+            // 계산 완료 표시 (재계산 방지)
+            vphCalculatedVideos.add(videoId);
         }
         
     } catch (error) {
@@ -1000,6 +1009,18 @@ function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '', item = 
         const recentEl = panelEl?.querySelector('.recent-vph');
         if (recentEl) {
             recentEl.textContent = t('velocity.unavailable');
+        }
+        return;
+    }
+    
+    // 이미 계산된 비디오는 재계산하지 않음
+    if (!videoId || vphCalculatedVideos.has(videoId)) {
+        // 이미 계산된 경우 저장된 값 사용
+        if (item && item.vph !== undefined && item.vph !== null) {
+            const recentEl = panelEl?.querySelector('.recent-vph');
+            if (recentEl) {
+                recentEl.textContent = `${formatNumber(item.vph)}/hr`;
+            }
         }
         return;
     }
