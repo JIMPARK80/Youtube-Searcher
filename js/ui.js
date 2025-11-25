@@ -1052,19 +1052,27 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
             const sortSelect = document.getElementById('sortVpdSelect');
             const sortValue = sortSelect?.value || 'desc';
             if (sortValue === 'desc' && currentVelocityMetric === 'recent-vph') {
-                // 약간의 딜레이 후 재정렬 (여러 VPH 계산이 동시에 완료될 수 있으므로)
-                setTimeout(() => {
-                    // 현재 페이지의 모든 항목이 계산되었는지 확인
-                    const allItemsCalculated = allItems.every(item => {
-                        const videoId = item.raw?.id || item.id;
-                        return !videoId || vphCalculatedVideos.has(videoId) || item.vph !== undefined;
-                    });
-                    
-                    // 모든 항목이 계산되었거나 충분한 항목이 계산되었으면 재정렬
-                    if (allItemsCalculated || vphCalculatedVideos.size >= allItems.length * 0.5) {
-                        renderPage(currentPage);
+                // 재정렬 디바운싱: 마지막 재정렬 요청 후 1초 후에 실행
+                if (window.vphResortTimer) {
+                    clearTimeout(window.vphResortTimer);
+                }
+                
+                window.vphResortTimer = setTimeout(() => {
+                    // 충분한 항목이 계산되었으면 재정렬 (최소 8개 이상 또는 전체의 50% 이상)
+                    const minCalculated = Math.min(8, Math.ceil(allItems.length * 0.5));
+                    if (vphCalculatedVideos.size >= minCalculated) {
+                        // allItems를 직접 정렬 (VPH 값 기준)
+                        allItems.sort((a, b) => {
+                            const valA = getVelocityValue(a);
+                            const valB = getVelocityValue(b);
+                            return valB - valA; // 높은 순
+                        });
+                        
+                        // 첫 페이지로 이동하여 재렌더링
+                        currentPage = 1;
+                        renderPage(1);
                     }
-                }, 500); // 500ms 딜레이로 여러 계산 완료를 기다림
+                }, 1000); // 1초 딜레이로 여러 계산 완료를 기다림
             }
         }
         
