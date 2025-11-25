@@ -980,7 +980,57 @@ function processVphQueue() {
             vphCalculationRunning--;
             // 다음 항목 처리
             setTimeout(() => processVphQueue(), 100); // 100ms 딜레이
+            
+            // 계산 완료 후 모든 계산이 끝났는지 확인
+            if (vphCalculationQueue.length === 0 && vphCalculationRunning === 0) {
+                // 모든 계산이 완료되었으므로 재정렬 확인
+                setTimeout(() => checkAndResortWhenAllCalculated(), 500);
+            }
         });
+}
+
+// 모든 VPH 계산이 완료되었는지 확인하고 재정렬
+function checkAndResortWhenAllCalculated() {
+    // 모든 데이터의 VPH 계산이 완료되었는지 확인
+    const totalItemsNeedingVph = allItems.filter(item => {
+        const videoId = item.raw?.id || item.id;
+        return videoId && !vphCalculatedVideos.has(videoId);
+    }).length;
+    
+    // 모든 계산이 완료되었거나, 계산 중인 항목이 없으면 재정렬
+    const allCalculated = totalItemsNeedingVph === 0 || 
+                         (vphCalculationQueue.length === 0 && vphCalculationRunning === 0);
+    
+    if (allCalculated && vphCalculatedVideos.size > 0) {
+        // 현재 정렬 옵션과 표시 단위 가져오기
+        const sortSelect = document.getElementById('sortVpdSelect');
+        const sortValue = sortSelect?.value || 'desc';
+        const velocityMetricSelect = document.getElementById('velocityMetricSelect');
+        const currentMetric = velocityMetricSelect?.value || 'recent-vph';
+        
+        // allItems를 직접 정렬 (현재 표시 단위와 정렬 옵션에 따라)
+        allItems.sort((a, b) => {
+            const valA = getVelocityValue(a, currentMetric);
+            const valB = getVelocityValue(b, currentMetric);
+            if (sortValue === 'asc') {
+                return valA - valB; // 낮은 순
+            } else {
+                return valB - valA; // 높은 순
+            }
+        });
+        
+        // 첫 페이지로 이동하여 재렌더링 (상위 8개가 1페이지에 표시됨)
+        currentPage = 1;
+        renderPage(1);
+    } else if (vphCalculationQueue.length > 0 || vphCalculationRunning > 0) {
+        // 아직 계산 중이면 2초 후 다시 확인
+        if (window.vphResortTimer) {
+            clearTimeout(window.vphResortTimer);
+        }
+        window.vphResortTimer = setTimeout(() => {
+            checkAndResortWhenAllCalculated();
+        }, 2000);
+    }
 }
 
 async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', item = null) {
@@ -1057,30 +1107,7 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
             }
             
             window.vphResortTimer = setTimeout(() => {
-                // 충분한 항목이 계산되었으면 재정렬 (최소 8개 이상 또는 전체의 50% 이상)
-                const minCalculated = Math.min(8, Math.ceil(allItems.length * 0.5));
-                if (vphCalculatedVideos.size >= minCalculated) {
-                    // 현재 정렬 옵션과 표시 단위 가져오기
-                    const sortSelect = document.getElementById('sortVpdSelect');
-                    const sortValue = sortSelect?.value || 'desc';
-                    const velocityMetricSelect = document.getElementById('velocityMetricSelect');
-                    const currentMetric = velocityMetricSelect?.value || 'recent-vph';
-                    
-                    // allItems를 직접 정렬 (현재 표시 단위와 정렬 옵션에 따라)
-                    allItems.sort((a, b) => {
-                        const valA = getVelocityValue(a, currentMetric);
-                        const valB = getVelocityValue(b, currentMetric);
-                        if (sortValue === 'asc') {
-                            return valA - valB; // 낮은 순
-                        } else {
-                            return valB - valA; // 높은 순
-                        }
-                    });
-                    
-                    // 첫 페이지로 이동하여 재렌더링
-                    currentPage = 1;
-                    renderPage(1);
-                }
+                checkAndResortWhenAllCalculated();
             }, 1000); // 1초 딜레이로 여러 계산 완료를 기다림
         }
         
