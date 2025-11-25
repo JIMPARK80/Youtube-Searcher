@@ -1130,6 +1130,25 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
                 }, 5000);
             } else {
                 // 3번 이상 시도했으면 더 이상 재시도하지 않음
+                // 최종 VPH를 0으로 설정하고 표시
+                const finalVphValue = 0;
+                
+                if (recentEl) {
+                    recentEl.textContent = `${formatNumber(finalVphValue)}/hr`;
+                    recentEl.style.opacity = '1'; // 정상 표시
+                }
+                
+                // item 객체에 VPH 데이터 저장 (0으로 저장)
+                if (item) {
+                    item.vph = finalVphValue;
+                    
+                    // 배지 업데이트 (표시 단위가 "최근 VPH"인 경우)
+                    if (badgeEl && currentVelocityMetric === 'recent-vph') {
+                        const velocityValue = getVelocityValue(item);
+                        badgeEl.textContent = formatVelocityBadge(velocityValue);
+                    }
+                }
+                
                 vphCalculatedVideos.add(videoId);
             }
             return;
