@@ -9,7 +9,8 @@ import {
     saveUserLastSearchKeyword,
     fetchNext50WithToken,
     hydrateDetailsOnlyForNew,
-    mergeCacheWithMore
+    mergeCacheWithMore,
+    trackVideoIdsForViewHistory
 } from './api.js';
 import {
     loadFromSupabase,
@@ -222,10 +223,15 @@ export async function search() {
     let cacheData = loadFromLocalCache(query);
     
     if (cacheData) {
-        console.log(`✅ 로컬 캐시 발견! API 호출 생략`);
-        restoreFromCache(cacheData);
-        renderPage(1);
-        return; // 로컬 캐시 사용, 즉시 반환
+        const localCount = cacheData.videos?.length || 0;
+        const localAge = Date.now() - (cacheData.timestamp || 0);
+        if (localCount > 0 && localAge < CACHE_TTL_MS) {
+            console.log(`✅ 로컬 캐시 사용 (${localCount}개, ${(localAge / (1000 * 60 * 60)).toFixed(1)}시간 전)`);
+            restoreFromCache(cacheData);
+            renderPage(1);
+            return; // 로컬 캐시 사용, 즉시 반환
+        }
+        console.log('⚠️ 로컬 캐시가 비어있거나 만료됨 → Supabase 확인');
     }
     
     // 2️⃣ 로컬 캐시 없음 → Supabase 캐시 확인
@@ -255,12 +261,16 @@ export async function search() {
             return;
         }
         
-        // 신선한 Google 캐시 사용
-        if (!isExpired) {
-            console.log(`✅ 로컬 캐시 사용 (기준 시각: ${savedAtLabel})`);
+        // 신선한 Google 캐시 사용 (데이터가 있을 때만)
+        if (!isExpired && count > 0) {
+            console.log(`✅ 로컬 캐시 사용 (기준 시각: ${savedAtLabel}) - ${count}개 항목`);
             restoreFromCache(cacheData);
             renderPage(1);
             return;
+        }
+        
+        if (count === 0) {
+            console.log('⚠️ Supabase 캐시에 데이터가 0개 → API 재호출');
         }
         
         // 72시간 경과 + pagination 토큰 존재 → 토핑
@@ -325,7 +335,13 @@ async function performFullGoogleSearch(query, apiKeyValue) {
                 duration: v.contentDetails?.duration || 'PT0S'
             })),
             channels: allChannelMap,
-            items: allItems,
+            items: allItems.map(item => ({
+                id: item.raw?.id || item.id,
+                vpd: item.vpd,
+                vclass: item.vclass,
+                cband: item.cband,
+                subs: item.subs
+            })),
             dataSource: 'google',
             meta: {
                 total: allVideos.length,
@@ -774,20 +790,67 @@ function loadFromLocalCache(query) {
     }
 }
 
+// 캐시 데이터 정규화 (Supabase / 로컬 포맷 차이 해결)
+function normalizeCacheData(cacheData) {
+    if (!cacheData) return null;
+
+    const normalizeVideo = (v = {}) => {
+        const raw = v.raw || v;
+        const snippet = raw.snippet || {};
+        const stats = raw.statistics || {};
+        const details = raw.contentDetails || {};
+
+        return {
+            id: v.id || raw.id || raw.video_id,
+            title: v.title || raw.title || snippet.title || '',
+            channelId: v.channelId || raw.channelId || raw.channel_id || snippet.channelId || '',
+            channelTitle: v.channelTitle || raw.channelTitle || raw.channel_title || snippet.channelTitle || '',
+            publishedAt: v.publishedAt || raw.publishedAt || raw.published_at || snippet.publishedAt || null,
+            viewCount: v.viewCount ?? raw.viewCount ?? raw.view_count ?? stats.viewCount ?? 0,
+            likeCount: v.likeCount ?? raw.likeCount ?? raw.like_count ?? stats.likeCount ?? 0,
+            duration: v.duration || raw.duration || details.duration || 'PT0S'
+        };
+    };
+
+    const normalizeItem = (item = {}) => {
+        const raw = item.raw || {};
+        return {
+            id: item.id || raw.id || raw.video_id,
+            vpd: item.vpd ?? raw.vpd ?? 0,
+            vclass: item.vclass ?? raw.vclass ?? 'unknown',
+            cband: item.cband ?? raw.cband ?? 'unknown',
+            subs: item.subs ?? raw.subs ?? 0
+        };
+    };
+
+    return {
+        videos: (cacheData.videos || []).map(normalizeVideo),
+        channels: cacheData.channels || {},
+        items: (cacheData.items || []).map(normalizeItem),
+        dataSource: cacheData.dataSource || cacheData.meta?.source || 'google',
+        meta: {
+            total: cacheData.meta?.total ?? (cacheData.videos?.length || 0),
+            nextPageToken: cacheData.meta?.nextPageToken,
+            source: cacheData.meta?.source || cacheData.dataSource || 'google'
+        },
+        cacheVersion: cacheData.cacheVersion || LOCAL_CACHE_VERSION,
+        timestamp: cacheData.timestamp || Date.now()
+    };
+}
+
 // 로컬 캐시에 데이터 저장
 function saveToLocalCache(query, cacheData) {
     try {
+        const normalized = normalizeCacheData(cacheData);
+        if (!normalized || !normalized.videos?.length) {
+            console.warn('⚠️ 로컬 캐시 저장 생략: 데이터 없음');
+            return;
+        }
         const keyword = query.trim().toLowerCase();
         const cacheKey = `${LOCAL_CACHE_PREFIX}${keyword}`;
         
-        const dataToSave = {
-            ...cacheData,
-            cacheVersion: LOCAL_CACHE_VERSION,
-            timestamp: Date.now()
-        };
-        
         // localStorage 크기 제한 고려 (약 5-10MB)
-        const dataString = JSON.stringify(dataToSave);
+        const dataString = JSON.stringify(normalized);
         if (dataString.length > 5 * 1024 * 1024) { // 5MB 초과 시 저장 안 함
             console.warn('⚠️ 로컬 캐시 크기 초과, 저장 생략');
             return;
