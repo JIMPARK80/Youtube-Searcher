@@ -9,13 +9,13 @@ import {
     saveUserLastSearchKeyword,
     fetchNext50WithToken,
     hydrateDetailsOnlyForNew,
-    mergeCacheWithMore,
-    trackVideoIdsForViewHistory
+    mergeCacheWithMore
 } from './api.js';
 import {
     loadFromSupabase,
     saveToSupabase,
     getRecentVelocityForVideo,
+    trackVideoIdsForViewHistory,
     CACHE_TTL_MS
 } from './supabase-api.js';
 import { t } from './i18n.js';

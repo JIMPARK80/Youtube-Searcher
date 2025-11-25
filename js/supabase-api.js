@@ -196,7 +196,7 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
 // Video ID 자동 추적
 // ============================================
 
-async function trackVideoIdsForViewHistory(videos) {
+export async function trackVideoIdsForViewHistory(videos) {
     try {
         const ids = Array.from(new Set(
             (videos || [])
