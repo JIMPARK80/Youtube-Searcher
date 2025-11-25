@@ -1036,7 +1036,7 @@ function checkAndResortWhenAllCalculated() {
         }
         window.vphResortTimer = setTimeout(() => {
             checkAndResortWhenAllCalculated();
-        }, 2000);
+        }, 1000); // 1초 후 다시 확인
     }
 }
 
@@ -1111,7 +1111,7 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
         
         window.vphResortTimer = setTimeout(() => {
             checkAndResortWhenAllCalculated();
-        }, 1000); // 1초 딜레이로 여러 계산 완료를 기다림
+        }, 500); // 0.5초 딜레이로 여러 계산 완료를 기다림
         
     } catch (error) {
         // 타임아웃 또는 기타 에러 처리
