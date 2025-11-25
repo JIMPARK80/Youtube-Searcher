@@ -850,9 +850,21 @@ function createVideoCard(video, item) {
     card.className = 'video-card';
     card.onclick = () => window.open(`https://www.youtube.com/watch?v=${video.id}`, '_blank');
     
+    // 썸네일 우선순위: maxres -> high -> default
     const thumbnail = video.snippet.thumbnails?.maxres?.url || 
                      video.snippet.thumbnails?.high?.url || 
                      video.snippet.thumbnails?.default?.url;
+    
+    // Fallback 썸네일 URL 목록 (로드 실패 시 순차적으로 시도)
+    const videoIdForThumbnail = video.id || video?.raw?.id || item?.raw?.id;
+    const fallbackThumbnails = [
+        thumbnail, // 첫 번째는 원본 썸네일
+        video.snippet.thumbnails?.high?.url,
+        video.snippet.thumbnails?.default?.url,
+        `https://img.youtube.com/vi/${videoIdForThumbnail}/hqdefault.jpg`,
+        `https://img.youtube.com/vi/${videoIdForThumbnail}/mqdefault.jpg`,
+        `https://img.youtube.com/vi/${videoIdForThumbnail}/default.jpg`
+    ].filter(Boolean); // null/undefined 제거
     
     // 업로드 경과일수 계산
     const uploadedDays = ageDays(video.snippet.publishedAt);
@@ -864,7 +876,7 @@ function createVideoCard(video, item) {
     const videoId = video.id || video?.raw?.id || item?.raw?.id;
     card.innerHTML = `
         <div class="thumbnail-container">
-            <img src="${thumbnail}" alt="${video.snippet.title}" loading="lazy">
+            <img src="${thumbnail}" alt="${video.snippet.title}" loading="lazy" data-fallback-index="0" data-fallbacks="${JSON.stringify(fallbackThumbnails)}">
             ${video.contentDetails?.duration ? `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
             <div class="vpd-badge">${formatVelocityBadge(velocityValue)}</div>
         </div>
@@ -899,6 +911,27 @@ function createVideoCard(video, item) {
         video.snippet.title,
         item
     );
+    
+    // 이미지 로드 실패 시 fallback 처리
+    const imgEl = card.querySelector('img');
+    if (imgEl && fallbackThumbnails.length > 1) {
+        imgEl.addEventListener('error', function() {
+            const currentIndex = parseInt(this.dataset.fallbackIndex || '0');
+            const fallbacks = JSON.parse(this.dataset.fallbacks || '[]');
+            
+            if (currentIndex < fallbacks.length - 1) {
+                // 다음 fallback 시도
+                const nextIndex = currentIndex + 1;
+                this.dataset.fallbackIndex = nextIndex.toString();
+                this.src = fallbacks[nextIndex];
+            } else {
+                // 모든 fallback 실패 시 기본 이미지 또는 투명 이미지
+                this.style.display = 'none';
+                // 또는 기본 placeholder 사용
+                // this.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="320" height="180"%3E%3Crect fill="%23ddd" width="100%25" height="100%25"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E';
+            }
+        }, { once: false }); // 여러 번 시도할 수 있도록 once: false
+    }
     
     return card;
 }
