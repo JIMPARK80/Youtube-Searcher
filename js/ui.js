@@ -229,6 +229,7 @@ export function getChannelSizeEmoji(cband) {
 
 // 검색 중 상태 추적 (중복 검색 방지)
 let isSearching = false;
+let searchTimeoutTimer = null; // 프리징 방지용 타이머
 
 export async function search(shouldReload = false) {
     // 중복 검색 방지 (자동 검색 제외)
@@ -257,6 +258,22 @@ export async function search(shouldReload = false) {
         
         const query = document.getElementById('searchInput')?.value?.trim();
         
+        // 프리징 방지: 3초 후 자동 새로고침 및 자동 검색
+        if (searchTimeoutTimer) {
+            clearTimeout(searchTimeoutTimer);
+        }
+        searchTimeoutTimer = setTimeout(() => {
+            // 3초 후에도 검색이 완료되지 않았으면 자동 새로고침
+            if (isSearching && query) {
+                console.log('🔄 검색 타임아웃 (3초) → 자동 새로고침 및 재검색');
+                // 검색어 저장
+                localStorage.setItem('autoRefreshLastQuery', query);
+                localStorage.setItem('autoSearchOnLoad', 'true');
+                // 새로고침
+                location.reload();
+            }
+        }, 3000); // 3초
+        
         // Reset isDefaultSearch flag
         const wasDefaultSearch = window.isDefaultSearch;
         window.isDefaultSearch = false;
@@ -269,6 +286,11 @@ export async function search(shouldReload = false) {
                 loginModal.classList.add('active');
                 alert(t('search.loginRequired'));
             }
+            // 타이머 클리어
+            if (searchTimeoutTimer) {
+                clearTimeout(searchTimeoutTimer);
+                searchTimeoutTimer = null;
+            }
             isSearching = false;
             if (searchBtn) searchBtn.disabled = false;
             if (searchInput) searchInput.disabled = false;
@@ -276,6 +298,11 @@ export async function search(shouldReload = false) {
         }
         
         if (!query) {
+            // 타이머 클리어
+            if (searchTimeoutTimer) {
+                clearTimeout(searchTimeoutTimer);
+                searchTimeoutTimer = null;
+            }
             alert(t('search.enterQuery'));
             isSearching = false;
             if (searchBtn) searchBtn.disabled = false;
@@ -287,6 +314,11 @@ export async function search(shouldReload = false) {
         const apiKeyValue = keys.youtube;
         
         if (!apiKeyValue) {
+            // 타이머 클리어
+            if (searchTimeoutTimer) {
+                clearTimeout(searchTimeoutTimer);
+                searchTimeoutTimer = null;
+            }
             alert(t('search.apiKeyRequired'));
             isSearching = false;
             if (searchBtn) searchBtn.disabled = false;
@@ -333,6 +365,12 @@ export async function search(shouldReload = false) {
         const localAge = Date.now() - (cacheData.timestamp || 0);
         if (localCount > 0 && localAge < CACHE_TTL_MS) {
         debugLog(`✅ 로컬 캐시 사용 (${localCount}개, ${(localAge / (1000 * 60 * 60)).toFixed(1)}시간 전)`);
+            // 타이머 클리어 (검색 완료)
+            if (searchTimeoutTimer) {
+                clearTimeout(searchTimeoutTimer);
+                searchTimeoutTimer = null;
+            }
+            
             restoreFromCache(cacheData);
             
             // 로컬 캐시 사용 시에도 Supabase에서 구독자 수만 가져와서 병합
@@ -421,6 +459,12 @@ export async function search(shouldReload = false) {
         // 신선한 Google 캐시 사용 (데이터가 있을 때만)
         if (!isExpired && count > 0) {
             debugLog(`✅ 로컬 캐시 사용 (기준 시각: ${savedAtLabel}) - ${count}개 항목`);
+            // 타이머 클리어 (검색 완료)
+            if (searchTimeoutTimer) {
+                clearTimeout(searchTimeoutTimer);
+                searchTimeoutTimer = null;
+            }
+            
             restoreFromCache(cacheData);
             renderPage(1);
             lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
@@ -471,6 +515,12 @@ export async function search(shouldReload = false) {
         
         // 앱이 멈추지 않도록 에러를 처리
     } finally {
+        // 타이머 클리어
+        if (searchTimeoutTimer) {
+            clearTimeout(searchTimeoutTimer);
+            searchTimeoutTimer = null;
+        }
+        
         // 검색 완료 후 UI 상태 복구
         isSearching = false;
         if (searchBtn) {
