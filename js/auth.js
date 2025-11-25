@@ -286,12 +286,15 @@ export function setupProfileEditModal() {
         userName.addEventListener('click', async () => {
             if (window.currentUser) {
                 try {
-                    const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', window.currentUser.uid);
-                    const userDocSnap = await window.firebaseGetDoc(userDocRef);
+                    const { supabase } = await import('./supabase-config.js');
+                    const { data: userData } = await supabase
+                        .from('users')
+                        .select('*')
+                        .eq('uid', window.currentUser.id)
+                        .maybeSingle();
                     
-                    if (userDocSnap.exists()) {
-                        const userData = userDocSnap.data();
-                        editUsername.value = userData.username || '';
+                    if (userData) {
+                        editUsername.value = window.currentUser.user_metadata?.username || '';
                         editEmail.value = window.currentUser.email || '';
                     } else {
                         editUsername.value = '';
@@ -348,11 +351,12 @@ export function setupProfileEditModal() {
             }
             
             try {
-                const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', window.currentUser.uid);
-                await window.firebaseSetDoc(userDocRef, {
-                    username: newUsername,
-                    updatedAt: Date.now()
-                }, { merge: true });
+                const { supabase } = await import('./supabase-config.js');
+                const { error } = await supabase.auth.updateUser({
+                    data: { username: newUsername }
+                });
+                
+                if (error) throw error;
                 
                 console.log('✅ 프로필 수정 완료:', newUsername);
                 
@@ -370,7 +374,7 @@ export function setupProfileEditModal() {
 }
 
 // ============================================
-// Firebase 인증 상태 관찰자
+// Supabase 인증 상태 관찰자
 // ============================================
 
 export function setupAuthStateObserver() {

@@ -9,9 +9,9 @@ import {
     saveUserLastSearchKeyword,
     fetchNext50WithToken,
     hydrateDetailsOnlyForNew,
-    mergeCacheWithMore,
-    trackVideoIdsForViewHistory
+    mergeCacheWithMore
 } from './api.js';
+import { trackVideoIdsForViewHistory } from './supabase-api.js';
 import {
     loadFromSupabase,
     saveToSupabase,
@@ -366,9 +366,9 @@ async function performFullGoogleSearch(query, apiKeyValue) {
     }
 }
 
-async function performTopUpUpdate(query, apiKeyValue, firebaseData) {
+async function performTopUpUpdate(query, apiKeyValue, cacheData) {
     try {
-        const meta = firebaseData.meta || {};
+        const meta = cacheData.meta || {};
         console.log('🔝 토핑: search.list 1회 + 신규 50개 상세 정보');
         
         // 1) 다음 50개 검색
@@ -378,7 +378,7 @@ async function performTopUpUpdate(query, apiKeyValue, firebaseData) {
         const { videoDetails, channelsMap } = await hydrateDetailsOnlyForNew(more, apiKeyValue);
         
         // 3) 기존 캐시와 merge (압축 형태로 저장)
-        const merged = mergeCacheWithMore(firebaseData, videoDetails, channelsMap);
+        const merged = mergeCacheWithMore(cacheData, videoDetails, channelsMap);
         
         // 4) 압축된 데이터 복원
         const restoredVideos = merged.videos.map(v => ({
@@ -925,9 +925,9 @@ function clearOldLocalCache() {
 // 캐시 복원
 // ============================================
 
-function restoreFromCache(firebaseData) {
+function restoreFromCache(cacheData) {
     // Restore videos from compressed cache
-    const restoredVideos = firebaseData.videos.map(v => ({
+    const restoredVideos = cacheData.videos.map(v => ({
         id: v.id,
         snippet: {
             title: v.title,
@@ -952,11 +952,11 @@ function restoreFromCache(firebaseData) {
     }));
     
     allVideos = restoredVideos;
-    allChannelMap = firebaseData.channels || {};
+    allChannelMap = cacheData.channels || {};
     
     // Restore items with proper video mapping by ID
     const videoById = new Map(restoredVideos.map(v => [v.id, v]));
-    const restoredItems = (firebaseData.items || []).map(item => {
+    const restoredItems = (cacheData.items || []).map(item => {
         const video = videoById.get(item.id);
         if (!video) return null;
         const channel = allChannelMap[video.snippet.channelId];
@@ -986,7 +986,7 @@ function restoreFromCache(firebaseData) {
         });
     }
     
-    console.log(`✅ Firebase 캐시 복원 완료: ${allItems.length}개 항목`);
+    console.log(`✅ 캐시 복원 완료: ${allItems.length}개 항목`);
     trackVideoIdsForViewHistory(restoredVideos);
 }
 
