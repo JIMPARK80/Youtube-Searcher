@@ -7,6 +7,7 @@ import { initializeUI } from './ui.js';
 import { initializeAuth } from './auth.js';
 import { initializeI18n } from './i18n.js';
 import { supabase } from './supabase-config.js';
+import { initializeViewTrackingFallback } from './view-history.js';
 
 // ============================================
 // 전역 변수 초기화
@@ -51,6 +52,10 @@ async function initializeApp() {
         // Initialize API keys
         console.log('🔑 API 키 초기화 중...');
         await initializeApiKeys();
+        
+        // Initialize view tracking fallback (1시간마다 자동 업데이트)
+        console.log('📊 View tracking 초기화 중...');
+        await initializeViewTrackingFallback();
         
         // Initialize authentication system
         console.log('🔐 인증 시스템 초기화 중...');
