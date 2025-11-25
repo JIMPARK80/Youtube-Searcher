@@ -8,7 +8,6 @@ import { initializeAuth } from './auth.js';
 import { initializeI18n } from './i18n.js';
 import { supabase } from './supabase-config.js';
 import { initializeViewTrackingFallback } from './view-history.js';
-import { cleanupOldVphCache } from './supabase-api.js';
 
 // ============================================
 // 전역 변수 초기화
@@ -19,7 +18,7 @@ window.currentUser = null;
 
 // 타이머 추적 (메모리 누수 방지)
 window.appTimers = {
-    vphCacheCleanup: null
+    autoRefresh: null
 };
 
 // ============================================
@@ -83,24 +82,6 @@ async function initializeApp() {
         console.log('📊 View tracking 초기화 중...');
         await initializeViewTrackingFallback();
         
-        // VPH LocalStorage 캐시 정리 (오래된 데이터 삭제)
-        console.log('🧹 VPH 캐시 정리 중...');
-        cleanupOldVphCache();
-        
-        // 기존 타이머 정리 (중복 방지)
-        if (window.appTimers.vphCacheCleanup) {
-            clearInterval(window.appTimers.vphCacheCleanup);
-        }
-        
-        // 주기적으로 VPH 캐시 정리 (10분마다)
-        window.appTimers.vphCacheCleanup = setInterval(() => {
-            try {
-                cleanupOldVphCache();
-            } catch (error) {
-                console.warn('⚠️ VPH 캐시 정리 중 오류:', error);
-            }
-        }, 10 * 60 * 1000); // 10분
-        
         // Initialize authentication system
         console.log('🔐 인증 시스템 초기화 중...');
         initializeAuth();
@@ -115,6 +96,15 @@ async function initializeApp() {
         console.error('❌ 초기화 실패:', error);
     }
 }
+
+// 페이지 언로드 시 모든 타이머 정리
+window.addEventListener('beforeunload', () => {
+    if (window.appTimers) {
+        if (window.appTimers.autoRefresh) {
+            clearInterval(window.appTimers.autoRefresh);
+        }
+    }
+});
 
 // ============================================
 // DOM 로드 완료 후 초기화

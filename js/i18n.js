@@ -53,6 +53,7 @@ const translations = {
         // 검색
         'search.placeholder': '검색어를 입력하세요...',
         'search.button': '검색',
+        'search.searching': '검색 중...',
         'search.loading': '⏳ 검색 중...',
         'search.noResults': '❌ 검색 결과가 없습니다.',
         'search.error': '❌ 검색 중 오류가 발생했습니다.',
@@ -172,6 +173,7 @@ const translations = {
         // Search
         'search.placeholder': 'Enter search term...',
         'search.button': 'Search',
+        'search.searching': 'Searching...',
         'search.loading': '⏳ Searching...',
         'search.noResults': '❌ No search results found.',
         'search.error': '❌ An error occurred during search.',

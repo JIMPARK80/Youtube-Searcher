@@ -28,6 +28,19 @@ export let currentPage = 1;
 export let allChannelMap = {};
 export let currentSearchQuery = '';
 let currentVelocityMetric = 'recent-vph'; // 기본값: 최근 VPH
+
+// 자동 새로고침 관리
+let lastUIUpdateTime = Date.now();
+let autoRefreshTimer = null;
+const AUTO_REFRESH_INACTIVE_MS = 5 * 60 * 1000; // 5분 동안 UI 업데이트 없으면 새로고침
+
+// 디버그 모드 (개발 시에만 로그 출력)
+const DEBUG_MODE = false; // 프로덕션에서는 false로 설정
+const debugLog = (...args) => {
+    if (DEBUG_MODE) {
+        console.log(...args);
+    }
+};
 const PUBLIC_DEFAULT_QUERY = '인생사연';
 const PUBLIC_DEFAULT_QUERY_NORMALIZED = PUBLIC_DEFAULT_QUERY.toLowerCase();
 
@@ -179,8 +192,31 @@ export function getChannelSizeEmoji(cband) {
 // 검색 함수
 // ============================================
 
-export async function search() {
+// 검색 중 상태 추적 (중복 검색 방지)
+let isSearching = false;
+
+export async function search(shouldReload = false) {
+    // 중복 검색 방지 (자동 검색 제외)
+    if (isSearching && !shouldReload) {
+        debugLog('ℹ️ 검색이 이미 진행 중입니다. 대기 중...');
+        return;
+    }
+    
+    const searchBtn = document.getElementById('searchBtn');
+    const searchInput = document.getElementById('searchInput');
+    
     try {
+        isSearching = true;
+        
+        // 검색 버튼 비활성화
+        if (searchBtn) {
+            searchBtn.disabled = true;
+            searchBtn.textContent = t('search.searching') || '검색 중...';
+        }
+        if (searchInput) {
+            searchInput.disabled = true;
+        }
+        
         const query = document.getElementById('searchInput')?.value?.trim();
         
         // Reset isDefaultSearch flag
@@ -195,11 +231,17 @@ export async function search() {
                 loginModal.classList.add('active');
                 alert(t('search.loginRequired'));
             }
+            isSearching = false;
+            if (searchBtn) searchBtn.disabled = false;
+            if (searchInput) searchInput.disabled = false;
             return;
         }
         
         if (!query) {
             alert(t('search.enterQuery'));
+            isSearching = false;
+            if (searchBtn) searchBtn.disabled = false;
+            if (searchInput) searchInput.disabled = false;
             return;
         }
         
@@ -208,12 +250,24 @@ export async function search() {
         
         if (!apiKeyValue) {
             alert(t('search.apiKeyRequired'));
+            isSearching = false;
+            if (searchBtn) searchBtn.disabled = false;
+            if (searchInput) searchInput.disabled = false;
             return;
         }
 
-    currentSearchQuery = query;
-    const resultsDiv = document.getElementById('results');
-    resultsDiv.innerHTML = `<div class="loading">${t('search.loading')}</div>`;
+        // 검색어를 localStorage에 저장하고 새로고침 (shouldReload가 false일 때만)
+        if (!shouldReload) {
+            localStorage.setItem('autoRefreshLastQuery', query);
+            localStorage.setItem('autoSearchOnLoad', 'true'); // 자동 검색 플래그
+            // 검색어 저장 후 새로고침
+            location.reload();
+            return; // 새로고침되므로 이후 코드는 실행되지 않음
+        }
+
+        currentSearchQuery = query;
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = `<div class="loading">${t('search.loading')}</div>`;
     
     // Save search keyword
     if (window.currentUser && !window.isDefaultSearch && !isDefaultPublicQuery) {
@@ -233,16 +287,17 @@ export async function search() {
     // ============================================
     
     // 1️⃣ 로컬 캐시 먼저 확인 (브라우저 localStorage)
-    console.log(`💾 로컬 캐시 확인 중: "${query}"`);
+    debugLog(`💾 로컬 캐시 확인 중: "${query}"`);
     let cacheData = loadFromLocalCache(query);
     
     if (cacheData) {
         const localCount = cacheData.videos?.length || 0;
         const localAge = Date.now() - (cacheData.timestamp || 0);
         if (localCount > 0 && localAge < CACHE_TTL_MS) {
-        console.log(`✅ 로컬 캐시 사용 (${localCount}개, ${(localAge / (1000 * 60 * 60)).toFixed(1)}시간 전)`);
+        debugLog(`✅ 로컬 캐시 사용 (${localCount}개, ${(localAge / (1000 * 60 * 60)).toFixed(1)}시간 전)`);
             restoreFromCache(cacheData);
             renderPage(1);
+            lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
         const nextToken = cacheData.meta?.nextPageToken || null;
         saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'local-cache', nextToken)
             .catch(err => console.warn('⚠️ 로컬 캐시 기반 Supabase 저장 실패:', err));
@@ -253,18 +308,18 @@ export async function search() {
             timestamp: Date.now() // timestamp 갱신
         };
         saveToLocalCache(query, updatedCacheData);
-        console.log(`💾 로컬 캐시 timestamp 업데이트 완료`);
+        debugLog(`💾 로컬 캐시 timestamp 업데이트 완료`);
             return; // 로컬 캐시 사용, 즉시 반환
         }
-        console.log('⚠️ 로컬 캐시가 비어있거나 만료됨 → Supabase 확인');
+        debugLog('⚠️ 로컬 캐시가 비어있거나 만료됨 → Supabase 확인');
     }
     
     // 2️⃣ 로컬 캐시 없음 → Supabase 캐시 확인
-    console.log(`🔍 Supabase 캐시 확인 중: "${query}"`);
+    debugLog(`🔍 Supabase 캐시 확인 중: "${query}"`);
     cacheData = await loadFromSupabase(query);
     
     if (cacheData) {
-        console.log(`✅ Supabase 캐시 발견! API 호출 생략`);
+        debugLog(`✅ Supabase 캐시 발견! API 호출 생략`);
         
         // Supabase 캐시를 로컬 캐시에도 저장 (다음번 빠른 접근)
         saveToLocalCache(query, cacheData);
@@ -276,21 +331,22 @@ export async function search() {
         const savedAt = new Date(cacheData.timestamp);
         const savedAtLabel = savedAt.toLocaleString();
         
-        console.log(`📂 로컬 검색어 캐시 확인: "${query}" (총 ${count}개, 소스=${cacheSource})`);
-        console.log(`⏳ 72시간 경과 여부: ${isExpired ? '만료' : '유효'} (저장 시각: ${savedAtLabel})`);
+        debugLog(`📂 로컬 검색어 캐시 확인: "${query}" (총 ${count}개, 소스=${cacheSource})`);
+        debugLog(`⏳ 72시간 경과 여부: ${isExpired ? '만료' : '유효'} (저장 시각: ${savedAtLabel})`);
         
         // Google 데이터가 아닌 캐시는 최신 Google 데이터로 갱신
         if (cacheSource !== 'google') {
-            console.log('🔄 Google 외 캐시 감지 → 전체 갱신');
+            debugLog('🔄 Google 외 캐시 감지 → 전체 갱신');
             await performFullGoogleSearch(query, apiKeyValue);
             return;
         }
         
         // 신선한 Google 캐시 사용 (데이터가 있을 때만)
         if (!isExpired && count > 0) {
-            console.log(`✅ 로컬 캐시 사용 (기준 시각: ${savedAtLabel}) - ${count}개 항목`);
+            debugLog(`✅ 로컬 캐시 사용 (기준 시각: ${savedAtLabel}) - ${count}개 항목`);
             restoreFromCache(cacheData);
             renderPage(1);
+            lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
             const nextToken = meta.nextPageToken || null;
             saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'supa-cache', nextToken)
                 .catch(err => console.warn('⚠️ Supabase 캐시 기반 저장 실패:', err));
@@ -298,28 +354,49 @@ export async function search() {
         }
         
         if (count === 0) {
-            console.log('⚠️ Supabase 캐시에 데이터가 0개 → API 재호출');
+            debugLog('⚠️ Supabase 캐시에 데이터가 0개 → API 재호출');
         }
         
         // 72시간 경과 + pagination 토큰 존재 → 토핑
         if (count === 50 && meta.nextPageToken) {
-            console.log('🔝 토핑 모드: 추가 50개만 fetch');
+            debugLog('🔝 토핑 모드: 추가 50개만 fetch');
             await performTopUpUpdate(query, apiKeyValue, cacheData);
             return;
         }
         
-        console.log('⏰ 로컬 캐시 만료 → Supabase 서버 재호출');
+        debugLog('⏰ 로컬 캐시 만료 → Supabase 서버 재호출');
         await performFullGoogleSearch(query, apiKeyValue);
         return;
     }
 
     // 캐시 없음 → 전체 검색 (API 호출 필요)
-    console.log(`❌ Supabase 캐시 없음 → YouTube API 호출 필요`);
+    debugLog(`❌ Supabase 캐시 없음 → YouTube API 호출 필요`);
     await performFullGoogleSearch(query, apiKeyValue);
     } catch (error) {
         console.error('❌ 검색 중 오류 발생:', error);
-        alert(`검색 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
+        
+        // UI 상태 복구
+        const resultsDiv = document.getElementById('results');
+        if (resultsDiv) {
+            resultsDiv.innerHTML = `<div class="error">${t('search.error') || '검색 중 오류가 발생했습니다.'}</div>`;
+        }
+        
+        // 사용자에게 알림 (에러 메시지가 너무 길면 간단하게)
+        const errorMessage = error.message || '알 수 없는 오류';
+        const shortMessage = errorMessage.length > 50 ? '검색 중 오류가 발생했습니다. 다시 시도해주세요.' : errorMessage;
+        alert(shortMessage);
+        
         // 앱이 멈추지 않도록 에러를 처리
+    } finally {
+        // 검색 완료 후 UI 상태 복구
+        isSearching = false;
+        if (searchBtn) {
+            searchBtn.disabled = false;
+            searchBtn.textContent = t('search.button') || '검색';
+        }
+        if (searchInput) {
+            searchInput.disabled = false;
+        }
     }
 }
 
@@ -328,10 +405,20 @@ export async function search() {
 // ============================================
 
 async function performFullGoogleSearch(query, apiKeyValue) {
+    // 타임아웃 설정 (60초)
+    const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('검색 타임아웃: 60초 내에 응답이 없습니다.')), 60000);
+    });
+    
     try {
-        console.log('🌐 Google API 전체 검색 (최대 300개)');
-        const result = await searchYouTubeAPI(query, apiKeyValue);
-        console.log(`🎯 fetch 완료: ${result.videos.length}개`);
+        debugLog('🌐 Google API 전체 검색 (최대 300개)');
+        
+        // 타임아웃과 함께 실행
+        const result = await Promise.race([
+            searchYouTubeAPI(query, apiKeyValue),
+            timeoutPromise
+        ]);
+        debugLog(`🎯 fetch 완료: ${result.videos.length}개`);
         allVideos = result.videos;
         allChannelMap = result.channels;
         
@@ -389,21 +476,42 @@ async function performFullGoogleSearch(query, apiKeyValue) {
         saveToLocalCache(query, cacheData);
         
         renderPage(1);
+        lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
 
     } catch (googleError) {
         console.error('❌ YouTube API 오류:', googleError);
+        
+        // 타임아웃 에러인지 확인
+        if (googleError.message && googleError.message.includes('타임아웃')) {
+            console.warn('⏰ 검색 타임아웃 발생');
+        }
+        
+        // UI 상태 복구
         const resultsDiv = document.getElementById('results');
-        resultsDiv.innerHTML = `<div class="error">${t('search.error')}</div>`;
+        if (resultsDiv) {
+            resultsDiv.innerHTML = `<div class="error">${t('search.error') || '검색 중 오류가 발생했습니다.'}</div>`;
+        }
+        
+        // 에러를 다시 throw하여 상위에서 처리
+        throw googleError;
     }
 }
 
 async function performTopUpUpdate(query, apiKeyValue, firebaseData) {
+    // 타임아웃 설정 (60초)
+    const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('토핑 업데이트 타임아웃: 60초 내에 응답이 없습니다.')), 60000);
+    });
+    
     try {
         const meta = firebaseData.meta || {};
-        console.log('🔝 토핑: search.list 1회 + 신규 50개 상세 정보');
+        debugLog('🔝 토핑: search.list 1회 + 신규 50개 상세 정보');
         
-        // 1) 다음 50개 검색
-        const more = await fetchNext50WithToken(query, apiKeyValue, meta.nextPageToken);
+        // 1) 다음 50개 검색 (타임아웃과 함께)
+        const more = await Promise.race([
+            fetchNext50WithToken(query, apiKeyValue, meta.nextPageToken),
+            timeoutPromise
+        ]);
         
         // 2) 신규 50개 비디오/채널 상세
         const { videoDetails, channelsMap } = await hydrateDetailsOnlyForNew(more, apiKeyValue);
@@ -461,8 +569,21 @@ async function performTopUpUpdate(query, apiKeyValue, firebaseData) {
         renderPage(1);
         
     } catch (error) {
-        console.error('❌ 토핑 실패:', error);
-        await performFullGoogleSearch(query, apiKeyValue);
+        console.error('❌ 토핑 업데이트 오류:', error);
+        
+        // 타임아웃 에러인지 확인
+        if (error.message && error.message.includes('타임아웃')) {
+            console.warn('⏰ 토핑 업데이트 타임아웃 발생');
+        }
+        
+        // UI 상태 복구
+        const resultsDiv = document.getElementById('results');
+        if (resultsDiv) {
+            resultsDiv.innerHTML = `<div class="error">${t('search.error') || '업데이트 중 오류가 발생했습니다.'}</div>`;
+        }
+        
+        // 에러를 다시 throw하여 상위에서 처리
+        throw error;
     }
 }
 
@@ -491,6 +612,10 @@ function getFilteredDedupedItems() {
 
 export function renderPage(page) {
     currentPage = page;
+    
+    // VPH 계산 큐 초기화 (이전 페이지의 큐 정리)
+    vphCalculationQueue = [];
+    vphCalculationRunning = 0;
     
     // Apply filters and dedupe results
     const dedupedItems = getFilteredDedupedItems();
@@ -526,10 +651,12 @@ export function renderPage(page) {
     // Use DocumentFragment to prevent layout thrashing
     const fragment = document.createDocumentFragment();
     
-    pageItems.forEach(item => {
+    // 카드 렌더링 (forEach 대신 for 루프 사용 - 약간 더 빠름)
+    for (let i = 0; i < pageItems.length; i++) {
+        const item = pageItems[i];
         const video = item.raw;
         const card = createVideoCard(video, item);
-        if (card) { // Only append if card is not null
+        if (card) {
             fragment.appendChild(card);
             
             // 표시 단위가 "최근 VPH"이고 VPH 데이터가 이미 있는 경우 배지 업데이트
@@ -541,13 +668,17 @@ export function renderPage(page) {
                 }
             }
         }
-    });
+    }
     
     gridContainer.appendChild(fragment);
     resultsDiv.appendChild(gridContainer);
     
     // Update pagination
     updatePaginationControls(dedupedItems.length);
+    
+    // 마지막 UI 업데이트 시간 갱신
+    lastUIUpdateTime = Date.now();
+    resetAutoRefreshTimer();
 }
 
 function createVideoCard(video, item) {
@@ -614,9 +745,96 @@ function createVideoCard(video, item) {
     return card;
 }
 
-function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '', item = null) {
+// VPH 계산 큐 관리 (동시 실행 제한)
+let vphCalculationQueue = [];
+let vphCalculationRunning = 0;
+const MAX_CONCURRENT_VPH_CALCULATIONS = 3; // 동시 최대 3개만 실행
+
+// 자동 새로고침 함수
+function resetAutoRefreshTimer() {
+    // 기존 타이머 정리
+    if (autoRefreshTimer) {
+        clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+    }
+    if (window.appTimers?.autoRefresh) {
+        clearInterval(window.appTimers.autoRefresh);
+        window.appTimers.autoRefresh = null;
+    }
+    
+    // 새 타이머 시작
+    autoRefreshTimer = setInterval(() => {
+        const inactiveTime = Date.now() - lastUIUpdateTime;
+        
+        if (inactiveTime >= AUTO_REFRESH_INACTIVE_MS) {
+            console.log(`🔄 ${Math.floor(inactiveTime / 1000 / 60)}분 동안 UI 업데이트 없음 → 자동 새로고침`);
+            // 자동 새로고침은 중요한 로그이므로 유지
+            // 마지막 검색어로 자동 재검색
+            const lastQuery = currentSearchQuery || document.getElementById('searchInput')?.value?.trim();
+            if (lastQuery) {
+                // LocalStorage에 마지막 검색어 저장
+                try {
+                    localStorage.setItem('autoRefreshLastQuery', lastQuery);
+                } catch (e) {
+                    // LocalStorage 오류 무시
+                }
+            }
+            location.reload();
+        }
+    }, 30 * 1000); // 30초마다 체크
+    
+    // 전역 타이머에도 저장 (중복 방지)
+    window.appTimers.autoRefresh = autoRefreshTimer;
+}
+
+// 사용자 활동 감지 (타이머 리셋)
+function detectUserActivity() {
+    lastUIUpdateTime = Date.now();
+}
+
+// 페이지 로드 시 마지막 검색어 복원 및 자동 검색
+function restoreLastSearchOnRefresh() {
+    try {
+        const autoSearch = localStorage.getItem('autoSearchOnLoad');
+        const lastQuery = localStorage.getItem('autoRefreshLastQuery');
+        
+        if (lastQuery && document.getElementById('searchInput')) {
+            document.getElementById('searchInput').value = lastQuery;
+            
+            // 자동 검색 플래그가 있으면 검색 실행
+            if (autoSearch === 'true') {
+                localStorage.removeItem('autoSearchOnLoad'); // 플래그 제거 (한 번만 실행)
+                // 약간의 지연 후 검색 실행 (DOM이 완전히 준비된 후)
+                setTimeout(() => {
+                    search(true); // shouldReload = true로 자동 검색 실행
+                }, 100);
+            }
+        }
+    } catch (e) {
+        // LocalStorage 오류 무시
+        console.warn('⚠️ 검색어 복원 실패:', e);
+    }
+}
+
+function processVphQueue() {
+    if (vphCalculationRunning >= MAX_CONCURRENT_VPH_CALCULATIONS || vphCalculationQueue.length === 0) {
+        return;
+    }
+    
+    const { videoId, panelEl, baseVpd, label, item } = vphCalculationQueue.shift();
+    vphCalculationRunning++;
+    
+    executeVphCalculation(videoId, panelEl, baseVpd, label, item)
+        .finally(() => {
+            vphCalculationRunning--;
+            // 다음 항목 처리
+            setTimeout(() => processVphQueue(), 100); // 100ms 딜레이
+        });
+}
+
+async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', item = null) {
     if (!panelEl) {
-        console.warn(`⚠️ hydrateVelocityPanel: panelEl이 없습니다 (videoId="${videoId}")`);
+        console.warn(`⚠️ executeVphCalculation: panelEl이 없습니다 (videoId="${videoId}")`);
         return;
     }
     const recentEl = panelEl.querySelector('.recent-vph');
@@ -624,7 +842,7 @@ function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '', item = 
     const badgeEl = panelEl.closest('.video-card')?.querySelector('.vpd-badge');
     
     if (!recentEl) {
-        console.warn(`⚠️ hydrateVelocityPanel: .recent-vph 요소를 찾을 수 없습니다 (videoId="${videoId}")`);
+        console.warn(`⚠️ executeVphCalculation: .recent-vph 요소를 찾을 수 없습니다 (videoId="${videoId}")`);
     }
     
     if (dailyEl) {
@@ -636,78 +854,65 @@ function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '', item = 
         return;
     }
     
-    // 디버깅: videoId 확인
-    console.log(`🔍 VPH 계산 시작: videoId="${videoId}", label="${label}", recentEl=${recentEl ? '존재' : '없음'}`);
-    
-    // 타임아웃 설정 (10초)
+    // 타임아웃 설정 (5초로 단축)
     const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('VPH 계산 타임아웃')), 10000);
+        setTimeout(() => reject(new Error('VPH 계산 타임아웃')), 5000);
     });
     
-    Promise.race([
-        getRecentVelocityForVideo(videoId),
-        timeoutPromise
-    ])
-        .then((stats) => {
-            if (!stats) {
-                if (recentEl) recentEl.textContent = t('velocity.unavailable');
-                // 이미 getRecentVelocityForVideo에서 로그를 출력하므로 여기서는 생략
-                return;
-            }
-            if (recentEl) {
-                const vphValue = stats.vph || 0;
-                recentEl.textContent = `${formatNumber(vphValue)}/hr`;
-                console.log(`✅ UI 업데이트 완료: videoId="${videoId}", VPH=${vphValue}, 요소=${recentEl ? '존재' : '없음'}`);
-                
-                // item 객체에 VPH 데이터 저장 (표시 단위 "최근 VPH" 사용 시)
-                if (item) {
-                    item.vph = vphValue;
-                    
-                    // 배지 업데이트 (표시 단위가 "최근 VPH"인 경우)
-                    if (badgeEl && currentVelocityMetric === 'recent-vph') {
-                        const velocityValue = getVelocityValue(item);
-                        badgeEl.textContent = formatVelocityBadge(velocityValue);
-                    }
-                }
-            } else {
-                console.warn(`⚠️ UI 업데이트 실패: recentEl 요소를 찾을 수 없음 (videoId="${videoId}")`);
-            }
-            
-            // 시간 정보 포맷팅
-            const latestTs = stats.latest?.fetchedAt?.toLocaleString?.() || 'N/A';
-            const prevTs = stats.previous?.fetchedAt?.toLocaleString?.() || 'N/A';
-            const firstTs = stats.first?.fetchedAt?.toLocaleString?.() || 'N/A';
-            const nowTs = stats.now?.toLocaleString?.() || 'N/A';
-            
-            // 경과 시간 포맷팅
-            const recentDiffHours = stats.diffHours?.toFixed(2) || '0';
-            const totalElapsedHours = stats.totalElapsedHours?.toFixed(2) || '0';
-            const totalElapsedDays = stats.totalElapsedDays?.toFixed(2) || '0';
-            
-            // 조회수 증가 정보
-            const recentGrowth = stats.recentGrowth || 0;
-            const totalGrowth = stats.totalGrowth || 0;
-            
-            console.log(
-                `🕒 VPH 스냅샷 [${label || videoId}]\n` +
-                `  📊 최초 데이터: ${firstTs} (조회수: ${formatNumber(stats.first?.viewCount || 0)})\n` +
-                `  📈 최신 데이터: ${latestTs} (조회수: ${formatNumber(stats.latest?.viewCount || 0)})\n` +
-                `  ⏰ 현재 시간: ${nowTs}\n` +
-                `  ⏱️ 최근 경과: ${recentDiffHours}시간 (${formatNumber(recentGrowth)} 증가)\n` +
-                `  ⏱️ 전체 경과: ${totalElapsedDays}일 (${totalElapsedHours}시간) (${formatNumber(totalGrowth)} 증가)\n` +
-                `  🚀 최근 VPH: ${formatNumber(stats.vph || 0)}/hr`
-            );
-        })
-        .catch((error) => {
-            // 타임아웃 또는 기타 에러 처리
-            if (error.message === 'VPH 계산 타임아웃') {
-                console.warn(`⚠️ VPH 계산 타임아웃 (${videoId}): 10초 초과`);
-            } else {
-                console.warn('⚠️ 최근 VPH 로드 실패:', error);
-            }
+    try {
+        const stats = await Promise.race([
+            getRecentVelocityForVideo(videoId),
+            timeoutPromise
+        ]);
+        
+        if (!stats) {
             if (recentEl) recentEl.textContent = t('velocity.unavailable');
-            // 앱이 멈추지 않도록 에러를 무시
-        });
+            return;
+        }
+        
+        if (recentEl) {
+            const vphValue = stats.vph || 0;
+            recentEl.textContent = `${formatNumber(vphValue)}/hr`;
+            
+            // item 객체에 VPH 데이터 저장 (표시 단위 "최근 VPH" 사용 시)
+            if (item) {
+                item.vph = vphValue;
+                
+                // 배지 업데이트 (표시 단위가 "최근 VPH"인 경우)
+                if (badgeEl && currentVelocityMetric === 'recent-vph') {
+                    const velocityValue = getVelocityValue(item);
+                    badgeEl.textContent = formatVelocityBadge(velocityValue);
+                }
+            }
+        }
+        
+    } catch (error) {
+        // 타임아웃 또는 기타 에러 처리
+        if (error.message === 'VPH 계산 타임아웃') {
+            console.warn(`⚠️ VPH 계산 타임아웃 (${videoId}): 5초 초과`);
+        } else {
+            console.warn('⚠️ 최근 VPH 로드 실패:', error);
+        }
+        if (recentEl) recentEl.textContent = t('velocity.unavailable');
+        // 앱이 멈추지 않도록 에러를 무시
+    }
+}
+
+function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '', item = null) {
+    // 표시 단위가 "최근 VPH"가 아니면 VPH 계산 건너뛰기
+    if (currentVelocityMetric !== 'recent-vph') {
+        const recentEl = panelEl?.querySelector('.recent-vph');
+        if (recentEl) {
+            recentEl.textContent = t('velocity.unavailable');
+        }
+        return;
+    }
+    
+    // 큐에 추가 (동시 실행 제한)
+    vphCalculationQueue.push({ videoId, panelEl, baseVpd, label, item });
+    
+    // 큐 처리 시작
+    processVphQueue();
 }
 
 // ============================================
@@ -1108,6 +1313,12 @@ export function setupEventListeners() {
         return;
     }
     
+    // 사용자 활동 감지 (클릭, 키보드 입력, 스크롤)
+    document.addEventListener('click', detectUserActivity);
+    document.addEventListener('keydown', detectUserActivity);
+    document.addEventListener('scroll', detectUserActivity, { passive: true });
+    document.addEventListener('mousemove', detectUserActivity, { passive: true });
+    
     // Search button
     document.getElementById('searchBtn')?.addEventListener('click', search);
     
@@ -1196,6 +1407,12 @@ export function setupEventListeners() {
     
     eventListenersSetup = true;
     console.log('✅ 이벤트 리스너 설정 완료');
+    
+    // 마지막 검색어 복원
+    restoreLastSearchOnRefresh();
+    
+    // 자동 새로고침 타이머 시작
+    resetAutoRefreshTimer();
 }
 
 // ============================================
