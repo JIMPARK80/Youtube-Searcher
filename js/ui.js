@@ -1048,32 +1048,38 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
             // 계산 완료 표시 (재계산 방지)
             vphCalculatedVideos.add(videoId);
             
-            // VPH 계산 완료 후 정렬이 "높은 순"이고 표시 단위가 "최근 VPH"이면 재정렬
-            const sortSelect = document.getElementById('sortVpdSelect');
-            const sortValue = sortSelect?.value || 'desc';
-            if (sortValue === 'desc' && currentVelocityMetric === 'recent-vph') {
-                // 재정렬 디바운싱: 마지막 재정렬 요청 후 1초 후에 실행
-                if (window.vphResortTimer) {
-                    clearTimeout(window.vphResortTimer);
-                }
-                
-                window.vphResortTimer = setTimeout(() => {
-                    // 충분한 항목이 계산되었으면 재정렬 (최소 8개 이상 또는 전체의 50% 이상)
-                    const minCalculated = Math.min(8, Math.ceil(allItems.length * 0.5));
-                    if (vphCalculatedVideos.size >= minCalculated) {
-                        // allItems를 직접 정렬 (VPH 값 기준)
-                        allItems.sort((a, b) => {
-                            const valA = getVelocityValue(a);
-                            const valB = getVelocityValue(b);
-                            return valB - valA; // 높은 순
-                        });
-                        
-                        // 첫 페이지로 이동하여 재렌더링
-                        currentPage = 1;
-                        renderPage(1);
-                    }
-                }, 1000); // 1초 딜레이로 여러 계산 완료를 기다림
+            // VPH 계산 완료 후 항상 재정렬 (표시 단위와 정렬 옵션에 따라)
+            // 재정렬 디바운싱: 마지막 재정렬 요청 후 1초 후에 실행
+            if (window.vphResortTimer) {
+                clearTimeout(window.vphResortTimer);
             }
+            
+            window.vphResortTimer = setTimeout(() => {
+                // 충분한 항목이 계산되었으면 재정렬 (최소 8개 이상 또는 전체의 50% 이상)
+                const minCalculated = Math.min(8, Math.ceil(allItems.length * 0.5));
+                if (vphCalculatedVideos.size >= minCalculated) {
+                    // 현재 정렬 옵션과 표시 단위 가져오기
+                    const sortSelect = document.getElementById('sortVpdSelect');
+                    const sortValue = sortSelect?.value || 'desc';
+                    const velocityMetricSelect = document.getElementById('velocityMetricSelect');
+                    const currentMetric = velocityMetricSelect?.value || 'recent-vph';
+                    
+                    // allItems를 직접 정렬 (현재 표시 단위와 정렬 옵션에 따라)
+                    allItems.sort((a, b) => {
+                        const valA = getVelocityValue(a, currentMetric);
+                        const valB = getVelocityValue(b, currentMetric);
+                        if (sortValue === 'asc') {
+                            return valA - valB; // 낮은 순
+                        } else {
+                            return valB - valA; // 높은 순
+                        }
+                    });
+                    
+                    // 첫 페이지로 이동하여 재렌더링
+                    currentPage = 1;
+                    renderPage(1);
+                }
+            }, 1000); // 1초 딜레이로 여러 계산 완료를 기다림
         }
         
     } catch (error) {
