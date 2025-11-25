@@ -766,9 +766,17 @@ export function renderPage(page) {
     const sortSelect = document.getElementById('sortVpdSelect');
     const sortValue = sortSelect?.value || 'desc'; // 기본값: 높은 순
     if (sortValue === 'asc') {
-        dedupedItems.sort((a, b) => getVelocityValue(a) - getVelocityValue(b));
+        dedupedItems.sort((a, b) => {
+            const valA = getVelocityValue(a);
+            const valB = getVelocityValue(b);
+            return valA - valB;
+        });
     } else if (sortValue === 'desc') {
-        dedupedItems.sort((a, b) => getVelocityValue(b) - getVelocityValue(a));
+        dedupedItems.sort((a, b) => {
+            const valA = getVelocityValue(a);
+            const valB = getVelocityValue(b);
+            return valB - valA; // 높은 순
+        });
     }
     
     // Pagination
@@ -1039,6 +1047,25 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
             
             // 계산 완료 표시 (재계산 방지)
             vphCalculatedVideos.add(videoId);
+            
+            // VPH 계산 완료 후 정렬이 "높은 순"이고 표시 단위가 "최근 VPH"이면 재정렬
+            const sortSelect = document.getElementById('sortVpdSelect');
+            const sortValue = sortSelect?.value || 'desc';
+            if (sortValue === 'desc' && currentVelocityMetric === 'recent-vph') {
+                // 약간의 딜레이 후 재정렬 (여러 VPH 계산이 동시에 완료될 수 있으므로)
+                setTimeout(() => {
+                    // 현재 페이지의 모든 항목이 계산되었는지 확인
+                    const allItemsCalculated = allItems.every(item => {
+                        const videoId = item.raw?.id || item.id;
+                        return !videoId || vphCalculatedVideos.has(videoId) || item.vph !== undefined;
+                    });
+                    
+                    // 모든 항목이 계산되었거나 충분한 항목이 계산되었으면 재정렬
+                    if (allItemsCalculated || vphCalculatedVideos.size >= allItems.length * 0.5) {
+                        renderPage(currentPage);
+                    }
+                }, 500); // 500ms 딜레이로 여러 계산 완료를 기다림
+            }
         }
         
     } catch (error) {
