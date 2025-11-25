@@ -45,6 +45,33 @@ const debugLog = (...args) => {
         console.log(...args);
     }
 };
+
+// 콘솔 로그 정리 (선택적: 30초마다 또는 비활성 시)
+let consoleClearTimer = null;
+const CONSOLE_CLEAR_INTERVAL_MS = 30 * 1000; // 30초
+const ENABLE_CONSOLE_CLEANUP = false; // true로 설정하면 30초마다 콘솔 정리
+
+function initConsoleCleanup() {
+    if (!ENABLE_CONSOLE_CLEANUP) {
+        return; // 비활성화된 경우 아무것도 하지 않음
+    }
+    
+    if (consoleClearTimer) {
+        clearInterval(consoleClearTimer);
+    }
+    
+    consoleClearTimer = setInterval(() => {
+        // 개발 모드가 아니고, 사용자가 비활성 상태일 때만 콘솔 정리
+        if (!DEBUG_MODE) {
+            const inactiveTime = Date.now() - lastUIUpdateTime;
+            // 30초 이상 비활성 상태일 때만 정리 (사용자가 작업 중이 아닐 때)
+            if (inactiveTime > 30 * 1000) {
+                console.clear();
+                console.log('🧹 콘솔 로그 정리 완료 (30초 비활성 후)');
+            }
+        }
+    }, CONSOLE_CLEAR_INTERVAL_MS);
+}
 const PUBLIC_DEFAULT_QUERY = '인생사연';
 const PUBLIC_DEFAULT_QUERY_NORMALIZED = PUBLIC_DEFAULT_QUERY.toLowerCase();
 
@@ -1564,4 +1591,7 @@ export function setupEventListeners() {
 export function initializeUI() {
     setupEventListeners();
     console.log('✅ UI 초기화 완료');
+    
+    // 콘솔 로그 정리 초기화
+    initConsoleCleanup();
 }
