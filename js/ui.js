@@ -870,6 +870,15 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
             return;
         }
         
+        // 스냅샷이 부족한 경우 (2개 미만)
+        if (stats.insufficient) {
+            if (recentEl) {
+                recentEl.textContent = stats.message || t('velocity.unavailable');
+                recentEl.style.opacity = '0.6'; // 반투명으로 표시
+            }
+            return;
+        }
+        
         if (recentEl) {
             const vphValue = stats.vph || 0;
             recentEl.textContent = `${formatNumber(vphValue)}/hr`;

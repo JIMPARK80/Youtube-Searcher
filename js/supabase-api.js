@@ -376,9 +376,15 @@ export async function getRecentVelocityForVideo(videoId) {
         }
         
         if (!recentData || recentData.length < 2) {
-            // 로그 최소화: 데이터 없을 때만 로그
-            // console.log(`⚪ VPH 데이터 없음 (${videoId}): 스냅샷 ${recentData?.length || 0}개 (2개 필요)`);
-            return null;
+            // 스냅샷 개수에 따른 상세 정보 반환 (UI에서 더 나은 메시지 표시용)
+            return {
+                insufficient: true,
+                snapshotCount: recentData?.length || 0,
+                requiredCount: 2,
+                message: recentData?.length === 1 
+                    ? '데이터 수집 중 (1/2)' 
+                    : '데이터 없음'
+            };
         }
 
         // 최초 스냅샷 가져오기 (전체 경과 시간 계산용)
