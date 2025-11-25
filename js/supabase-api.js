@@ -208,7 +208,7 @@ async function trackVideoIdsForViewHistory(videos) {
         // Get current config
         const { data: config } = await supabase
             .from('view_tracking_config')
-            .select('video_ids')
+            .select('id, video_ids')
             .limit(1)
             .single();
 
@@ -219,12 +219,16 @@ async function trackVideoIdsForViewHistory(videos) {
 
         // Update config
         const merged = Array.from(new Set([...existing, ...newIds]));
+        const payload = {
+            video_ids: merged,
+            updated_at: new Date().toISOString()
+        };
+        if (config?.id) {
+            payload.id = config.id;
+        }
         await supabase
             .from('view_tracking_config')
-            .upsert({
-                video_ids: merged,
-                updated_at: new Date().toISOString()
-            }, {
+            .upsert(payload, {
                 onConflict: 'id'
             });
 
