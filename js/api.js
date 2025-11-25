@@ -528,12 +528,26 @@ function parseRelativeDate(relativeDateStr) {
 export async function saveUserLastSearchKeyword(uid, keyword) {
     try {
         const { supabase } = await import('./supabase-config.js');
+        const { data: sessionData } = await supabase.auth.getSession();
+
+        const supabaseSession = sessionData?.session;
+        const supabaseUserId = supabaseSession?.user?.id;
+
+        // RLS requires a Supabase Auth session. Skip if user isn't logged in via Supabase.
+        if (!supabaseUserId) {
+            console.warn('⚠️ Supabase 세션이 없어 검색어 저장을 건너뜁니다.');
+            return;
+        }
+
+        if (uid && uid !== supabaseUserId) {
+            console.warn('⚠️ 전달된 uid와 Supabase uid가 달라 Supabase uid를 사용합니다.');
+        }
         
         // users table uses 'uid' field (TEXT) to store Supabase Auth user.id
         const { error } = await supabase
             .from('users')
             .upsert({
-                uid: uid, // Supabase Auth user.id as string
+                uid: supabaseUserId, // Supabase Auth user.id as string
                 last_search_keyword: keyword,
                 last_search_time: Date.now(),
                 updated_at: new Date().toISOString()

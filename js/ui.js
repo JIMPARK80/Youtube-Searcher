@@ -226,9 +226,12 @@ export async function search() {
         const localCount = cacheData.videos?.length || 0;
         const localAge = Date.now() - (cacheData.timestamp || 0);
         if (localCount > 0 && localAge < CACHE_TTL_MS) {
-            console.log(`✅ 로컬 캐시 사용 (${localCount}개, ${(localAge / (1000 * 60 * 60)).toFixed(1)}시간 전)`);
+        console.log(`✅ 로컬 캐시 사용 (${localCount}개, ${(localAge / (1000 * 60 * 60)).toFixed(1)}시간 전)`);
             restoreFromCache(cacheData);
             renderPage(1);
+        const nextToken = cacheData.meta?.nextPageToken || null;
+        saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'local-cache', nextToken)
+            .catch(err => console.warn('⚠️ 로컬 캐시 기반 Supabase 저장 실패:', err));
             return; // 로컬 캐시 사용, 즉시 반환
         }
         console.log('⚠️ 로컬 캐시가 비어있거나 만료됨 → Supabase 확인');
@@ -266,6 +269,9 @@ export async function search() {
             console.log(`✅ 로컬 캐시 사용 (기준 시각: ${savedAtLabel}) - ${count}개 항목`);
             restoreFromCache(cacheData);
             renderPage(1);
+            const nextToken = meta.nextPageToken || null;
+            saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'supa-cache', nextToken)
+                .catch(err => console.warn('⚠️ Supabase 캐시 기반 저장 실패:', err));
             return;
         }
         
