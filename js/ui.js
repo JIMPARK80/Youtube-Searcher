@@ -232,6 +232,14 @@ export async function search() {
         const nextToken = cacheData.meta?.nextPageToken || null;
         saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'local-cache', nextToken)
             .catch(err => console.warn('⚠️ 로컬 캐시 기반 Supabase 저장 실패:', err));
+        
+        // 로컬 캐시 timestamp 업데이트 (Supabase 저장 후)
+        const updatedCacheData = {
+            ...cacheData,
+            timestamp: Date.now() // timestamp 갱신
+        };
+        saveToLocalCache(query, updatedCacheData);
+        console.log(`💾 로컬 캐시 timestamp 업데이트 완료`);
             return; // 로컬 캐시 사용, 즉시 반환
         }
         console.log('⚠️ 로컬 캐시가 비어있거나 만료됨 → Supabase 확인');
@@ -327,6 +335,10 @@ async function performFullGoogleSearch(query, apiKeyValue) {
 
         // Save to Supabase with nextPageToken
         await saveToSupabase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken);
+        
+        // Track video IDs for view history (VPH 추적 시작)
+        trackVideoIdsForViewHistory(allVideos)
+            .catch(err => console.warn('⚠️ Video ID 추적 실패:', err));
         
         // 로컬 캐시에도 저장
         const cacheData = {
@@ -574,30 +586,67 @@ function createVideoCard(video, item) {
 }
 
 function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '') {
-    if (!panelEl) return;
+    if (!panelEl) {
+        console.warn(`⚠️ hydrateVelocityPanel: panelEl이 없습니다 (videoId="${videoId}")`);
+        return;
+    }
     const recentEl = panelEl.querySelector('.recent-vph');
     const dailyEl = panelEl.querySelector('.daily-vpd');
+    
+    if (!recentEl) {
+        console.warn(`⚠️ hydrateVelocityPanel: .recent-vph 요소를 찾을 수 없습니다 (videoId="${videoId}")`);
+    }
+    
     if (dailyEl) {
         dailyEl.textContent = `${formatNumber(baseVpd || 0)}/day`;
     }
     if (!videoId) {
         if (recentEl) recentEl.textContent = t('velocity.unavailable');
+        console.warn('⚠️ VPH 계산: videoId가 없습니다', { label });
         return;
     }
+    
+    // 디버깅: videoId 확인
+    console.log(`🔍 VPH 계산 시작: videoId="${videoId}", label="${label}", recentEl=${recentEl ? '존재' : '없음'}`);
+    
     getRecentVelocityForVideo(videoId)
         .then((stats) => {
             if (!stats) {
                 if (recentEl) recentEl.textContent = t('velocity.unavailable');
-                console.log(`⚪ VPH 데이터 없음: ${label || videoId}`);
+                // 이미 getRecentVelocityForVideo에서 로그를 출력하므로 여기서는 생략
                 return;
             }
             if (recentEl) {
-                recentEl.textContent = `${formatNumber(stats.vph || 0)}/hr`;
+                const vphValue = stats.vph || 0;
+                recentEl.textContent = `${formatNumber(vphValue)}/hr`;
+                console.log(`✅ UI 업데이트 완료: videoId="${videoId}", VPH=${vphValue}, 요소=${recentEl ? '존재' : '없음'}`);
+            } else {
+                console.warn(`⚠️ UI 업데이트 실패: recentEl 요소를 찾을 수 없음 (videoId="${videoId}")`);
             }
+            
+            // 시간 정보 포맷팅
             const latestTs = stats.latest?.fetchedAt?.toLocaleString?.() || 'N/A';
             const prevTs = stats.previous?.fetchedAt?.toLocaleString?.() || 'N/A';
+            const firstTs = stats.first?.fetchedAt?.toLocaleString?.() || 'N/A';
+            const nowTs = stats.now?.toLocaleString?.() || 'N/A';
+            
+            // 경과 시간 포맷팅
+            const recentDiffHours = stats.diffHours?.toFixed(2) || '0';
+            const totalElapsedHours = stats.totalElapsedHours?.toFixed(2) || '0';
+            const totalElapsedDays = stats.totalElapsedDays?.toFixed(2) || '0';
+            
+            // 조회수 증가 정보
+            const recentGrowth = stats.recentGrowth || 0;
+            const totalGrowth = stats.totalGrowth || 0;
+            
             console.log(
-                `🕒 VPH 스냅샷 [${label || videoId}] 최신=${latestTs}, 이전=${prevTs}, Δ=${stats.diffHours?.toFixed?.(2) || '0'}h`
+                `🕒 VPH 스냅샷 [${label || videoId}]\n` +
+                `  📊 최초 데이터: ${firstTs} (조회수: ${formatNumber(stats.first?.viewCount || 0)})\n` +
+                `  📈 최신 데이터: ${latestTs} (조회수: ${formatNumber(stats.latest?.viewCount || 0)})\n` +
+                `  ⏰ 현재 시간: ${nowTs}\n` +
+                `  ⏱️ 최근 경과: ${recentDiffHours}시간 (${formatNumber(recentGrowth)} 증가)\n` +
+                `  ⏱️ 전체 경과: ${totalElapsedDays}일 (${totalElapsedHours}시간) (${formatNumber(totalGrowth)} 증가)\n` +
+                `  🚀 최근 VPH: ${formatNumber(stats.vph || 0)}/hr`
             );
         })
         .catch((error) => {

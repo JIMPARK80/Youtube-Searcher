@@ -8,6 +8,7 @@ import { initializeAuth } from './auth.js';
 import { initializeI18n } from './i18n.js';
 import { supabase } from './supabase-config.js';
 import { initializeViewTrackingFallback } from './view-history.js';
+import { cleanupOldVphCache } from './supabase-api.js';
 
 // ============================================
 // 전역 변수 초기화
@@ -56,6 +57,15 @@ async function initializeApp() {
         // Initialize view tracking fallback (1시간마다 자동 업데이트)
         console.log('📊 View tracking 초기화 중...');
         await initializeViewTrackingFallback();
+        
+        // VPH LocalStorage 캐시 정리 (오래된 데이터 삭제)
+        console.log('🧹 VPH 캐시 정리 중...');
+        cleanupOldVphCache();
+        
+        // 주기적으로 VPH 캐시 정리 (10분마다)
+        setInterval(() => {
+            cleanupOldVphCache();
+        }, 10 * 60 * 1000); // 10분
         
         // Initialize authentication system
         console.log('🔐 인증 시스템 초기화 중...');

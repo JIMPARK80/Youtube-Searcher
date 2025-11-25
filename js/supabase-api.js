@@ -198,12 +198,29 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
 
 export async function trackVideoIdsForViewHistory(videos) {
     try {
+        // video.id는 이미 문자열 (videos.list 응답)
+        // video.id.videoId는 search.list 응답에서만 사용
         const ids = Array.from(new Set(
             (videos || [])
-                .map(video => video?.id?.videoId || video?.id)
+                .map(video => {
+                    // videos.list 응답: video.id는 직접 문자열
+                    // search.list 응답: video.id.videoId
+                    const id = video?.id?.videoId || video?.id;
+                    if (!id) {
+                        console.warn('⚠️ videoId 추출 실패:', video);
+                        return null;
+                    }
+                    return id;
+                })
                 .filter(Boolean)
         ));
-        if (!ids.length) return;
+        
+        if (!ids.length) {
+            console.warn('⚠️ trackVideoIdsForViewHistory: 추출된 videoId가 없습니다');
+            return;
+        }
+        
+        console.log(`📌 추출된 videoId 목록 (${ids.length}개):`, ids.slice(0, 5)); // 처음 5개만 로그
 
         // Get current config
         const { data: config } = await supabase
@@ -332,37 +349,203 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
 }
 
 // ============================================
-// VPH 데이터 가져오기
+// VPH 데이터 가져오기 (다층 캐싱: LocalStorage → Supabase → Server)
 // ============================================
+
+const VPH_LOCAL_CACHE_PREFIX = 'vph_snapshot_';
+const VPH_CACHE_TTL = 5 * 60 * 1000; // 5분
+
+// LocalStorage의 오래된 VPH 캐시 정리 (주기적으로 실행)
+export function cleanupOldVphCache() {
+    try {
+        const now = Date.now();
+        let cleanedCount = 0;
+        const keysToRemove = [];
+        
+        // 모든 localStorage 키 확인
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith(VPH_LOCAL_CACHE_PREFIX)) {
+                try {
+                    const cached = localStorage.getItem(key);
+                    if (!cached) continue;
+                    
+                    const data = JSON.parse(cached);
+                    const age = now - (data.cachedAt || 0);
+                    
+                    // TTL을 초과한 캐시는 삭제 대상
+                    if (age >= VPH_CACHE_TTL) {
+                        keysToRemove.push(key);
+                    }
+                } catch (e) {
+                    // 파싱 실패한 항목도 삭제
+                    keysToRemove.push(key);
+                }
+            }
+        }
+        
+        // 삭제 실행
+        keysToRemove.forEach(key => {
+            localStorage.removeItem(key);
+            cleanedCount++;
+        });
+        
+        if (cleanedCount > 0) {
+            console.log(`🧹 VPH LocalStorage 캐시 정리 완료: ${cleanedCount}개 삭제`);
+        }
+        
+        return cleanedCount;
+    } catch (error) {
+        console.warn('⚠️ VPH 캐시 정리 실패:', error);
+        return 0;
+    }
+}
+
+// LocalStorage에서 VPH 스냅샷 로드
+function loadVphFromLocalStorage(videoId) {
+    try {
+        const cacheKey = `${VPH_LOCAL_CACHE_PREFIX}${videoId}`;
+        const cached = localStorage.getItem(cacheKey);
+        if (!cached) return null;
+        
+        const data = JSON.parse(cached);
+        const age = Date.now() - (data.cachedAt || 0);
+        
+        if (age < VPH_CACHE_TTL && data.stats) {
+            console.log(`💾 VPH 로컬 캐시 사용 (${videoId})`);
+            return data.stats;
+        }
+        
+        // 만료된 캐시 삭제
+        localStorage.removeItem(cacheKey);
+        return null;
+    } catch (error) {
+        return null;
+    }
+}
+
+// LocalStorage에 VPH 스냅샷 저장
+function saveVphToLocalStorage(videoId, stats) {
+    try {
+        const cacheKey = `${VPH_LOCAL_CACHE_PREFIX}${videoId}`;
+        const data = {
+            stats,
+            cachedAt: Date.now()
+        };
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+        console.log(`💾 VPH LocalStorage 저장 완료: ${cacheKey}`);
+    } catch (error) {
+        // 용량 초과 등 에러는 무시
+        console.warn(`⚠️ VPH LocalStorage 저장 실패 (${videoId}):`, error);
+    }
+}
 
 export async function getRecentVelocityForVideo(videoId) {
     try {
-        const { data, error } = await supabase
+        if (!videoId) {
+            console.warn('⚠️ VPH 계산: videoId가 없습니다');
+            return null;
+        }
+        
+        // ⚠️ 중요: 항상 서버(Supabase) 데이터를 우선 사용
+        // LocalStorage는 오프라인 폴백용으로만 사용하며, 주기적으로 정리됨
+        console.log(`🔍 Supabase view_history 쿼리 시작: video_id="${videoId}"`);
+        
+        // 최근 2개 스냅샷 가져오기 (VPH 계산용)
+        const { data: recentData, error: recentError } = await supabase
             .from('view_history')
             .select('view_count, fetched_at')
             .eq('video_id', videoId)
             .order('fetched_at', { ascending: false })
             .limit(2);
 
-        if (error || !data || data.length < 2) {
+        if (recentError) {
+            console.warn(`⚠️ VPH 데이터 로드 실패 (${videoId}):`, recentError);
+            return null;
+        }
+        
+        console.log(`📊 Supabase 쿼리 결과 (${videoId}): ${recentData?.length || 0}개 스냅샷 발견`);
+        if (recentData && recentData.length > 0) {
+            console.log(`  - 최신: ${recentData[0].fetched_at} (조회수: ${recentData[0].view_count})`);
+            if (recentData.length > 1) {
+                console.log(`  - 이전: ${recentData[1].fetched_at} (조회수: ${recentData[1].view_count})`);
+            }
+        }
+        
+        if (!recentData || recentData.length < 2) {
+            console.log(`⚪ VPH 데이터 없음 (${videoId}): 스냅샷 ${recentData?.length || 0}개 (2개 필요)`);
+            // video_id로 전체 스냅샷 개수 확인
+            const { count } = await supabase
+                .from('view_history')
+                .select('*', { count: 'exact', head: true })
+                .eq('video_id', videoId);
+            console.log(`  📊 view_history 테이블에 ${videoId}의 총 스냅샷: ${count || 0}개`);
             return null;
         }
 
-        const [latest, previous] = data;
+        // 최초 스냅샷 가져오기 (전체 경과 시간 계산용)
+        const { data: firstData, error: firstError } = await supabase
+            .from('view_history')
+            .select('view_count, fetched_at')
+            .eq('video_id', videoId)
+            .order('fetched_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+        
+        if (firstError) {
+            console.warn(`⚠️ 최초 스냅샷 로드 실패 (${videoId}):`, firstError);
+        }
+
+        const [latest, previous] = recentData;
         const growth = latest.view_count - previous.view_count;
         const diffHours = (new Date(latest.fetched_at).getTime() - new Date(previous.fetched_at).getTime()) / (1000 * 60 * 60);
         const vph = diffHours > 0 ? growth / diffHours : 0;
 
-        return {
+        // 최초 데이터와 현재 시간 정보
+        const first = firstData || null;
+        const now = new Date();
+        
+        // 전체 경과 시간 계산
+        let totalElapsedHours = 0;
+        let totalElapsedDays = 0;
+        let totalGrowth = 0;
+        
+        if (first) {
+            totalElapsedHours = (now.getTime() - new Date(first.fetched_at).getTime()) / (1000 * 60 * 60);
+            totalElapsedDays = totalElapsedHours / 24;
+            totalGrowth = latest.view_count - first.view_count;
+        }
+
+        const stats = {
             vph,
             vpd: vph * 24,
             recentGrowth: growth,
             diffHours,
             latest: { viewCount: latest.view_count, fetchedAt: new Date(latest.fetched_at) },
-            previous: { viewCount: previous.view_count, fetchedAt: new Date(previous.fetched_at) }
+            previous: { viewCount: previous.view_count, fetchedAt: new Date(previous.fetched_at) },
+            first: first ? { viewCount: first.view_count, fetchedAt: new Date(first.fetched_at) } : null,
+            now: now,
+            totalElapsedHours,
+            totalElapsedDays,
+            totalGrowth
         };
+        
+        // 2️⃣ LocalStorage에 단기 캐시 저장 (오프라인 폴백용, 5분 TTL)
+        // 주의: 이 캐시는 주기적으로 정리되므로 서버 데이터를 항상 우선 사용
+        saveVphToLocalStorage(videoId, stats);
+        console.log(`✅ VPH 서버 데이터(Supabase)로 계산 완료 (${videoId})`);
+        
+        return stats;
     } catch (error) {
-        console.warn('⚠️ VPH 데이터 로드 실패:', error);
+        console.warn('⚠️ VPH 서버 데이터 로드 실패:', error);
+        
+        // 서버 데이터 로드 실패 시 LocalStorage 폴백 (오프라인 지원)
+        const localStats = loadVphFromLocalStorage(videoId);
+        if (localStats) {
+            console.log(`💾 VPH 로컬 캐시 폴백 사용 (${videoId})`);
+            return localStats;
+        }
+        
         return null;
     }
 }
