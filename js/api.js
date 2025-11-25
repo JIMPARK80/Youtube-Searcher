@@ -191,7 +191,7 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
         // 30개로 제한
         searchItems = searchItems.slice(0, MAX_RESULTS);
         
-        console.log(`✅ Google API 정상 작동 (${searchItems.length}개 검색 결과)`);
+        console.log(`✅ Google API 정상 작동 (${searchItems.length}개 검색 결과, MAX_RESULTS=${MAX_RESULTS})`);
 
         // ② Step 2: Get detailed video information (50개씩 배치, throttle 적용)
         const videoIds = searchItems.map(item => item.id.videoId).filter(Boolean);

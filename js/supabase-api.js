@@ -206,11 +206,14 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
         const now = new Date().toISOString();
 
         // Upsert search_cache
+        const totalCount = videos.length;
+        console.log(`💾 search_cache 저장: keyword="${keyword}", total_count=${totalCount}, data_source=${dataSource}`);
+        
         const { error: cacheError } = await supabase
             .from('search_cache')
             .upsert({
                 keyword,
-                total_count: videos.length,
+                total_count: totalCount,
                 data_source: dataSource,
                 cache_version: '1.32',
                 next_page_token: nextPageToken,
@@ -729,7 +732,7 @@ export async function searchYouTubeAPI(query, apiKeyValue) {
         // 30개로 제한
         searchItems = searchItems.slice(0, MAX_RESULTS);
         
-        console.log(`✅ Google API 정상 작동 (${searchItems.length}개 검색 결과)`);
+        console.log(`✅ Google API 정상 작동 (${searchItems.length}개 검색 결과, MAX_RESULTS=${MAX_RESULTS})`);
 
         const videoIds = searchItems.map(item => item.id.videoId).filter(Boolean);
         console.log(`📋 비디오 ID 추출: ${videoIds.length}개`);
