@@ -757,27 +757,29 @@ export function renderPage(page) {
     vphCalculationQueue = [];
     vphCalculationRunning = 0;
     
-    // Apply filters and dedupe results
-    const dedupedItems = getFilteredDedupedItems();
+    // 표시 단위와 정렬 옵션 가져오기
     const velocityMetricSelect = document.getElementById('velocityMetricSelect');
     currentVelocityMetric = velocityMetricSelect?.value || 'recent-vph';
-    
-    // Sort by views per day if requested
     const sortSelect = document.getElementById('sortVpdSelect');
     const sortValue = sortSelect?.value || 'desc'; // 기본값: 높은 순
+    
+    // 전체 allItems를 먼저 정렬 (모든 페이지의 데이터가 올바르게 정렬되도록)
     if (sortValue === 'asc') {
-        dedupedItems.sort((a, b) => {
-            const valA = getVelocityValue(a);
-            const valB = getVelocityValue(b);
+        allItems.sort((a, b) => {
+            const valA = getVelocityValue(a, currentVelocityMetric);
+            const valB = getVelocityValue(b, currentVelocityMetric);
             return valA - valB;
         });
     } else if (sortValue === 'desc') {
-        dedupedItems.sort((a, b) => {
-            const valA = getVelocityValue(a);
-            const valB = getVelocityValue(b);
+        allItems.sort((a, b) => {
+            const valA = getVelocityValue(a, currentVelocityMetric);
+            const valB = getVelocityValue(b, currentVelocityMetric);
             return valB - valA; // 높은 순
         });
     }
+    
+    // 정렬된 allItems를 필터링하고 중복 제거
+    const dedupedItems = getFilteredDedupedItems();
     
     // Pagination
     const startIdx = (page - 1) * pageSize;
