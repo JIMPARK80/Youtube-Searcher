@@ -496,6 +496,17 @@ export async function search(shouldReload = false) {
             debugLog('⚠️ Supabase 캐시에 데이터가 0개 → API 재호출');
         }
         
+        // 캐시가 30개 미만이고 nextPageToken이 있으면 추가로 가져오기 (만료된 캐시도 포함)
+        const TARGET_COUNT = 30;
+        if (count > 0 && count < TARGET_COUNT && meta.nextPageToken) {
+            const needed = TARGET_COUNT - count;
+            debugLog(`📈 만료된 캐시 ${count}개 → ${TARGET_COUNT}개까지 ${needed}개 추가 필요`);
+            // 먼저 캐시 복원
+            restoreFromCache(cacheData);
+            await performIncrementalFetch(query, apiKeyValue, cacheData, needed);
+            return;
+        }
+        
         // 72시간 경과 + pagination 토큰 존재 → 토핑
         if (count === 50 && meta.nextPageToken) {
             debugLog('🔝 토핑 모드: 추가 50개만 fetch');
