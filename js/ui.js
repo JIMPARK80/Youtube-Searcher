@@ -529,6 +529,8 @@ function createVideoCard(video, item) {
     const uploadedDays = ageDays(video.snippet.publishedAt);
     const daysText = uploadedDays < 1 ? '< 1d' : `${Math.floor(uploadedDays)}d`;
     
+    const computedVpd = viewVelocityPerDay(video);
+    item.vpd = computedVpd;
     const velocityValue = getVelocityValue(item);
     const videoId = video.id || video?.raw?.id || item?.raw?.id;
     card.innerHTML = `
@@ -555,7 +557,7 @@ function createVideoCard(video, item) {
                 </div>
                 <div class="velocity-row">
                     <span class="label" data-i18n="velocity.daily">${t('velocity.daily')}</span>
-                    <span class="value daily-vpd">${formatNumber(item.vpd || 0)}/day</span>
+                    <span class="value daily-vpd">${formatNumber(computedVpd || 0)}/day</span>
                 </div>
             </div>
         </div>
@@ -564,7 +566,7 @@ function createVideoCard(video, item) {
     hydrateVelocityPanel(
         videoId,
         card.querySelector('.velocity-panel'),
-        item.vpd,
+        computedVpd,
         video.snippet.title
     );
     
