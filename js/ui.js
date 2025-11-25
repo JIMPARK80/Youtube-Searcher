@@ -180,35 +180,36 @@ export function getChannelSizeEmoji(cband) {
 // ============================================
 
 export async function search() {
-    const query = document.getElementById('searchInput').value.trim();
-    
-    // Reset isDefaultSearch flag
-    const wasDefaultSearch = window.isDefaultSearch;
-    window.isDefaultSearch = false;
-    
-    // Check if user is logged in
-    const isDefaultPublicQuery = isPublicDefaultQuery(query);
-    if (!window.currentUser && !wasDefaultSearch && !isDefaultPublicQuery) {
-        const loginModal = document.getElementById('loginModal');
-        if (loginModal) {
-            loginModal.classList.add('active');
-            alert(t('search.loginRequired'));
+    try {
+        const query = document.getElementById('searchInput')?.value?.trim();
+        
+        // Reset isDefaultSearch flag
+        const wasDefaultSearch = window.isDefaultSearch;
+        window.isDefaultSearch = false;
+        
+        // Check if user is logged in
+        const isDefaultPublicQuery = isPublicDefaultQuery(query);
+        if (!window.currentUser && !wasDefaultSearch && !isDefaultPublicQuery) {
+            const loginModal = document.getElementById('loginModal');
+            if (loginModal) {
+                loginModal.classList.add('active');
+                alert(t('search.loginRequired'));
+            }
+            return;
         }
-        return;
-    }
-    
-    if (!query) {
-        alert(t('search.enterQuery'));
-        return;
-    }
-    
-    const keys = await getApiKeys();
-    const apiKeyValue = keys.youtube;
-    
-    if (!apiKeyValue) {
-        alert(t('search.apiKeyRequired'));
-        return;
-    }
+        
+        if (!query) {
+            alert(t('search.enterQuery'));
+            return;
+        }
+        
+        const keys = await getApiKeys();
+        const apiKeyValue = keys.youtube;
+        
+        if (!apiKeyValue) {
+            alert(t('search.apiKeyRequired'));
+            return;
+        }
 
     currentSearchQuery = query;
     const resultsDiv = document.getElementById('results');
@@ -315,6 +316,11 @@ export async function search() {
     // 캐시 없음 → 전체 검색 (API 호출 필요)
     console.log(`❌ Supabase 캐시 없음 → YouTube API 호출 필요`);
     await performFullGoogleSearch(query, apiKeyValue);
+    } catch (error) {
+        console.error('❌ 검색 중 오류 발생:', error);
+        alert(`검색 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
+        // 앱이 멈추지 않도록 에러를 처리
+    }
 }
 
 // ============================================
@@ -633,7 +639,15 @@ function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '', item = 
     // 디버깅: videoId 확인
     console.log(`🔍 VPH 계산 시작: videoId="${videoId}", label="${label}", recentEl=${recentEl ? '존재' : '없음'}`);
     
-    getRecentVelocityForVideo(videoId)
+    // 타임아웃 설정 (10초)
+    const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('VPH 계산 타임아웃')), 10000);
+    });
+    
+    Promise.race([
+        getRecentVelocityForVideo(videoId),
+        timeoutPromise
+    ])
         .then((stats) => {
             if (!stats) {
                 if (recentEl) recentEl.textContent = t('velocity.unavailable');
@@ -685,8 +699,14 @@ function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '', item = 
             );
         })
         .catch((error) => {
-            console.warn('⚠️ 최근 VPH 로드 실패:', error);
+            // 타임아웃 또는 기타 에러 처리
+            if (error.message === 'VPH 계산 타임아웃') {
+                console.warn(`⚠️ VPH 계산 타임아웃 (${videoId}): 10초 초과`);
+            } else {
+                console.warn('⚠️ 최근 VPH 로드 실패:', error);
+            }
             if (recentEl) recentEl.textContent = t('velocity.unavailable');
+            // 앱이 멈추지 않도록 에러를 무시
         });
 }
 
@@ -1078,7 +1098,16 @@ function restoreFromCache(firebaseData) {
 // 이벤트 리스너 설정
 // ============================================
 
+// 이벤트 리스너 중복 등록 방지
+let eventListenersSetup = false;
+
 export function setupEventListeners() {
+    // 이미 설정되었으면 중복 방지
+    if (eventListenersSetup) {
+        console.log('ℹ️ 이벤트 리스너가 이미 설정되어 있습니다.');
+        return;
+    }
+    
     // Search button
     document.getElementById('searchBtn')?.addEventListener('click', search);
     
@@ -1164,6 +1193,9 @@ export function setupEventListeners() {
     document.getElementById('velocityMetricSelect')?.addEventListener('change', () => {
         renderPage(1);
     });
+    
+    eventListenersSetup = true;
+    console.log('✅ 이벤트 리스너 설정 완료');
 }
 
 // ============================================

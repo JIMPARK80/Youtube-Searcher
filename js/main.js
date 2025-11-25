@@ -17,6 +17,11 @@ import { cleanupOldVphCache } from './supabase-api.js';
 window.isDefaultSearch = false;
 window.currentUser = null;
 
+// 타이머 추적 (메모리 누수 방지)
+window.appTimers = {
+    vphCacheCleanup: null
+};
+
 // ============================================
 // 애플리케이션 초기화
 // ============================================
@@ -26,22 +31,42 @@ async function initializeApp() {
     
     try {
         // Ignore external extension errors (e.g., MetaMask) to prevent noisy logs
-        window.addEventListener('error', (event) => {
-            const source = event?.filename || '';
-            const message = event?.message || '';
-            if (source.includes('inpage.js') || message.includes('MetaMask')) {
-                console.warn('⚠️ 외부 확장 프로그램(MetaMask) 오류 무시:', message || source);
-                event.preventDefault();
-            }
-        });
+        // 전역 에러 핸들러 (중복 등록 방지)
+        if (!window.__errorHandlerAttached) {
+            window.addEventListener('error', (event) => {
+                const source = event?.filename || '';
+                const message = event?.message || '';
+                if (source.includes('inpage.js') || message.includes('MetaMask')) {
+                    console.warn('⚠️ 외부 확장 프로그램(MetaMask) 오류 무시:', message || source);
+                    event.preventDefault();
+                } else {
+                    // 앱 내부 에러는 로그만 남기고 앱이 멈추지 않도록
+                    console.error('⚠️ 앱 에러 발생:', {
+                        message: event.message,
+                        source: event.filename,
+                        line: event.lineno,
+                        col: event.colno,
+                        error: event.error
+                    });
+                }
+            });
 
-        window.addEventListener('unhandledrejection', (event) => {
-            const message = event.reason?.message || '';
-            if (message.includes('MetaMask')) {
-                console.warn('⚠️ 외부 확장 프로그램(MetaMask) 오류 무시:', message);
-                event.preventDefault();
-            }
-        });
+            window.addEventListener('unhandledrejection', (event) => {
+                const message = event.reason?.message || '';
+                if (message.includes('MetaMask')) {
+                    console.warn('⚠️ 외부 확장 프로그램(MetaMask) 오류 무시:', message);
+                    event.preventDefault();
+                } else {
+                    // Promise rejection은 로그만 남기고 앱이 멈추지 않도록
+                    console.error('⚠️ Promise rejection:', {
+                        reason: event.reason,
+                        message: message
+                    });
+                }
+            });
+            
+            window.__errorHandlerAttached = true;
+        }
 
         // Supabase is already initialized in supabase-config.js
         console.log('✅ Supabase 준비 완료');
@@ -62,9 +87,18 @@ async function initializeApp() {
         console.log('🧹 VPH 캐시 정리 중...');
         cleanupOldVphCache();
         
+        // 기존 타이머 정리 (중복 방지)
+        if (window.appTimers.vphCacheCleanup) {
+            clearInterval(window.appTimers.vphCacheCleanup);
+        }
+        
         // 주기적으로 VPH 캐시 정리 (10분마다)
-        setInterval(() => {
-            cleanupOldVphCache();
+        window.appTimers.vphCacheCleanup = setInterval(() => {
+            try {
+                cleanupOldVphCache();
+            } catch (error) {
+                console.warn('⚠️ VPH 캐시 정리 중 오류:', error);
+            }
         }, 10 * 60 * 1000); // 10분
         
         // Initialize authentication system
