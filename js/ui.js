@@ -27,7 +27,7 @@ export const pageSize = 8;
 export let currentPage = 1;
 export let allChannelMap = {};
 export let currentSearchQuery = '';
-let currentVelocityMetric = 'day';
+let currentVelocityMetric = 'recent-vph'; // 기본값: 최근 VPH
 const PUBLIC_DEFAULT_QUERY = '인생사연';
 const PUBLIC_DEFAULT_QUERY_NORMALIZED = PUBLIC_DEFAULT_QUERY.toLowerCase();
 
@@ -125,6 +125,16 @@ export function viewVelocityPerDay(video) {
 }
 
 function getVelocityValue(item, metric = currentVelocityMetric) {
+    // 최근 VPH: 서버에서 가져온 실제 VPH 데이터 사용
+    if (metric === 'recent-vph') {
+        const vph = Number(item?.vph || 0);
+        // VPH 데이터가 없으면 일간 속도를 시간당으로 변환하여 폴백
+        if (vph === 0 && item?.vpd) {
+            return Number(item.vpd) / 24;
+        }
+        return vph;
+    }
+    
     const base = Number(item?.vpd || 0);
     if (metric === 'hour') {
         return base / 24;
@@ -133,7 +143,10 @@ function getVelocityValue(item, metric = currentVelocityMetric) {
 }
 
 function formatVelocityBadge(value, metric = currentVelocityMetric) {
-    const unit = metric === 'hour' ? '/hr' : '/day';
+    let unit = '/day';
+    if (metric === 'hour' || metric === 'recent-vph') {
+        unit = '/hr';
+    }
     return `+${formatNumber(value)}${unit}`;
 }
 
@@ -476,7 +489,7 @@ export function renderPage(page) {
     // Apply filters and dedupe results
     const dedupedItems = getFilteredDedupedItems();
     const velocityMetricSelect = document.getElementById('velocityMetricSelect');
-    currentVelocityMetric = velocityMetricSelect?.value || 'day';
+    currentVelocityMetric = velocityMetricSelect?.value || 'recent-vph';
     
     // Sort by views per day if requested
     const sortSelect = document.getElementById('sortVpdSelect');
@@ -512,6 +525,15 @@ export function renderPage(page) {
         const card = createVideoCard(video, item);
         if (card) { // Only append if card is not null
             fragment.appendChild(card);
+            
+            // 표시 단위가 "최근 VPH"이고 VPH 데이터가 이미 있는 경우 배지 업데이트
+            if (currentVelocityMetric === 'recent-vph' && item.vph) {
+                const badgeEl = card.querySelector('.vpd-badge');
+                if (badgeEl) {
+                    const velocityValue = getVelocityValue(item);
+                    badgeEl.textContent = formatVelocityBadge(velocityValue);
+                }
+            }
         }
     });
     
@@ -579,19 +601,21 @@ function createVideoCard(video, item) {
         videoId,
         card.querySelector('.velocity-panel'),
         computedVpd,
-        video.snippet.title
+        video.snippet.title,
+        item
     );
     
     return card;
 }
 
-function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '') {
+function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '', item = null) {
     if (!panelEl) {
         console.warn(`⚠️ hydrateVelocityPanel: panelEl이 없습니다 (videoId="${videoId}")`);
         return;
     }
     const recentEl = panelEl.querySelector('.recent-vph');
     const dailyEl = panelEl.querySelector('.daily-vpd');
+    const badgeEl = panelEl.closest('.video-card')?.querySelector('.vpd-badge');
     
     if (!recentEl) {
         console.warn(`⚠️ hydrateVelocityPanel: .recent-vph 요소를 찾을 수 없습니다 (videoId="${videoId}")`);
@@ -620,6 +644,17 @@ function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '') {
                 const vphValue = stats.vph || 0;
                 recentEl.textContent = `${formatNumber(vphValue)}/hr`;
                 console.log(`✅ UI 업데이트 완료: videoId="${videoId}", VPH=${vphValue}, 요소=${recentEl ? '존재' : '없음'}`);
+                
+                // item 객체에 VPH 데이터 저장 (표시 단위 "최근 VPH" 사용 시)
+                if (item) {
+                    item.vph = vphValue;
+                    
+                    // 배지 업데이트 (표시 단위가 "최근 VPH"인 경우)
+                    if (badgeEl && currentVelocityMetric === 'recent-vph') {
+                        const velocityValue = getVelocityValue(item);
+                        badgeEl.textContent = formatVelocityBadge(velocityValue);
+                    }
+                }
             } else {
                 console.warn(`⚠️ UI 업데이트 실패: recentEl 요소를 찾을 수 없음 (videoId="${videoId}")`);
             }
