@@ -80,7 +80,4 @@ DO UPDATE SET value = EXCLUDED.value;
 스키마 생성이 완료되면:
 1. ✅ Edge Functions 배포 (선택사항)
 2. ✅ Cron 작업 설정 (선택사항)
-3. ✅ 데이터 마이그레이션 (기존 Firestore 데이터가 있는 경우)
-
-자세한 내용은 `SUPABASE_MIGRATION_GUIDE.md` 참고하세요.
 

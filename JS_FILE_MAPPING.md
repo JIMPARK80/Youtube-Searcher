@@ -5,10 +5,13 @@
 ## 📁 파일 구조
 ```
 js/
-├── firebase-config.js   # Firebase 설정 (기존 유지)
-├── api.js               # API 관련 함수
+├── supabase-config.js   # Supabase 설정
+├── supabase-api.js      # Supabase API 관련 함수
+├── api.js               # YouTube API 관련 함수
 ├── ui.js                # UI 관련 함수
 ├── auth.js              # 인증 관련 함수
+├── view-history.js      # 조회수 히스토리 추적
+├── i18n.js              # 다국어 지원
 └── main.js              # 통합 초기화
 ```
 
@@ -18,7 +21,7 @@ js/
 
 | HTML 주석 처리 함수 | 대상 JS 파일 | 설명 |
 |---------------------|--------------|------|
-| `getApiKeys()` | `js/api.js` | Firebase에서 API 키 로드 |
+| `getApiKeys()` | `js/api.js` | Supabase에서 API 키 로드 |
 | `formatNumber()` | `js/ui.js` | 숫자 포맷팅 (K, M) |
 | `formatDuration()` | `js/ui.js` | 영상 길이 포맷팅 |
 | `parseDurationToSeconds()` | `js/ui.js` | 영상 길이 → 초 변환 |
@@ -41,12 +44,9 @@ js/
 | `createVideoCard()` | `js/ui.js` | 비디오 카드 생성 |
 | `goToNextPage()` | `js/ui.js` | 다음 페이지 |
 | `goToPrevPage()` | `js/ui.js` | 이전 페이지 |
-| `loadSearchData()` | `js/api.js` | Firebase에서 캐시 로드 |
-| `saveSearchData()` | `js/api.js` | Firebase에 캐시 저장 |
-| `loadFromFirebase()` | `js/api.js` | Firebase 직접 로드 |
-| `saveToFirebase()` | `js/api.js` | Firebase 직접 저장 |
-| `saveUserLastSearchKeyword()` | `js/api.js` | 사용자 마지막 검색어 저장 |
-| `loadUserLastSearchKeyword()` | `js/api.js` | 사용자 마지막 검색어 로드 |
+| `loadFromSupabase()` | `js/supabase-api.js` | Supabase에서 캐시 로드 |
+| `saveToSupabase()` | `js/supabase-api.js` | Supabase에 캐시 저장 |
+| `saveUserLastSearchKeyword()` | `js/api.js` | 사용자 마지막 검색어 저장 (Supabase) |
 | `updateFilterStatusIndicators()` | `js/ui.js` | 필터 상태 표시 |
 | `resetAllFilters()` | `js/ui.js` | 필터 리셋 |
 | `initializeModal()` | `js/auth.js` | 모달 초기화 |
@@ -56,29 +56,42 @@ js/
 | `handleLogout()` | `js/auth.js` | 로그아웃 |
 | `updateProfile()` | `js/auth.js` | 프로필 업데이트 |
 | `performDefaultSearch()` | `js/main.js` | 기본 검색 실행 |
-| Firebase 초기화 | `js/firebase-config.js` | Firebase 설정 |
+| Supabase 초기화 | `js/supabase-config.js` | Supabase 설정 |
 | 이벤트 리스너 | `js/main.js` | 모든 이벤트 리스너 등록 |
 
 ---
 
 ## 📦 각 JS 파일의 역할
 
-### 1️⃣ `js/api.js` (328줄)
-**역할**: API 관련 모든 함수
+### 1️⃣ `js/api.js`
+**역할**: YouTube API 관련 함수
 - YouTube Data API 호출
-- Firebase 캐싱 (저장/로드)
-- API 키 관리
+- API 키 관리 (Supabase에서 로드)
+- 검색어 저장
 
 **포함 함수**:
 ```javascript
 - export let apiKey = null;
-- export async function getApiKeys()
-- export async function loadSearchData(query)
-- export async function saveSearchData(query, videos, channels)
-- export async function loadFromFirebase(query)
-- export async function saveToFirebase(query, videos, channels, items, source)
-- export async function saveUserLastSearchKeyword(keyword)
-- export async function loadUserLastSearchKeyword()
+- export async function getApiKeys()  // Supabase에서 로드
+- export async function searchYouTubeAPI(query, apiKeyValue)
+- export async function saveUserLastSearchKeyword(uid, keyword)
+- export async function fetchNext50WithToken()
+- export async function hydrateDetailsOnlyForNew()
+- export function mergeCacheWithMore()
+```
+
+### 1️⃣-2 `js/supabase-api.js`
+**역할**: Supabase API 관련 함수
+- Supabase 캐싱 (저장/로드)
+- 조회수 히스토리 추적
+- VPH 계산
+
+**포함 함수**:
+```javascript
+- export async function loadFromSupabase(query)
+- export async function saveToSupabase(query, videos, channels, items)
+- export async function trackVideoIdsForViewHistory(videos)
+- export async function getRecentVelocityForVideo(videoId)
 ```
 
 ### 2️⃣ `js/ui.js` (483줄)
@@ -130,12 +143,12 @@ js/
 - export function updateFilterStatusIndicators()
 ```
 
-### 3️⃣ `js/auth.js` (435줄)
+### 3️⃣ `js/auth.js`
 **역할**: 인증 시스템
 - 로그인 / 회원가입
 - 로그아웃
 - 프로필 수정
-- Firebase 인증 상태 관리
+- Supabase 인증 상태 관리
 
 **포함 함수**:
 ```javascript
@@ -158,10 +171,10 @@ js/
 - function getCurrentUser()
 ```
 
-### 4️⃣ `js/main.js` (78줄)
+### 4️⃣ `js/main.js`
 **역할**: 통합 초기화
 - 모든 모듈 통합
-- Firebase 대기
+- Supabase 초기화
 - 순차적 초기화
 - 이벤트 리스너 등록
 
@@ -188,7 +201,7 @@ js/
 
 ### After (모듈화)
 ```html
-<script type="module" src="js/firebase-config.js"></script>
+<script type="module" src="js/supabase-config.js"></script>
 <script type="module" src="js/main.js"></script>
 
 <!-- 백업 주석 -->
