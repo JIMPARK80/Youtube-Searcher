@@ -1,6 +1,6 @@
 // ============================================
 // API.JS - API 관련 함수 모음
-// YouTube API
+// YouTube API, Firebase 캐싱
 // ============================================
 
 // 유틸: 배열을 n개씩 청크로 나누기 (기본 50개)
@@ -88,7 +88,248 @@ function createHiddenApiKeyInputs(keys) {
     console.log('🔐 API 키 hidden input 생성 완료');
 }
 
-// Firebase 관련 함수는 제거됨 (Supabase로 마이그레이션 완료)
+// ============================================
+// FIREBASE 캐싱 함수
+// ============================================
+
+// Load from Firebase cloud cache (자동 병합 로드)
+export async function loadFromFirebase(query) {
+    try {
+        if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseGetDoc) {
+            console.log('⚠️ Firebase 초기화 안 됨');
+            return null;
+        }
+        
+        const docId = window.toDocId(query);
+        console.log(`🔍 Firebase 캐시 확인 중: "${query}" -> "${docId}"`);
+        
+        const mainRef = window.firebaseDoc(window.firebaseDb, 'searchCache', docId);
+        const partRefs = [2, 3, 4, 5, 6].map(i => 
+            window.firebaseDoc(window.firebaseDb, 'searchCache', `${docId}_p${i}`)
+        );
+        
+
+        let mainSnap, partSnaps;
+        try {
+            // Try to read from server first
+            [mainSnap, ...partSnaps] = await Promise.all([
+                window.firebaseGetDoc(mainRef),
+                ...partRefs.map(ref => window.firebaseGetDoc(ref))
+            ]);
+        } catch (offlineError) {
+            // If offline, try reading from cache
+            if (offlineError.code === 'unavailable' || offlineError.message?.includes('offline')) {
+                console.log('📴 오프라인 상태 감지 → 캐시에서 읽기 시도');
+                try {
+                    [mainSnap, ...partSnaps] = await Promise.all([
+                        window.firebaseGetDocFromCache(mainRef),
+                        ...partRefs.map(ref => window.firebaseGetDocFromCache(ref))
+                    ]);
+                } catch (cacheError) {
+                    console.warn('⚠️ 캐시에도 데이터 없음:', cacheError);
+                    return null;
+                }
+            } else {
+                throw offlineError;
+            }
+        }
+
+        if (!mainSnap.exists()) {
+            console.log(`🔭 Firebase 캐시 없음 (문서 ID: "${docId}")`);
+            return null;
+        }
+
+        const mainData = mainSnap.data();
+        const age = Date.now() - mainData.timestamp;
+        const ageHours = age / (1000 * 60 * 60);
+        
+        // 캐시 버전 체크 (latest미만이면 업그레이드 필요)
+        const CURRENT_VERSION = '1.32';
+        const cacheVersion = mainData.cacheVersion || '1.0';
+        if (cacheVersion < CURRENT_VERSION) {
+            console.warn(`🔄 구버전 캐시 발견 (v${cacheVersion} → v${CURRENT_VERSION})`);
+            console.warn(`♻️ 캐시 업그레이드: 새로 fetch하여 300개 저장합니다`);
+            return null; // 캐시 무효화 → 새로 fetch
+        }
+        
+        // part2~part6 병합
+        for (const partSnap of partSnaps) {
+            if (partSnap.exists()) {
+                const partData = partSnap.data();
+                mainData.videos.push(...partData.videos);
+                mainData.items.push(...partData.items);
+            }
+        }
+        const totalParts = 1 + partSnaps.filter(s => s.exists()).length;
+        console.log(`☁️ Firebase 캐시 발견 (${totalParts}개 파트 병합): ${ageHours.toFixed(1)}시간 전`);
+        console.log(`📊 병합된 캐시: 총 ${mainData.videos.length}개 항목, 소스: ${mainData.dataSource || 'unknown'}`);
+        
+        // 72시간 이내면 유효
+        if (age < CACHE_TTL_MS) {
+            console.log('✅ 유효한 Firebase 캐시 사용');
+            return mainData;
+        } else {
+            console.log(`⏰ Firebase 캐시 만료 (${CACHE_TTL_HOURS}시간 초과)`);
+            return null;
+        }
+        
+    } catch (error) {
+        console.error('❌ Firebase 캐시 로드 실패:', error);
+        return null;
+    }
+}
+
+// Save to Firebase cloud cache (자동 분할 저장: 50+50)
+export async function saveToFirebase(query, videos, channels, items, dataSource = 'google', nextPageToken = null) {
+    try {
+        if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseSetDoc) {
+            console.log('⚠️ Firebase 초기화 안 됨');
+            return;
+        }
+
+        const docId = window.toDocId(query);
+        console.log(`💾 문서 ID: "${query}" -> "${docId}"`);
+        const cacheRef = window.firebaseDoc(window.firebaseDb, 'searchCache', docId);
+
+        const shrinkVideo = v => ({
+            id: v.id,
+            title: v.snippet?.title,
+            channelId: v.snippet?.channelId,
+            channelTitle: v.snippet?.channelTitle,
+            publishedAt: v.snippet?.publishedAt,
+            viewCount: v.statistics?.viewCount ?? null,
+            likeCount: v.statistics?.likeCount ?? null,
+            duration: v.contentDetails?.duration ?? null
+        });
+
+        const shrinkItem = x => ({
+            id: x?.raw?.id,
+            vpd: x.vpd,
+            vclass: x.vclass,
+            cband: x.cband,
+            subs: x.subs
+        });
+
+        const now = Date.now();
+        const totalVideos = (videos || []).length;
+        console.log(`💾 저장 시작: videos=${totalVideos}개, items=${(items || []).length}개`);
+        
+        const chunks = [
+            { videos: videos.slice(0, 50), items: items.slice(0, 50), part: 1 },
+            { videos: videos.slice(50, 100), items: items.slice(50, 100), part: 2 },
+            { videos: videos.slice(100, 150), items: items.slice(100, 150), part: 3 },
+            { videos: videos.slice(150, 200), items: items.slice(150, 200), part: 4 },
+            { videos: videos.slice(200, 250), items: items.slice(200, 250), part: 5 },
+            { videos: videos.slice(250, 300), items: items.slice(250, 300), part: 6 }
+        ];
+
+        for (const chunk of chunks) {
+            if (chunk.videos.length === 0) continue;
+
+            const targetRef = chunk.part === 1
+                ? cacheRef
+                : window.firebaseDoc(window.firebaseDb, 'searchCache', `${docId}_p${chunk.part}`);
+
+            const data = {
+                query,
+                videos: chunk.videos.map(shrinkVideo),
+                channels: chunk.part === 1 ? channels : {},
+                items: chunk.items.map(shrinkItem),
+                timestamp: now,
+                cacheVersion: '1.32',
+                dataSource,
+                meta: {
+                    part: chunk.part,
+                    total: totalVideos,
+                    nextPageToken: chunk.part === 1 ? nextPageToken : null,
+                    source: dataSource
+                }
+            };
+
+            await window.firebaseSetDoc(targetRef, data);
+            console.log(`✅ Firebase 캐시 저장 완료 (part ${chunk.part}, ${chunk.videos.length}개)`);
+        }
+
+    } catch (error) {
+        console.error('❌ Firebase 캐시 저장 실패:', error);
+    }
+}
+
+export async function trackVideoIdsForViewHistory(videos = []) {
+    try {
+        if (!window.firebaseDb || !window.firebaseDoc || !window.firebaseSetDoc) {
+            return;
+        }
+        const ids = Array.from(new Set(
+            (videos || [])
+                .map(video => video?.id?.videoId || video?.id)
+                .filter(Boolean)
+        ));
+        if (!ids.length) return;
+
+        const docRef = window.firebaseDoc(window.firebaseDb, 'config', 'viewTracking');
+        let snap;
+        try {
+            snap = await window.firebaseGetDoc(docRef);
+        } catch (offlineError) {
+            // 오프라인 상태에서는 videoId 업데이트 건너뛰기 (나중에 자동 동기화됨)
+            if (offlineError.code === 'unavailable' || offlineError.message?.includes('offline')) {
+                console.log('📴 오프라인 상태: viewTracking 업데이트 건너뛰기');
+                return;
+            }
+            throw offlineError;
+        }
+        
+        const now = Date.now();
+
+        if (!snap.exists()) {
+            try {
+                await window.firebaseSetDoc(docRef, {
+                    videoIds: ids,
+                    retentionHours: 240,
+                    maxEntries: 240,
+                    createdAt: now,
+                    updatedAt: now
+                }, { merge: true });
+                console.log(`🆕 viewTracking 문서 생성: ${ids.length}개 videoId 저장`);
+            } catch (writeError) {
+                if (writeError.code === 'unavailable' || writeError.message?.includes('offline')) {
+                    console.log('📴 오프라인 상태: viewTracking 문서 생성 건너뛰기');
+                } else {
+                    throw writeError;
+                }
+            }
+            return;
+        }
+
+        const existing = Array.isArray(snap.data().videoIds) ? snap.data().videoIds : [];
+        const newIds = ids.filter(id => !existing.includes(id));
+        if (!newIds.length) {
+            return;
+        }
+
+        try {
+            if (window.firebaseUpdateDoc && window.firebaseArrayUnion) {
+                await window.firebaseUpdateDoc(docRef, {
+                    videoIds: window.firebaseArrayUnion(...newIds),
+                    updatedAt: now
+                });
+            } else {
+                const merged = Array.from(new Set([...existing, ...newIds]));
+                await window.firebaseSetDoc(docRef, { videoIds: merged, updatedAt: now }, { merge: true });
+            }
+            console.log(`📌 viewTracking에 ${newIds.length}개 videoId 추가`);
+        } catch (writeError) {
+            if (writeError.code === 'unavailable' || writeError.message?.includes('offline')) {
+                console.log('📴 오프라인 상태: viewTracking 업데이트 건너뛰기 (나중에 자동 동기화)');
+            } else {
+                console.error('❌ viewTracking videoId 업데이트 실패:', writeError);
+            }
+        }
+    } catch (error) {
+        console.warn('⚠️ viewTracking videoId 업데이트 실패:', error);
+    }
+}
 
 // ============================================
 // 토핑(Top-up) 함수들 - 캐시 최적화용
