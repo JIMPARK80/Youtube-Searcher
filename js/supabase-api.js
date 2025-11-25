@@ -338,12 +338,15 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
             
             // 1. NULL 필드가 있는 비디오 조회 (특정 검색어가 있으면 해당 검색어만)
             // subscriber_count가 -1인 경우는 제외 (구독자 수가 숨겨진 경우)
+            // NULL만 명시적으로 찾기 위해 .is.null 사용
             let query = supabase
                 .from('videos')
                 .select('video_id, channel_id, title, view_count, like_count, subscriber_count, duration, channel_title, published_at')
                 .or('subscriber_count.is.null,view_count.is.null,like_count.is.null,title.is.null,channel_id.is.null,duration.is.null,published_at.is.null')
-                .neq('subscriber_count', -1) // 구독자 수가 숨겨진 경우(-1) 제외
                 .limit(limit);
+            
+            // subscriber_count가 -1이 아닌 경우만 (NULL은 포함, -1만 제외)
+            // NULL과 -1을 구분하기 위해 별도 필터링 필요
             
             // 특정 검색어가 있으면 해당 검색어의 비디오만 체크
             if (keyword) {
@@ -366,24 +369,39 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
                 return { updated: 0, skipped: 0, error: fetchError };
             }
             
+            // 디버그: 조회 결과 확인
+            console.log(`🔍 쿼리 결과: ${videosWithNulls?.length || 0}개 비디오 발견`);
+            
             // 디버그: 조회된 비디오 정보 출력
             if (videosWithNulls && videosWithNulls.length > 0) {
                 console.log(`📋 조회된 NULL 데이터 비디오: ${videosWithNulls.length}개`);
-                // 첫 3개만 상세 출력
-                videosWithNulls.slice(0, 3).forEach(v => {
+                // 첫 5개만 상세 출력
+                videosWithNulls.slice(0, 5).forEach(v => {
                     const nullFields = [];
-                    if (!v.subscriber_count && v.subscriber_count !== -1) nullFields.push('subscriber_count');
-                    if (!v.view_count) nullFields.push('view_count');
-                    if (!v.like_count) nullFields.push('like_count');
+                    if (v.subscriber_count === null || v.subscriber_count === undefined) nullFields.push('subscriber_count');
+                    if (v.view_count === null || v.view_count === undefined) nullFields.push('view_count');
+                    if (v.like_count === null || v.like_count === undefined) nullFields.push('like_count');
                     if (!v.title) nullFields.push('title');
                     if (!v.channel_id) nullFields.push('channel_id');
                     if (!v.duration) nullFields.push('duration');
-                    console.log(`  - ${v.video_id}: NULL 필드 = [${nullFields.join(', ')}]`);
+                    if (!v.published_at) nullFields.push('published_at');
+                    console.log(`  - ${v.video_id}: NULL 필드 = [${nullFields.join(', ')}], subscriber_count=${v.subscriber_count}`);
                 });
+            } else {
+                // 결과가 없을 때도 디버그 정보 출력
+                console.log(`⚠️ NULL 데이터 비디오를 찾지 못했습니다.`);
+                console.log(`   키워드: "${keyword || '전체'}"`);
+                console.log(`   쿼리 조건: subscriber_count.is.null OR 다른 필드 NULL`);
             }
             
-            // 스킵된 비디오 필터링
-            const videosToProcess = videosWithNulls?.filter(v => !skippedVideoIds.has(v.video_id)) || [];
+            // 스킵된 비디오 및 -1 값 필터링 (NULL은 유지, -1만 제외)
+            const videosToProcess = (videosWithNulls || []).filter(v => {
+                // 스킵된 비디오 제외
+                if (skippedVideoIds.has(v.video_id)) return false;
+                // subscriber_count가 -1인 경우 제외 (NULL은 포함)
+                if (v.subscriber_count === -1) return false;
+                return true;
+            });
             
             if (videosToProcess.length === 0) {
                 if (videosWithNulls && videosWithNulls.length > 0) {
