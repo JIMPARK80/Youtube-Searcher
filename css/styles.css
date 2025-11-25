@@ -282,10 +282,10 @@ body {
 
 .velocity-row .label {
     font-weight: 600;
-    color: #555;
+    color: #555555;
 }
 .velocity-row.recent .label {
-    color: #e63946;
+    color: #0044ff;
 }
 
 .velocity-row .value {

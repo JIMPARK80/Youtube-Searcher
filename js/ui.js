@@ -592,9 +592,6 @@ function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '') {
             if (recentEl) {
                 recentEl.textContent = `${formatNumber(stats.vph || 0)}/hr`;
             }
-            if (dailyEl) {
-                dailyEl.textContent = `${formatNumber(stats.vpd || baseVpd || 0)}/day`;
-            }
             const latestTs = stats.latest?.fetchedAt?.toLocaleString?.() || 'N/A';
             const prevTs = stats.previous?.fetchedAt?.toLocaleString?.() || 'N/A';
             console.log(
@@ -957,13 +954,35 @@ function restoreFromCache(firebaseData) {
     
     // Restore items with proper video mapping by ID
     const videoById = new Map(restoredVideos.map(v => [v.id, v]));
-    allItems = (firebaseData.items || []).map(item => ({
-        raw: videoById.get(item.id), // Connect to restored video by ID
-        vpd: item.vpd,
-        vclass: item.vclass,
-        cband: item.cband,
-        subs: item.subs
-    })).filter(item => item.raw); // Remove items without matching video
+    const restoredItems = (firebaseData.items || []).map(item => {
+        const video = videoById.get(item.id);
+        if (!video) return null;
+        const channel = allChannelMap[video.snippet.channelId];
+        const computedVpd = viewVelocityPerDay(video);
+        return {
+            raw: video,
+            vpd: item.vpd ?? computedVpd,
+            vclass: item.vclass || classifyVelocity(computedVpd),
+            cband: item.cband || channelSizeBand(channel),
+            subs: item.subs ?? Number(channel?.statistics?.subscriberCount ?? 0)
+        };
+    }).filter(Boolean);
+
+    if (restoredItems.length > 0) {
+        allItems = restoredItems;
+    } else {
+        allItems = restoredVideos.map(video => {
+            const channel = allChannelMap[video.snippet.channelId];
+            const vpd = viewVelocityPerDay(video);
+            return {
+                raw: video,
+                vpd,
+                vclass: classifyVelocity(vpd),
+                cband: channelSizeBand(channel),
+                subs: Number(channel?.statistics?.subscriberCount ?? 0)
+            };
+        });
+    }
     
     console.log(`✅ Firebase 캐시 복원 완료: ${allItems.length}개 항목`);
     trackVideoIdsForViewHistory(restoredVideos);
