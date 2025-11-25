@@ -469,13 +469,21 @@ export async function search(shouldReload = false) {
             
             restoreFromCache(cacheData);
             
-            // 캐시가 30개 미만이고 nextPageToken이 있으면 추가로 가져오기
+            // 캐시가 30개 미만이면 추가로 가져오기 또는 전체 검색
             const TARGET_COUNT = 30;
-            if (count < TARGET_COUNT && meta.nextPageToken) {
-                const needed = TARGET_COUNT - count;
-                debugLog(`📈 캐시 ${count}개 → ${TARGET_COUNT}개까지 ${needed}개 추가 필요`);
-                await performIncrementalFetch(query, apiKeyValue, cacheData, needed);
-                return;
+            if (count < TARGET_COUNT) {
+                if (meta.nextPageToken) {
+                    // nextPageToken이 있으면 증분 검색
+                    const needed = TARGET_COUNT - count;
+                    debugLog(`📈 캐시 ${count}개 → ${TARGET_COUNT}개까지 ${needed}개 추가 필요 (nextPageToken 있음)`);
+                    await performIncrementalFetch(query, apiKeyValue, cacheData, needed);
+                    return;
+                } else {
+                    // nextPageToken이 없으면 전체 검색으로 30개 가져오기
+                    debugLog(`📈 캐시 ${count}개 → ${TARGET_COUNT}개까지 전체 검색 필요 (nextPageToken 없음)`);
+                    await performFullGoogleSearch(query, apiKeyValue);
+                    return;
+                }
             }
             
             renderPage(1);
