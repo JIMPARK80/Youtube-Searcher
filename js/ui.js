@@ -1470,12 +1470,12 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
                 vphRetryCount.set(videoId, retryCount + 1);
                 // 재시도를 위해 vphCalculatedVideos에서 제거 (다음에 다시 계산 시도)
                 vphCalculatedVideos.delete(videoId);
-                // 일정 시간 후 재시도 (5초 후)
+                // 일정 시간 후 재시도 (2초 후로 단축 - 성능 최적화)
                 setTimeout(() => {
                     if (panelEl && !vphCalculatedVideos.has(videoId)) {
                         hydrateVelocityPanel(videoId, panelEl, baseVpd, label, item);
                     }
-                }, 5000);
+                }, 2000);
             } else {
                 // 3번 이상 시도했으면 더 이상 재시도하지 않음
                 // 최종 VPH를 0으로 설정하고 표시
