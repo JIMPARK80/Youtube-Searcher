@@ -6,9 +6,18 @@
 -- pg_cron extension 활성화 (이미 활성화되어 있을 수 있음)
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 
+-- pg_net extension 활성화 (Supabase에서 HTTP 요청을 위해 필요)
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
 -- ============================================
 -- 1. Hourly View Tracker (매 60분)
 -- ============================================
+-- 기존 작업 삭제 (이미 등록된 경우)
+SELECT cron.unschedule('hourly-view-tracker') WHERE EXISTS (
+    SELECT 1 FROM cron.job WHERE jobname = 'hourly-view-tracker'
+);
+
+-- 새 작업 등록
 SELECT cron.schedule(
     'hourly-view-tracker',
     '0 * * * *', -- 매 시간 정각 (0분)
@@ -17,7 +26,7 @@ SELECT cron.schedule(
         url := 'https://hteazdwvhjaexjxwiwwl.supabase.co/functions/v1/hourly-view-tracker',
         headers := jsonb_build_object(
             'Content-Type', 'application/json',
-            'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key')
+            'Authorization', 'Bearer sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ'
         )
     ) AS request_id;
     $$
@@ -26,6 +35,12 @@ SELECT cron.schedule(
 -- ============================================
 -- 2. Update Trending Videos (매 72시간)
 -- ============================================
+-- 기존 작업 삭제 (이미 등록된 경우)
+SELECT cron.unschedule('update-trending-videos') WHERE EXISTS (
+    SELECT 1 FROM cron.job WHERE jobname = 'update-trending-videos'
+);
+
+-- 새 작업 등록
 SELECT cron.schedule(
     'update-trending-videos',
     '0 */72 * * *', -- 매 72시간마다
@@ -34,7 +49,7 @@ SELECT cron.schedule(
         url := 'https://hteazdwvhjaexjxwiwwl.supabase.co/functions/v1/update-trending-videos',
         headers := jsonb_build_object(
             'Content-Type', 'application/json',
-            'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key')
+            'Authorization', 'Bearer sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ'
         )
     ) AS request_id;
     $$
@@ -43,6 +58,12 @@ SELECT cron.schedule(
 -- ============================================
 -- 3. Daily Video Accumulator (매일 자정)
 -- ============================================
+-- 기존 작업 삭제 (이미 등록된 경우)
+SELECT cron.unschedule('daily-video-accumulator') WHERE EXISTS (
+    SELECT 1 FROM cron.job WHERE jobname = 'daily-video-accumulator'
+);
+
+-- 새 작업 등록
 SELECT cron.schedule(
     'daily-video-accumulator',
     '0 0 * * *', -- 매일 자정 (00:00)
@@ -51,7 +72,7 @@ SELECT cron.schedule(
         url := 'https://hteazdwvhjaexjxwiwwl.supabase.co/functions/v1/daily-video-accumulator',
         headers := jsonb_build_object(
             'Content-Type', 'application/json',
-            'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key')
+            'Authorization', 'Bearer sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ'
         )
     ) AS request_id;
     $$

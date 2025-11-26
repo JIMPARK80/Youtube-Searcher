@@ -4,6 +4,7 @@
 // ============================================
 
 import { supabase } from './supabase-config.js';
+import { formatDateTorontoSimple } from './ui.js';
 
 const CACHE_TTL_MS = 72 * 60 * 60 * 1000; // 72 hours
 const CACHE_TTL_HOURS = 72;
@@ -102,7 +103,8 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
             return null;
         }
 
-        console.log(`☁️ Supabase 캐시 발견: ${videos.length}개 항목, ${ageHours.toFixed(1)}시간 전`);
+        const cacheTimeToronto = formatDateTorontoSimple(new Date(cacheMeta.updated_at));
+        console.log(`☁️ Supabase 캐시 발견: ${videos.length}개 항목, ${ageHours.toFixed(1)}시간 전 (토론토: ${cacheTimeToronto})`);
         console.log(`📊 캐시 소스: ${cacheMeta.data_source || 'unknown'}`);
         
         // 디버그: 구독자 수 데이터 확인 (첫 3개만 - 성능 최적화)
@@ -1057,13 +1059,13 @@ export async function getRecentVelocityForVideo(videoId) {
             }
         }
 
-        // VPH 그래프용 데이터: 최근 5개 구간 + 현재값
+        // VPH 그래프용 데이터: 최근 20개 구간 + 현재값
         let graphData = null;
         let trend = null;
         
         if (totalSnapshotCount >= 2) {
-            // 최근 6개 스냅샷 가져오기 (5개 구간 + 현재값 표시용)
-            const limitCount = Math.min(6, totalSnapshotCount);
+            // 최근 21개 스냅샷 가져오기 (20개 구간 + 현재값 표시용)
+            const limitCount = Math.min(21, totalSnapshotCount);
             const { data: recentSnapshots, error: snapshotError } = await supabase
                 .from('view_history')
                 .select('view_count, fetched_at')
@@ -1079,7 +1081,7 @@ export async function getRecentVelocityForVideo(videoId) {
                 // 시간순으로 정렬 (오래된 것부터)
                 const sortedSnapshots = [...recentSnapshots].reverse();
                 
-                // 각 구간의 VPH 계산 (최근 5개 구간)
+                // 각 구간의 VPH 계산 (최근 20개 구간)
                 const vphSegments = [];
                 for (let i = 1; i < sortedSnapshots.length; i++) {
                     const prev = sortedSnapshots[i - 1];
@@ -1098,24 +1100,24 @@ export async function getRecentVelocityForVideo(videoId) {
                     });
                 }
                 
-                // 최근 5개 구간만 선택 (그래프용)
-                const recent5Segments = vphSegments.slice(-5);
+                // 최근 20개 구간만 선택 (그래프용)
+                const recent20Segments = vphSegments.slice(-20);
                 
                 // 그래프 데이터는 최소 1개 구간만 있어도 생성
-                if (recent5Segments.length >= 1) {
+                if (recent20Segments.length >= 1) {
                     // 현재값 (가장 최신 구간의 VPH)
-                    const currentVph = recent5Segments[recent5Segments.length - 1].vph;
+                    const currentVph = recent20Segments[recent20Segments.length - 1].vph;
                     
                     // 그래프 데이터 구성
                     graphData = {
-                        segments: recent5Segments.map((seg, idx) => ({
+                        segments: recent20Segments.map((seg, idx) => ({
                             vph: seg.vph,
                             time: seg.to, // 구간 종료 시간 (표시용)
                             label: `구간 ${idx + 1}`,
-                            isCurrent: idx === recent5Segments.length - 1 // 마지막 구간이 현재값
+                            isCurrent: idx === recent20Segments.length - 1 // 마지막 구간이 현재값
                         })),
                         currentVph: currentVph,
-                        currentIndex: recent5Segments.length - 1 // 현재 구간 인덱스
+                        currentIndex: recent20Segments.length - 1 // 현재 구간 인덱스
                     };
                 }
                 
@@ -1202,7 +1204,7 @@ export async function getRecentVelocityForVideo(videoId) {
             snapshotCount: totalSnapshotCount,
             calculationMethod: totalSnapshotCount >= 3 ? 'first-to-latest' : 'recent-2',
             trend, // VPH 추세 분석 결과
-            graphData // VPH 그래프용 데이터 (최근 5개 구간 + 현재값)
+            graphData // VPH 그래프용 데이터 (최근 20개 구간 + 현재값)
         };
         
         // 로그 최소화 (성능 향상)
@@ -1217,4 +1219,56 @@ export async function getRecentVelocityForVideo(videoId) {
 
 // Export constants
 export { CACHE_TTL_MS, CACHE_TTL_HOURS };
+
+// ============================================
+// Edge Function 수동 호출
+// ============================================
+
+/**
+ * Edge Function을 수동으로 호출하는 함수
+ * @param {string} functionName - 호출할 Edge Function 이름 (예: 'hourly-view-tracker', 'daily-video-accumulator')
+ * @returns {Promise<Object>} - Edge Function 응답
+ */
+export async function invokeEdgeFunction(functionName) {
+    try {
+        const supabaseUrl = 'https://hteazdwvhjaexjxwiwwl.supabase.co';
+        const serviceRoleKey = 'sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ'; // Service Role Key
+        
+        console.log(`🚀 Edge Function 호출 중: ${functionName}`);
+        
+        const response = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${serviceRoleKey}`
+            }
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Edge Function 호출 실패: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        
+        const data = await response.json();
+        console.log(`✅ Edge Function 호출 성공: ${functionName}`, data);
+        return data;
+    } catch (error) {
+        console.error(`❌ Edge Function 호출 실패: ${functionName}`, error);
+        throw error;
+    }
+}
+
+/**
+ * hourly-view-tracker Edge Function 수동 호출
+ */
+export async function triggerHourlyViewTracker() {
+    return await invokeEdgeFunction('hourly-view-tracker');
+}
+
+/**
+ * daily-video-accumulator Edge Function 수동 호출
+ */
+export async function triggerDailyVideoAccumulator() {
+    return await invokeEdgeFunction('daily-video-accumulator');
+}
 

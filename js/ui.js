@@ -17,14 +17,17 @@ import {
     getRecentVelocityForVideo,
     trackVideoIdsForViewHistory,
     updateMissingData,
-    CACHE_TTL_MS
+    CACHE_TTL_MS,
+    triggerHourlyViewTracker,
+    triggerDailyVideoAccumulator,
+    invokeEdgeFunction
 } from './supabase-api.js';
 import { t } from './i18n.js';
 
 // Global variables for pagination
 export let allVideos = [];
 export let allItems = [];
-export const pageSize = 8;
+export const pageSize = 12; // 페이지당 표시할 영상 개수 (8 → 12로 변경)
 export let currentPage = 1;
 export let allChannelMap = {};
 export let currentSearchQuery = '';
@@ -50,6 +53,12 @@ export function getMaxResults() {
     return 'max'; // 기본값 max
 }
 
+// 페이지 크기 계산 (항상 pageSize 사용)
+export function getEffectivePageSize() {
+    // 의도적으로 8개씩 표시하도록 설정
+    return pageSize; // pageSize = 8
+}
+
 export function setMaxResults(count) {
     if (count === 'max') {
         localStorage.setItem(MAX_RESULTS_STORAGE_KEY, 'max');
@@ -61,7 +70,8 @@ export function setMaxResults(count) {
 
 // 하루 Load More 사용량 가져오기
 function getDailyLoadMoreCount(keyword) {
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    // 토론토 시간 기준 오늘 날짜
+    const today = getNowToronto().toISOString().split('T')[0]; // YYYY-MM-DD
     const key = `${DAILY_LIMIT_STORAGE_PREFIX}${keyword}_${today}`;
     const stored = localStorage.getItem(key);
     return stored ? parseInt(stored, 10) : 0;
@@ -69,7 +79,8 @@ function getDailyLoadMoreCount(keyword) {
 
 // 하루 Load More 사용량 증가
 function incrementDailyLoadMoreCount(keyword, count) {
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    // 토론토 시간 기준 오늘 날짜
+    const today = getNowToronto().toISOString().split('T')[0]; // YYYY-MM-DD
     const key = `${DAILY_LIMIT_STORAGE_PREFIX}${keyword}_${today}`;
     const current = getDailyLoadMoreCount(keyword);
     localStorage.setItem(key, (current + count).toString());
@@ -192,10 +203,67 @@ function isPublicDefaultQuery(value) {
 }
 
 // ============================================
+// 시간대 유틸리티 함수 (캐나다 토론토 동부 시간대)
+// ============================================
+
+const TORONTO_TIMEZONE = 'America/Toronto'; // 캐나다 토론토(동부) 시간대 (EST/EDT 자동 처리)
+
+// 날짜를 토론토 시간으로 변환하여 포맷팅
+export function formatDateToronto(date, options = {}) {
+    if (!date) return '';
+    
+    const dateObj = date instanceof Date ? date : new Date(date);
+    if (isNaN(dateObj.getTime())) return '';
+    
+    const defaultOptions = {
+        timeZone: TORONTO_TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        ...options
+    };
+    
+    return new Intl.DateTimeFormat('ko-KR', defaultOptions).format(dateObj);
+}
+
+// 날짜를 토론토 시간으로 변환하여 간단한 문자열로 반환
+export function formatDateTorontoSimple(date) {
+    return formatDateToronto(date, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// 현재 시간을 토론토 시간대 기준으로 반환 (Date 객체)
+// 내부적으로는 UTC를 사용하지만, 표시 시 토론토 시간으로 변환
+export function getNowToronto() {
+    // Date 객체는 항상 UTC 기준이므로, 현재 시간 반환
+    // 표시할 때 formatDateToronto를 사용하여 토론토 시간으로 변환
+    return new Date();
+}
+
+// 토론토 시간 기준으로 경과 시간 계산
+export function getElapsedTimeToronto(startDate, endDate = null) {
+    const start = startDate instanceof Date ? startDate : new Date(startDate);
+    const end = endDate ? (endDate instanceof Date ? endDate : new Date(endDate)) : new Date();
+    
+    // 밀리초 차이 계산 (시간대와 무관하게 정확함)
+    return end.getTime() - start.getTime();
+}
+
+// ============================================
 // 속도 계산 함수
 // ============================================
 
 function ageDays(publishedAt) {
+    // 시간 계산은 UTC 기준으로 하고, 표시만 토론토 시간으로
     const now = Date.now();
     const publishedTime = Date.parse(publishedAt);
     
@@ -442,10 +510,11 @@ export async function search(shouldReload = false) {
             console.log(`📊 로컬 캐시 total_count: actualCount=${actualCount}, metaTotal=${metaTotal}, localCount=${localCount}, currentTotalCount=${currentTotalCount}`);
             
             // 캐시에 이미 충분한 데이터가 있으면 API 호출 안 함 (maxResults 변경해도)
+            const totalCount = Math.max(actualCount, metaTotal, localCount);
             if (totalCount >= targetCount) {
                 debugLog(`✅ 로컬 캐시에 충분한 데이터 있음 (${totalCount}개 >= ${targetCount}개) → API 호출 생략`);
                 restoreFromCache(cacheData);
-                // Load More 모드가 아니면 선택한 개수로 제한
+                // Load More 모드가 아니고 maxResults가 숫자일 때만 제한
                 if (!isLoadMoreMode && targetCount !== Infinity && allVideos.length > targetCount) {
                     allVideos = allVideos.slice(0, targetCount);
                     allItems = allItems.slice(0, targetCount);
@@ -520,8 +589,8 @@ export async function search(shouldReload = false) {
             
             restoreFromCache(cacheData);
             
-            // 선택한 최대 결과 수로 제한 (캐시가 더 많아도)
-            if (allVideos.length > targetCount) {
+            // 선택한 최대 결과 수로 제한 (maxResults가 숫자일 때만, "max"일 때는 제한 안 함)
+            if (targetCount !== Infinity && allVideos.length > targetCount) {
                 debugLog(`✂️ 로컬 캐시 ${allVideos.length}개 → ${targetCount}개로 제한`);
                 allVideos = allVideos.slice(0, targetCount);
                 allItems = allItems.slice(0, targetCount);
@@ -598,7 +667,7 @@ export async function search(shouldReload = false) {
         const meta = cacheData.meta || {};
         const cacheSource = cacheData.dataSource || meta.source || 'unknown';
         const savedAt = new Date(cacheData.timestamp);
-        const savedAtLabel = savedAt.toLocaleString();
+        const savedAtLabel = formatDateTorontoSimple(savedAt);
         
         debugLog(`📂 로컬 검색어 캐시 확인: "${query}" (총 ${count}개, 소스=${cacheSource})`);
         debugLog(`⏳ 72시간 경과 여부: ${isExpired ? '만료' : '유효'} (저장 시각: ${savedAtLabel})`);
@@ -637,13 +706,17 @@ export async function search(shouldReload = false) {
             
             // total_count 확인 (Supabase의 total_count 우선 사용)
             const totalCount = meta.total_count || count;
+            // currentTotalCount 업데이트: 실제 로드한 개수와 meta.total 중 더 큰 값 사용
+            const actualCount = cacheData.videos?.length || cacheData.items?.length || 0;
+            currentTotalCount = Math.max(actualCount, totalCount, count);
+            console.log(`📊 Supabase 캐시 total_count: actualCount=${actualCount}, metaTotal=${meta.total_count || 0}, count=${count}, currentTotalCount=${currentTotalCount}`);
             
             // 캐시에 이미 충분한 데이터가 있으면 API 호출 안 함 (maxResults 변경해도)
             if (targetCount !== Infinity && totalCount >= targetCount) {
                 debugLog(`✅ 캐시에 충분한 데이터 있음 (${totalCount}개 >= ${targetCount}개) → API 호출 생략`);
                 restoreFromCache(cacheData);
-                // 선택한 개수로 제한
-                if (allVideos.length > targetCount) {
+                // maxResults가 숫자일 때만 제한 ("max"일 때는 모든 데이터 표시)
+                if (targetCount !== Infinity && allVideos.length > targetCount) {
                     allVideos = allVideos.slice(0, targetCount);
                     allItems = allItems.slice(0, targetCount);
                 }
@@ -680,8 +753,8 @@ export async function search(shouldReload = false) {
             
             restoreFromCache(cacheData);
             
-            // 정확히 일치하거나 더 많으면 선택한 개수로 제한
-            if (count >= targetCount) {
+            // maxResults가 숫자일 때만 제한 ("max"일 때는 모든 데이터 표시)
+            if (targetCount !== Infinity && count >= targetCount) {
                 allVideos = allVideos.slice(0, targetCount);
                 allItems = allItems.slice(0, targetCount);
             }
@@ -1525,11 +1598,15 @@ export function renderPage(page, skipSort = false) {
     
     // 정렬된 allItems를 필터링하고 중복 제거
     const dedupedItems = getFilteredDedupedItems();
+    console.log(`📊 필터링 후: allItems=${allItems.length}, dedupedItems=${dedupedItems.length}`);
     
-    // Pagination
-    const startIdx = (page - 1) * pageSize;
-    const endIdx = startIdx + pageSize;
+    // Pagination - maxResults에 따라 동적으로 페이지 크기 조정
+    const effectivePageSize = getEffectivePageSize();
+    console.log(`📄 페이지네이션: page=${page}, effectivePageSize=${effectivePageSize}, totalItems=${dedupedItems.length}`);
+    const startIdx = (page - 1) * effectivePageSize;
+    const endIdx = startIdx + effectivePageSize;
     const pageItems = dedupedItems.slice(startIdx, endIdx);
+    console.log(`📄 표시할 항목: ${pageItems.length}개 (${startIdx}~${endIdx}), 실제 카드 생성 전`);
     
     const resultsDiv = document.getElementById('results');
     resultsDiv.innerHTML = '';
@@ -1547,12 +1624,14 @@ export function renderPage(page, skipSort = false) {
     const fragment = document.createDocumentFragment();
     
     // 카드 렌더링 (forEach 대신 for 루프 사용 - 약간 더 빠름)
+    let cardsCreated = 0;
     for (let i = 0; i < pageItems.length; i++) {
         const item = pageItems[i];
         const video = item.raw;
         const card = createVideoCard(video, item);
         if (card) {
             fragment.appendChild(card);
+            cardsCreated++;
             
             // 표시 단위가 "최근 VPH"이고 VPH 데이터가 이미 있는 경우 배지 업데이트
             if (currentVelocityMetric === 'recent-vph' && item.vph) {
@@ -1578,9 +1657,11 @@ export function renderPage(page, skipSort = false) {
     
     gridContainer.appendChild(fragment);
     resultsDiv.appendChild(gridContainer);
+    console.log(`✅ 카드 생성 완료: ${cardsCreated}개 (pageItems=${pageItems.length}개 중)`);
     
     // Update pagination
     updatePaginationControls(dedupedItems.length);
+    console.log(`📄 페이지네이션 업데이트: totalItems=${dedupedItems.length}, effectivePageSize=${getEffectivePageSize()}`);
     
     // 모든 항목에 대해 VPH 계산 시작 (페이지와 관계없이)
     // 첫 페이지 렌더링 시에만 실행 (중복 계산 방지)
@@ -1659,13 +1740,16 @@ function createVideoCard(video, item) {
                 <span class="stat-item">📅 ${daysText}</span>
             </div>
             <div class="velocity-panel">
-                <div class="velocity-row recent">
-                    <span class="label" data-i18n="velocity.recent">${t('velocity.recent')}</span>
-                    <span class="value recent-vph">${t('velocity.loading')}</span>
-                </div>
-                <div class="velocity-row">
-                    <span class="label" data-i18n="velocity.daily">${t('velocity.daily')}</span>
-                    <span class="value daily-vpd">${formatNumber(computedVpd || 0)}/day</span>
+                <div class="velocity-row-horizontal">
+                    <div class="velocity-item">
+                        <span class="label" data-i18n="velocity.recent">${t('velocity.recent')}</span>
+                        <span class="value recent-vph">${t('velocity.loading')}</span>
+                    </div>
+                    <div class="velocity-separator">|</div>
+                    <div class="velocity-item">
+                        <span class="label" data-i18n="velocity.daily">${t('velocity.daily')}</span>
+                        <span class="value daily-vpd">${formatNumber(computedVpd || 0)}/day</span>
+                    </div>
                 </div>
                 <div class="vph-graph-container" style="display: none;">
                     <div class="vph-graph-label">최근 VPH</div>
@@ -2301,7 +2385,9 @@ export function applyFilters(items) {
 // ============================================
 
 export function updatePaginationControls(totalItems) {
-    const totalPages = Math.ceil(totalItems / pageSize);
+    const effectivePageSize = getEffectivePageSize();
+    const totalPages = Math.ceil(totalItems / effectivePageSize);
+    console.log(`🔢 updatePaginationControls: totalItems=${totalItems}, effectivePageSize=${effectivePageSize}, totalPages=${totalPages}, currentPage=${currentPage}`);
     const pageInfo = document.getElementById('pageInfo');
     const totalCount = document.getElementById('totalCount');
     const prevBtn = document.getElementById('prevPage');
@@ -2309,6 +2395,7 @@ export function updatePaginationControls(totalItems) {
     
     if (pageInfo) {
         pageInfo.innerHTML = `${currentPage} / ${totalPages} <span data-i18n="result.page">${t('result.page')}</span>`;
+        console.log(`📄 pageInfo 업데이트: "${pageInfo.innerHTML}"`);
     }
     if (totalCount) totalCount.textContent = totalItems;
     
@@ -2325,7 +2412,8 @@ export function setupPaginationHandlers() {
     
     document.getElementById('nextPage')?.addEventListener('click', () => {
         const dedupedItems = getFilteredDedupedItems();
-        const totalPages = Math.ceil(dedupedItems.length / pageSize);
+        const effectivePageSize = getEffectivePageSize();
+        const totalPages = Math.ceil(dedupedItems.length / effectivePageSize);
         if (currentPage < totalPages) {
             renderPage(currentPage + 1);
         }
