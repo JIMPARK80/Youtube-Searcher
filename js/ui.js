@@ -241,6 +241,7 @@ export function getChannelSizeEmoji(cband) {
 // 검색 중 상태 추적 (중복 검색 방지)
 let isSearching = false;
 let searchTimeoutTimer = null; // 프리징 방지용 타이머
+let isQuotaExceeded = false; // 할당량 초과 플래그
 
 export async function search(shouldReload = false) {
     // 중복 검색 방지 (자동 검색 제외)
@@ -253,6 +254,7 @@ export async function search(shouldReload = false) {
     vphCalculatedVideos.clear();
     vphRetryCount.clear(); // 재시도 횟수도 초기화
     window.vphCalculationsStarted = false; // 새로운 검색 시 VPH 계산 시작 플래그 초기화
+    isQuotaExceeded = false; // 할당량 초과 플래그 초기화
     
     const searchBtn = document.getElementById('searchBtn');
     const searchInput = document.getElementById('searchInput');
@@ -759,6 +761,7 @@ async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVid
         if (!result) {
             // API 할당량 초과로 실패한 경우 Supabase에서 모든 데이터 가져오기
             debugLog(`⚠️ 추가 비디오 검색 실패 (할당량 초과) → Supabase에서 모든 데이터 가져오기`);
+            isQuotaExceeded = true; // 할당량 초과 플래그 설정
             
             // Supabase에서 모든 데이터 가져오기 (만료 여부 무시)
             const cacheData = await loadFromSupabase(query, true); // ignoreExpiry = true
@@ -849,6 +852,7 @@ async function performFullGoogleSearch(query, apiKeyValue) {
             // API 할당량 초과 시 캐시에서 최대 데이터 가져오기
             if (error.message === 'quotaExceeded' || error.message?.includes('quota')) {
                 console.warn('⚠️ YouTube API 할당량 초과 → 캐시에서 최대 데이터 가져오기');
+                isQuotaExceeded = true; // 할당량 초과 플래그 설정
                 
                 // 캐시에서 최대 데이터 가져오기 시도 (만료 여부 무시)
                 const cacheData = await loadFromSupabase(query, true); // ignoreExpiry = true
@@ -1224,11 +1228,14 @@ function getFilteredDedupedItems() {
 export function renderPage(page, skipSort = false) {
     currentPage = page;
     
-    // 선택한 최대 결과 수로 제한 (필터링 전에 적용)
-    const maxResults = getMaxResults();
-    if (allVideos.length > maxResults) {
-        allVideos = allVideos.slice(0, maxResults);
-        allItems = allItems.slice(0, maxResults);
+    // 할당량 초과 시에는 제한을 적용하지 않음
+    if (!isQuotaExceeded) {
+        // 선택한 최대 결과 수로 제한 (필터링 전에 적용)
+        const maxResults = getMaxResults();
+        if (allVideos.length > maxResults) {
+            allVideos = allVideos.slice(0, maxResults);
+            allItems = allItems.slice(0, maxResults);
+        }
     }
     
     // VPH 계산 큐 초기화 (이전 페이지의 큐 정리)
