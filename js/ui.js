@@ -502,7 +502,12 @@ export async function search(shouldReload = false) {
                 return;
             }
             
-            // 정확히 일치하면 그대로 사용
+            // 정확히 일치하거나 더 많으면 선택한 개수로 제한
+            if (count >= targetCount) {
+                allVideos = allVideos.slice(0, targetCount);
+                allItems = allItems.slice(0, targetCount);
+            }
+            
             renderPage(1);
             lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
             const nextToken = meta.nextPageToken || null;
@@ -611,6 +616,12 @@ async function performFullGoogleSearch(query, apiKeyValue) {
         debugLog(`🎯 fetch 완료: ${result.videos.length}개`);
         allVideos = result.videos;
         allChannelMap = result.channels;
+        
+        // 선택한 최대 결과 수로 제한 (API가 더 많이 반환할 수 있으므로)
+        if (allVideos.length > maxResults) {
+            debugLog(`✂️ 결과 ${allVideos.length}개 → ${maxResults}개로 제한`);
+            allVideos = allVideos.slice(0, maxResults);
+        }
         
         // Enrich with velocity data
         allItems = allVideos.map(video => {
