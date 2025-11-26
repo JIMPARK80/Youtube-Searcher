@@ -34,8 +34,17 @@ export let isLoadMoreMode = false; // Load More 버튼으로 확장된 경우
 // 최대 결과 수 설정 (기본값 10, 최대값 100)
 const MAX_RESULTS_STORAGE_KEY = 'youtube_searcher_max_results';
 const MAX_RESULTS_LIMIT = 1000; // 키워드당 최대 1000개
-const LOAD_MORE_INCREMENT = 20; // 추가 로드 시 20개씩
-const DAILY_LOAD_MORE_LIMIT = 60; // 하루 최대 추가 로드 60개
+const LOAD_MORE_INCREMENT = 50; // 추가 로드 시 50개씩 (API 효율성 고려)
+// VPH 업데이트 할당량 계산:
+// - 10,000개 비디오 기준: 200 units/시간
+// - 하루: 200 × 24 = 4,800 units
+// - YouTube API 기본 할당량: 10,000 units/일
+// - 신규 영상 데이터 확보 가능: 10,000 - 4,800 = 5,200 units
+// - 신규 영상 데이터 확보 비용: search.list(100) + videos.list(1) = 101 units per 50개
+// - 전체 가능: 5,200 / 101 × 50 ≈ 2,574개
+// - 키워드 100개 기준: 2,574 / 100 ≈ 25.74개/키워드
+// - 안전 마진 고려: 키워드당 20개로 설정
+const DAILY_LOAD_MORE_LIMIT = 20; // 키워드당 하루 최대 추가 로드 20개
 const DAILY_LIMIT_STORAGE_PREFIX = 'loadMoreDailyLimit_';
 
 export function getMaxResults() {
@@ -964,8 +973,8 @@ async function loadMoreVideos(query) {
     // 하루 제한 확인
     const remainingDailyLimit = getRemainingDailyLoadMoreCount(keyword);
     if (remainingDailyLimit <= 0) {
-        console.warn(`⚠️ 하루 추가 로드 제한 도달 (${DAILY_LOAD_MORE_LIMIT}개)`);
-        alert(`하루 추가 로드 제한에 도달했습니다. (최대 ${DAILY_LOAD_MORE_LIMIT}개/일)`);
+        console.warn(`⚠️ 하루 추가 로드 제한 도달 (키워드당 ${DAILY_LOAD_MORE_LIMIT}개)`);
+        alert(`하루 데이터 확보 제한에 도달했습니다. (키워드당 최대 ${DAILY_LOAD_MORE_LIMIT}개/일)\n\nVPH 업데이트(4,800 units/일) 할당량을 제외한 신규 영상 데이터 확보 제한입니다.`);
         updateLoadMoreButton();
         return;
     }
@@ -1086,18 +1095,18 @@ function updateLoadMoreButton() {
         }
         const dailyLimitText = remainingDailyLimit < DAILY_LOAD_MORE_LIMIT ? ` (하루 남은: ${remainingDailyLimit}개)` : '';
         const maxLimitText = remainingMaxLimit < MAX_RESULTS_LIMIT ? ` (최대: ${MAX_RESULTS_LIMIT}개)` : '';
-        loadMoreBtn.textContent = `+${remaining}개 더${dailyLimitText}${maxLimitText}`;
+        loadMoreBtn.textContent = `데이터 더 확보 (+${remaining}개)${dailyLimitText}${maxLimitText}`;
     } else {
         // 더 이상 데이터가 없거나 하루 제한 도달 또는 최대 제한 도달
         if (isMaxLimitReached) {
             loadMoreBtn.textContent = `최대 제한 도달 (${MAX_RESULTS_LIMIT}개)`;
         } else if (remainingDailyLimit <= 0) {
-            loadMoreBtn.textContent = `하루 제한 도달 (${DAILY_LOAD_MORE_LIMIT}개/일)`;
+            loadMoreBtn.textContent = `하루 제한 도달 (키워드당 ${DAILY_LOAD_MORE_LIMIT}개/일)`;
         } else if (currentTotalCount > 0 && currentCount >= currentTotalCount) {
             // 최종 결과 수 표시
             loadMoreBtn.textContent = `모두 표시됨 (${currentTotalCount}개)`;
         } else {
-            loadMoreBtn.textContent = `+${LOAD_MORE_INCREMENT}개 더`;
+            loadMoreBtn.textContent = `데이터 더 확보 (+${LOAD_MORE_INCREMENT}개)`;
         }
     }
     

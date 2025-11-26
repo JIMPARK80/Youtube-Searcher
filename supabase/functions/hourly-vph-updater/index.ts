@@ -15,9 +15,19 @@ const API_THROTTLE_MS = 200; // 요청 사이 200ms 딜레이
 
 serve(async (_req) => {
   try {
+    // Service Role Key 가져오기 (환경 변수에서)
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    
+    // Supabase URL 가져오기
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    
+    // 디버깅 로그 (환경 변수 확인)
+    console.log(`🔍 Environment check: SUPABASE_URL=${supabaseUrl ? "set" : "not set"}, SERVICE_ROLE_KEY=${serviceRoleKey ? "set" : "not set"}`);
+    
+    // Supabase 클라이언트 생성
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      supabaseUrl,
+      serviceRoleKey || (Deno.env.get("SUPABASE_ANON_KEY") ?? "")
     );
 
     if (!YOUTUBE_API_KEY) {
@@ -148,7 +158,24 @@ serve(async (_req) => {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error(`❌ Error processing batch ${i + 1}:`, errorMessage);
-        // 에러가 발생해도 다음 배치 계속 처리
+        
+        // 할당량 초과 시 조기 종료 (다음 시간에 자동 재시도)
+        if (errorMessage.includes("quota exceeded")) {
+          console.log(`⚠️ Quota exceeded at batch ${i + 1}. Will retry automatically on next schedule.`);
+          return new Response(
+            JSON.stringify({
+              success: true,
+              processed: totalProcessed,
+              saved: totalSuccess,
+              total: videoIds.length,
+              timestamp: fetchedAt,
+              warning: "YouTube API quota exceeded. Partial processing completed. Will retry automatically on next schedule.",
+            }),
+            { headers: { "Content-Type": "application/json" } }
+          );
+        }
+        
+        // 다른 에러는 다음 배치 계속 처리
         continue;
       }
     }
@@ -175,4 +202,3 @@ serve(async (_req) => {
     );
   }
 });
-

@@ -35,6 +35,10 @@ SELECT cron.unschedule('hourly-vph-updater') WHERE EXISTS (
     SELECT 1 FROM cron.job WHERE jobname = 'hourly-vph-updater'
 );
 
+SELECT cron.unschedule('daily-statistics-updater') WHERE EXISTS (
+    SELECT 1 FROM cron.job WHERE jobname = 'daily-statistics-updater'
+);
+
 -- ============================================
 -- VPH 자동 업데이트 Cron 작업 (1시간마다)
 -- ============================================
@@ -69,6 +73,34 @@ SELECT cron.schedule(
 );
 
 -- ============================================
+-- 일일 통계 업데이트 Cron 작업 (매일 자정)
+-- ============================================
+-- daily-statistics-updater Edge Function을 매일 자정에 실행
+-- 좋아요(like_count)와 구독자(subscriber_count) 데이터 업데이트
+
+-- 기존 작업이 있으면 삭제
+SELECT cron.unschedule('daily-statistics-updater') WHERE EXISTS (
+    SELECT 1 FROM cron.job WHERE jobname = 'daily-statistics-updater'
+);
+
+-- 새 Cron 작업 등록 (매일 자정에 실행)
+SELECT cron.schedule(
+    'daily-statistics-updater',
+    '0 0 * * *', -- 매일 자정에 실행 (00:00)
+    $$
+    SELECT
+        net.http_post(
+            url := 'https://hteazdwvhjaexjxwiwwl.supabase.co/functions/v1/daily-statistics-updater',
+            headers := jsonb_build_object(
+                'Content-Type', 'application/json',
+                'Authorization', 'Bearer sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ'
+            ),
+            body := '{}'::jsonb
+        ) AS request_id;
+    $$
+);
+
+-- ============================================
 -- Cron 작업 확인
 -- ============================================
 -- 실행 중인 작업 확인:
@@ -79,5 +111,6 @@ SELECT
     active,
     command
 FROM cron.job
-WHERE jobname = 'hourly-vph-updater';
+WHERE jobname IN ('hourly-vph-updater', 'daily-statistics-updater')
+ORDER BY jobname;
 
