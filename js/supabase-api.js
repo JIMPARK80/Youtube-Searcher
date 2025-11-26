@@ -214,9 +214,20 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
         const keyword = query.trim().toLowerCase();
         const now = new Date().toISOString();
 
-        // Upsert search_cache
-        const totalCount = videos.length;
-        console.log(`💾 search_cache 저장: keyword="${keyword}", total_count=${totalCount}, data_source=${dataSource}`);
+        // 기존 total_count 확인 (더 큰 값 유지)
+        const { data: existingCache } = await supabase
+            .from('search_cache')
+            .select('total_count')
+            .eq('keyword', keyword)
+            .single();
+        
+        const currentCount = videos.length;
+        const existingTotalCount = existingCache?.total_count || 0;
+        
+        // 기존 total_count와 비교해서 더 큰 값 사용 (total_count가 줄어들지 않도록)
+        const totalCount = Math.max(currentCount, existingTotalCount);
+        
+        console.log(`💾 search_cache 저장: keyword="${keyword}", 현재=${currentCount}개, 기존=${existingTotalCount}개, 저장=${totalCount}개, data_source=${dataSource}`);
         
         const { error: cacheError } = await supabase
             .from('search_cache')
