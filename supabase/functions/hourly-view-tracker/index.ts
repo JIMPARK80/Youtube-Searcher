@@ -115,8 +115,9 @@ serve(async (req) => {
       { headers: { "Content-Type": "application/json" } }
     );
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
