@@ -17,10 +17,7 @@ import {
     getRecentVelocityForVideo,
     trackVideoIdsForViewHistory,
     updateMissingData,
-    CACHE_TTL_MS,
-    triggerHourlyViewTracker,
-    triggerDailyVideoAccumulator,
-    invokeEdgeFunction
+    CACHE_TTL_MS
 } from './supabase-api.js';
 import { t } from './i18n.js';
 

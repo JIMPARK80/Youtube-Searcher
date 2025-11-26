@@ -1259,13 +1259,6 @@ export async function invokeEdgeFunction(functionName) {
 }
 
 /**
- * hourly-view-tracker Edge Function 수동 호출
- */
-export async function triggerHourlyViewTracker() {
-    return await invokeEdgeFunction('hourly-view-tracker');
-}
-
-/**
  * daily-video-accumulator Edge Function 수동 호출
  */
 export async function triggerDailyVideoAccumulator() {

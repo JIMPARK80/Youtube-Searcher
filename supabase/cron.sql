@@ -10,30 +10,7 @@ CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
 -- ============================================
--- 1. Hourly View Tracker (매 60분)
--- ============================================
--- 기존 작업 삭제 (이미 등록된 경우)
-SELECT cron.unschedule('hourly-view-tracker') WHERE EXISTS (
-    SELECT 1 FROM cron.job WHERE jobname = 'hourly-view-tracker'
-);
-
--- 새 작업 등록
-SELECT cron.schedule(
-    'hourly-view-tracker',
-    '0 * * * *', -- 매 시간 정각 (0분)
-    $$
-    SELECT net.http_post(
-        url := 'https://hteazdwvhjaexjxwiwwl.supabase.co/functions/v1/hourly-view-tracker',
-        headers := jsonb_build_object(
-            'Content-Type', 'application/json',
-            'Authorization', 'Bearer sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ'
-        )
-    ) AS request_id;
-    $$
-);
-
--- ============================================
--- 2. Update Trending Videos (매 72시간)
+-- 1. Update Trending Videos (매 72시간)
 -- ============================================
 -- 기존 작업 삭제 (이미 등록된 경우)
 SELECT cron.unschedule('update-trending-videos') WHERE EXISTS (
@@ -56,7 +33,7 @@ SELECT cron.schedule(
 );
 
 -- ============================================
--- 3. Daily Video Accumulator (매일 자정)
+-- 2. Daily Video Accumulator (매일 자정)
 -- ============================================
 -- 기존 작업 삭제 (이미 등록된 경우)
 SELECT cron.unschedule('daily-video-accumulator') WHERE EXISTS (
@@ -79,7 +56,7 @@ SELECT cron.schedule(
 );
 
 -- ============================================
--- 4. Cleanup Old Daily Load Tracking (매일 1시)
+-- 3. Cleanup Old Daily Load Tracking (매일 1시)
 -- ============================================
 SELECT cron.schedule(
     'cleanup-daily-load-tracking',
@@ -96,7 +73,6 @@ SELECT cron.schedule(
 -- SELECT * FROM cron.job;
 
 -- 작업 삭제 (필요시):
--- SELECT cron.unschedule('hourly-view-tracker');
 -- SELECT cron.unschedule('update-trending-videos');
 -- SELECT cron.unschedule('daily-video-accumulator');
 -- SELECT cron.unschedule('cleanup-daily-load-tracking');
