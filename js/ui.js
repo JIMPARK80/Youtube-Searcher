@@ -2158,7 +2158,11 @@ export function setupEventListeners() {
     // 최대 결과 수 선택 드롭다운 이벤트 리스너
     const maxResultsSelect = document.getElementById('maxResultsSelect');
     if (maxResultsSelect) {
-        // 저장된 값으로 초기화
+        // 저장된 값이 없으면 기본값 10 사용 (localStorage 초기화)
+        const stored = localStorage.getItem(MAX_RESULTS_STORAGE_KEY);
+        if (!stored) {
+            setMaxResults(10); // 기본값 10 저장
+        }
         const savedMaxResults = getMaxResults();
         maxResultsSelect.value = savedMaxResults.toString();
         
