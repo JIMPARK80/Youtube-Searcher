@@ -334,7 +334,6 @@ export function initializeI18n() {
     // 초기 텍스트 업데이트
     updatePageTexts();
     
-    console.log(`✅ 다국어 시스템 초기화 완료 (현재 언어: ${currentLanguage})`);
 }
 
 // 언어 토글 버튼 초기화

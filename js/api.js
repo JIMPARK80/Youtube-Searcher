@@ -25,29 +25,16 @@ export async function getApiKeys() {
             .single();
         
         if (error) {
-            console.warn('⚠️ Supabase에서 API 키 로드 실패:', error);
-            // Fallback: Try to use cached keys
-            if (window.serverApiKeys && window.serverApiKeys.youtube) {
-                console.log('✅ 캐시된 API 키 사용');
-                return {
-                    youtube: window.serverApiKeys.youtube
-                };
+            if (window.serverApiKeys?.youtube) {
+                return { youtube: window.serverApiKeys.youtube };
             }
-            return {
-                youtube: null
-            };
+            return { youtube: null };
         }
         
-        if (data && data.value && data.value.youtube) {
-            console.log('✅ Supabase에서 API 키 로드 성공');
-            // Cache for future use
+        if (data?.value?.youtube) {
             window.serverApiKeys = data.value;
-            return {
-                youtube: data.value.youtube
-            };
+            return { youtube: data.value.youtube };
         }
-        
-        console.warn('⚠️ Supabase에 API 키가 설정되지 않음');
         return {
             youtube: null
         };
@@ -85,7 +72,6 @@ function createHiddenApiKeyInputs(keys) {
         document.body.appendChild(apiKeyInput);
     }
 
-    console.log('🔐 API 키 hidden input 생성 완료');
 }
 
 
@@ -157,13 +143,7 @@ const API_THROTTLE_MS = 200; // 요청 사이 200ms 딜레이
 
 export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excludeVideoIds = []) {
     try {
-        console.log('🌐 Google API 호출 중...');
-        
-        // 기존 비디오 ID 제외 Set 생성
         const excludeSet = new Set(excludeVideoIds);
-        if (excludeSet.size > 0) {
-            console.log(`🚫 제외할 비디오 ID: ${excludeSet.size}개`);
-        }
         
         // ① Step 1: Search for videos (동적 최대 개수, 기존 ID 제외)
         let searchItems = [];
@@ -209,11 +189,8 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
         // 필요한 수만큼만 제한
         searchItems = searchItems.slice(0, MAX_RESULTS);
         
-        console.log(`✅ Google API 정상 작동 (${searchItems.length}개 검색 결과, MAX_RESULTS=${MAX_RESULTS})`);
-
         // ② Step 2: Get detailed video information (50개씩 배치, throttle 적용)
         const videoIds = searchItems.map(item => item.id.videoId).filter(Boolean);
-        console.log(`📋 비디오 ID 추출: ${videoIds.length}개`);
         let videoDetails = [];
         const videoIdChunks = chunk(videoIds, 50);
         for (let i = 0; i < videoIdChunks.length; i++) {
@@ -228,8 +205,6 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
             const d = await r.json();
             videoDetails.push(...(d.items || []));
         }
-        console.log(`📹 비디오 상세 정보: ${videoDetails.length}개`);
-
         // ③ Step 3: Get channel information (50개씩 배치, throttle 적용)
         const channelIds = [...new Set(videoDetails.map(v => v.snippet.channelId))];
         let channelsMap = {};
@@ -246,9 +221,6 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
             const d = await r.json();
             (d.items || []).forEach(ch => { channelsMap[ch.id] = ch; });
         }
-        console.log(`👥 채널 정보: ${Object.keys(channelsMap).length}개`);
-
-        console.log(`🔙 반환: videos=${videoDetails.length}개, channels=${Object.keys(channelsMap).length}개`);
         return {
             videos: videoDetails,
             channels: channelsMap,
@@ -310,30 +282,18 @@ export async function saveUserLastSearchKeyword(uid, keyword) {
         const supabaseUserId = supabaseSession?.user?.id;
 
         // RLS requires a Supabase Auth session. Skip if user isn't logged in via Supabase.
-        if (!supabaseUserId) {
-            console.warn('⚠️ Supabase 세션이 없어 검색어 저장을 건너뜁니다.');
-            return;
-        }
-
-        if (uid && uid !== supabaseUserId) {
-            console.warn('⚠️ 전달된 uid와 Supabase uid가 달라 Supabase uid를 사용합니다.');
-        }
+        if (!supabaseUserId) return;
         
-        // users table uses 'uid' field (TEXT) to store Supabase Auth user.id
-        const { error } = await supabase
+        await supabase
             .from('users')
             .upsert({
-                uid: supabaseUserId, // Supabase Auth user.id as string
+                uid: supabaseUserId,
                 last_search_keyword: keyword,
                 last_search_time: Date.now(),
                 updated_at: new Date().toISOString()
             }, {
                 onConflict: 'uid'
             });
-        
-        if (error) throw error;
-        
-        console.log('✅ 사용자 검색어 저장:', keyword);
     } catch (error) {
         console.warn('⚠️ 검색어 저장 실패:', error);
     }

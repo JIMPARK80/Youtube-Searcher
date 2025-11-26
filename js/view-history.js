@@ -82,8 +82,6 @@ function computeRecentVph(latest, previous) {
     };
 }
 
-// Note: This function is kept for backward compatibility
-// ui.js uses getRecentVelocityForVideo from supabase-api.js
 export async function getRecentVelocityForVideo(videoId, { cacheTtl = DEFAULT_CACHE_TTL } = {}) {
     if (!videoId) return null;
     const cached = velocityCache.get(videoId);
@@ -154,8 +152,6 @@ async function pruneHistory(videoId, retentionHours = DEFAULT_RETENTION_HOURS, m
             
             if (deleteError) {
                 console.warn('⚠️ 히스토리 개수 기반 정리 실패:', deleteError);
-            } else {
-                console.log(`🧹 ${videoId}: ${toDelete.length}개 오래된 스냅샷 삭제 (최대 ${maxEntries}개 유지)`);
             }
         }
     } catch (error) {
@@ -175,23 +171,75 @@ async function captureViewsForIds(videoIds = [], apiKey) {
     for (let i = 0; i < videoIds.length; i += 50) {
         chunks.push(videoIds.slice(i, i + 50));
     }
+    
+    let quotaExceeded = false;
+    
     for (const chunkIds of chunks) {
         const url = new URL('https://www.googleapis.com/youtube/v3/videos');
         url.searchParams.set('part', 'statistics');
         url.searchParams.set('id', chunkIds.join(','));
         url.searchParams.set('key', apiKey);
-        const response = await fetch(url);
-        if (!response.ok) {
-            console.error('❌ VPH 폴백 fetch 실패', await response.text());
+        
+        try {
+            const response = await fetch(url);
+            const responseText = await response.text();
+            
+            if (!response.ok) {
+                // API 할당량 초과 확인
+                if (response.status === 403) {
+                    try {
+                        const errorData = JSON.parse(responseText);
+                        if (errorData.error?.code === 403 || 
+                            errorData.error?.message?.toLowerCase().includes('quota') ||
+                            errorData.error?.message?.toLowerCase().includes('blocked')) {
+                            quotaExceeded = true;
+                            console.error('❌ YouTube API 할당량 초과: VPH 업데이트 중단');
+                            console.warn('⚠️ API 할당량이 초과되어 VPH 데이터를 업데이트할 수 없습니다.');
+                            break; // 할당량 초과 시 루프 중단
+                        }
+                    } catch (e) {
+                        // JSON 파싱 실패 시에도 403이면 할당량 초과로 간주
+                        if (response.status === 403) {
+                            quotaExceeded = true;
+                            console.error('❌ YouTube API 할당량 초과 (403): VPH 업데이트 중단');
+                            break;
+                        }
+                    }
+                }
+                console.error('❌ VPH 폴백 fetch 실패', response.status, responseText);
+                continue;
+            }
+            
+            const payload = JSON.parse(responseText);
+            
+            // 응답에 에러가 있는 경우 확인
+            if (payload.error) {
+                if (payload.error.code === 403 || 
+                    payload.error.message?.toLowerCase().includes('quota') ||
+                    payload.error.message?.toLowerCase().includes('blocked')) {
+                    quotaExceeded = true;
+                    console.error('❌ YouTube API 할당량 초과: VPH 업데이트 중단');
+                    console.warn('⚠️ API 할당량이 초과되어 VPH 데이터를 업데이트할 수 없습니다.');
+                    break;
+                }
+                console.error('❌ VPH API 에러:', payload.error);
+                continue;
+            }
+            
+            const now = new Date();
+            for (const item of payload.items || []) {
+                const viewCount = Number(item.statistics?.viewCount ?? 0);
+                await persistSnapshot(item.id, viewCount, now);
+                await pruneHistory(item.id, retentionHours, maxEntries);
+            }
+        } catch (error) {
+            console.error('❌ VPH 폴백 처리 중 에러:', error);
             continue;
         }
-        const payload = await response.json();
-        const now = new Date();
-        for (const item of payload.items || []) {
-            const viewCount = Number(item.statistics?.viewCount ?? 0);
-            await persistSnapshot(item.id, viewCount, now);
-            await pruneHistory(item.id, retentionHours, maxEntries);
-        }
+    }
+    
+    if (quotaExceeded) {
+        console.warn('⚠️ VPH 업데이트 실패: YouTube API 할당량 초과. 다음 업데이트는 1시간 후에 시도됩니다.');
     }
 }
 
@@ -224,19 +272,12 @@ async function getLastSnapshotTime() {
 }
 
 export async function initializeViewTrackingFallback() {
-    // 이미 실행 중이면 중복 초기화 방지
-    if (browserTrackerTimer) {
-        console.log('ℹ️ Browser view tracker already running');
-        return;
-    }
+    if (browserTrackerTimer) return;
     
     let config;
     try {
         config = await getViewTrackingConfig();
-        if (!config?.browserFallbackEnabled) {
-            console.log('ℹ️ Browser view tracker disabled');
-            return;
-        }
+        if (!config?.browserFallbackEnabled) return;
     } catch (error) {
         console.warn('⚠️ View tracking config 로드 실패:', error);
         return;
@@ -256,7 +297,6 @@ export async function initializeViewTrackingFallback() {
             console.warn('⚠️ Browser tracker: missing API key or video IDs');
             return;
         }
-        console.log(`🕒 Browser tracker 업데이트 실행 (${ids.length}개 영상)`);
         await captureViewsForIds(ids, apiKey);
         lastRunTime = Date.now();
         
@@ -274,18 +314,14 @@ export async function initializeViewTrackingFallback() {
             const elapsed = Date.now() - lastRunTime;
             const remaining = intervalMs - elapsed;
             
-            if (remaining <= 0) {
-                console.log(`⏰ 다음 VPH 스냅샷: 곧 실행됩니다...`);
-                return;
-            }
+            if (remaining <= 0) return;
             
             const remainingSeconds = Math.floor(remaining / 1000);
             const minutes = Math.floor(remainingSeconds / 60);
             const seconds = remainingSeconds % 60;
             
-            if (remainingSeconds <= 10 || remainingSeconds % 30 === 0) {
-                // 마지막 10초는 매초, 그 외에는 30초마다 표시
-                console.log(`⏰ 다음 VPH 스냅샷까지: ${minutes}분 ${seconds}초 남음`);
+            // 30초마다만 표시 (과도한 로그 방지)
+            if (remainingSeconds % 30 === 0) {
             }
         };
         
@@ -308,8 +344,6 @@ export async function initializeViewTrackingFallback() {
             const seconds = remainingSeconds % 60;
             // 토론토 시간으로 변환
             const lastSnapshotDate = formatDateTorontoSimple(new Date(lastSnapshotTime));
-            console.log(`📊 마지막 VPH 스냅샷 (토론토 시간): ${lastSnapshotDate}`);
-            console.log(`⏰ 다음 VPH 스냅샷까지: ${minutes}분 ${seconds}초 남음`);
             
             // 남은 시간만큼 대기 후 첫 실행
             setTimeout(() => {
@@ -320,8 +354,6 @@ export async function initializeViewTrackingFallback() {
                 startCountdown(intervalMs);
             }, remaining);
         } else {
-            // 이미 시간이 지났으면 즉시 실행
-            console.log(`⏰ 마지막 스냅샷 이후 ${Math.floor(elapsed / 1000)}초 경과 → 즉시 실행`);
             runTick().catch(console.error);
             browserTrackerTimer = setInterval(() => {
                 runTick().catch(console.error);
@@ -329,8 +361,6 @@ export async function initializeViewTrackingFallback() {
             startCountdown(intervalMs);
         }
     } else {
-        // 스냅샷이 없으면 즉시 실행
-        console.log(`📊 VPH 스냅샷 없음 → 첫 스냅샷 즉시 생성`);
         runTick().catch(console.error);
         browserTrackerTimer = setInterval(() => {
             runTick().catch(console.error);

@@ -99,39 +99,10 @@ let autoRefreshTimer = null;
 const AUTO_REFRESH_INACTIVE_MS = 5 * 60 * 1000; // 5분 동안 UI 업데이트 없으면 새로고침
 
 // 디버그 모드 (개발 시에만 로그 출력)
-const DEBUG_MODE = false; // 프로덕션에서는 false로 설정
-const debugLog = (...args) => {
-    if (DEBUG_MODE) {
-        console.log(...args);
-    }
-};
+// Debug logging removed for production
+const debugLog = () => {}; // No-op function
 
-// 콘솔 로그 정리 (선택적: 30초마다 또는 비활성 시)
-let consoleClearTimer = null;
-const CONSOLE_CLEAR_INTERVAL_MS = 30 * 1000; // 30초
-const ENABLE_CONSOLE_CLEANUP = false; // true로 설정하면 30초마다 콘솔 정리
-
-function initConsoleCleanup() {
-    if (!ENABLE_CONSOLE_CLEANUP) {
-        return; // 비활성화된 경우 아무것도 하지 않음
-    }
-    
-    if (consoleClearTimer) {
-        clearInterval(consoleClearTimer);
-    }
-    
-    consoleClearTimer = setInterval(() => {
-        // 개발 모드가 아니고, 사용자가 비활성 상태일 때만 콘솔 정리
-        if (!DEBUG_MODE) {
-            const inactiveTime = Date.now() - lastUIUpdateTime;
-            // 30초 이상 비활성 상태일 때만 정리 (사용자가 작업 중이 아닐 때)
-            if (inactiveTime > 30 * 1000) {
-                console.clear();
-                console.log('🧹 콘솔 로그 정리 완료 (30초 비활성 후)');
-            }
-        }
-    }, CONSOLE_CLEAR_INTERVAL_MS);
-}
+// Console cleanup removed for production
 const PUBLIC_DEFAULT_QUERY = '인생사연';
 const PUBLIC_DEFAULT_QUERY_NORMALIZED = PUBLIC_DEFAULT_QUERY.toLowerCase();
 
@@ -187,7 +158,6 @@ export function getPublishedAfterDate(period) {
 
     if (!isNaN(value) && value > 0) {
         date.setDate(now.getDate() - value);
-        console.log(`📅 기간 필터 계산: ${value}일 전`);
     } else {
         return '';
     }
@@ -389,7 +359,6 @@ export async function search(shouldReload = false) {
         searchTimeoutTimer = setTimeout(() => {
             // 3초 후에도 검색이 완료되지 않았으면 자동 새로고침
             if (isSearching && query) {
-                console.log('🔄 검색 타임아웃 (3초) → 자동 새로고침 및 재검색');
                 // 검색어 저장
                 localStorage.setItem('autoRefreshLastQuery', query);
                 localStorage.setItem('autoSearchOnLoad', 'true');
@@ -504,7 +473,6 @@ export async function search(shouldReload = false) {
             const actualCount = (cacheData.videos || cacheData.items || []).length;
             const metaTotal = meta.total || 0;
             currentTotalCount = Math.max(actualCount, metaTotal, localCount);
-            console.log(`📊 로컬 캐시 total_count: actualCount=${actualCount}, metaTotal=${metaTotal}, localCount=${localCount}, currentTotalCount=${currentTotalCount}`);
             
             // 캐시에 이미 충분한 데이터가 있으면 API 호출 안 함 (maxResults 변경해도)
             const totalCount = Math.max(actualCount, metaTotal, localCount);
@@ -546,14 +514,12 @@ export async function search(shouldReload = false) {
                 // Supabase에서 모든 데이터 가져오기 시도 (만료 여부 무시)
                 const supabaseData = await loadFromSupabase(query, true); // ignoreExpiry = true
                 if (supabaseData && supabaseData.videos && supabaseData.videos.length >= targetCount) {
-                    console.log(`✅ Supabase에서 ${supabaseData.videos.length}개 데이터 발견 → Supabase 데이터 사용`);
                     restoreFromCache(supabaseData);
                     
                     // total_count 업데이트: 실제 비디오 개수와 meta.total 중 더 큰 값 사용
                     const actualCount = supabaseData.videos.length;
                     const metaTotal = supabaseData.meta?.total || 0;
                     currentTotalCount = Math.max(actualCount, metaTotal);
-                    console.log(`📊 total_count 업데이트: actualCount=${actualCount}, metaTotal=${metaTotal}, currentTotalCount=${currentTotalCount}`);
                     
                     // Load More 모드가 아니면 선택한 개수로 제한
                     if (!isLoadMoreMode && targetCount !== Infinity && allVideos.length > targetCount) {
@@ -617,7 +583,6 @@ export async function search(shouldReload = false) {
                         return item;
                     });
                     
-                    console.log(`✅ Supabase 구독자 수 병합 완료: ${subscriberMap.size}개 업데이트`);
                 }
             } catch (err) {
                 console.warn('⚠️ Supabase 구독자 수 병합 실패:', err);
@@ -706,7 +671,6 @@ export async function search(shouldReload = false) {
             // currentTotalCount 업데이트: 실제 로드한 개수와 meta.total 중 더 큰 값 사용
             const actualCount = cacheData.videos?.length || cacheData.items?.length || 0;
             currentTotalCount = Math.max(actualCount, totalCount, count);
-            console.log(`📊 Supabase 캐시 total_count: actualCount=${actualCount}, metaTotal=${meta.total_count || 0}, count=${count}, currentTotalCount=${currentTotalCount}`);
             
             // 캐시에 이미 충분한 데이터가 있으면 API 호출 안 함 (maxResults 변경해도)
             if (targetCount !== Infinity && totalCount >= targetCount) {
@@ -894,7 +858,6 @@ async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVid
             // Supabase에서 모든 데이터 가져오기 (만료 여부 무시)
             const cacheData = await loadFromSupabase(query, true); // ignoreExpiry = true
             if (cacheData && cacheData.videos && cacheData.videos.length > 0) {
-                console.log(`✅ Supabase에서 ${cacheData.videos.length}개 데이터 사용 (할당량 초과)`);
                 restoreFromCache(cacheData);
                 
                 // 할당량 초과 시에는 제한 없이 모든 데이터 사용
@@ -1011,14 +974,12 @@ async function loadMoreVideos(query) {
     
     // 최대 제한 확인 (키워드당 1000개)
     if (currentCount >= MAX_RESULTS_LIMIT) {
-        console.log(`ℹ️ 최대 제한 도달 (${currentCount}/${MAX_RESULTS_LIMIT}개)`);
         updateLoadMoreButton();
         return;
     }
     
     // total_count 확인
     if (currentTotalCount > 0 && currentCount >= currentTotalCount) {
-        console.log(`ℹ️ 이미 모든 데이터를 표시 중 (${currentCount}/${currentTotalCount})`);
         updateLoadMoreButton();
         return;
     }
@@ -1042,7 +1003,6 @@ async function loadMoreVideos(query) {
     // 기존 비디오 ID 추출
     const existingVideoIds = allVideos.map(v => v.id).filter(Boolean);
     
-    console.log(`📥 추가 로드: ${currentCount}개 → ${targetCount}개 (${neededCount}개 추가, 하루 남은 제한: ${remainingDailyLimit - neededCount}개)`);
     
     // 추가 비디오 가져오기 (YouTube API 호출)
     await fetchAdditionalVideos(query, apiKeyValue, neededCount, existingVideoIds);
@@ -1141,7 +1101,6 @@ function updateLoadMoreButton() {
         }
     }
     
-    console.log(`🔍 Load More 버튼 상태: currentCount=${currentCount}, maxResults=${maxResults}, currentTotalCount=${currentTotalCount}, hasMoreData=${hasMoreData}, disabled=${loadMoreBtn.disabled}`);
 }
 
 async function performFullGoogleSearch(query, apiKeyValue) {
@@ -1168,7 +1127,6 @@ async function performFullGoogleSearch(query, apiKeyValue) {
                 // 캐시에서 최대 데이터 가져오기 시도 (만료 여부 무시)
                 const cacheData = await loadFromSupabase(query, true); // ignoreExpiry = true
                 if (cacheData && cacheData.videos && cacheData.videos.length > 0) {
-                    console.log(`✅ 캐시에서 ${cacheData.videos.length}개 데이터 사용 (할당량 초과, 만료 무시)`);
                     restoreFromCache(cacheData);
                     
                     // 할당량 초과 시에는 제한 없이 모든 데이터 사용
@@ -1595,15 +1553,12 @@ export function renderPage(page, skipSort = false) {
     
     // 정렬된 allItems를 필터링하고 중복 제거
     const dedupedItems = getFilteredDedupedItems();
-    console.log(`📊 필터링 후: allItems=${allItems.length}, dedupedItems=${dedupedItems.length}`);
     
     // Pagination - maxResults에 따라 동적으로 페이지 크기 조정
     const effectivePageSize = getEffectivePageSize();
-    console.log(`📄 페이지네이션: page=${page}, effectivePageSize=${effectivePageSize}, totalItems=${dedupedItems.length}`);
     const startIdx = (page - 1) * effectivePageSize;
     const endIdx = startIdx + effectivePageSize;
     const pageItems = dedupedItems.slice(startIdx, endIdx);
-    console.log(`📄 표시할 항목: ${pageItems.length}개 (${startIdx}~${endIdx}), 실제 카드 생성 전`);
     
     const resultsDiv = document.getElementById('results');
     resultsDiv.innerHTML = '';
@@ -1654,11 +1609,9 @@ export function renderPage(page, skipSort = false) {
     
     gridContainer.appendChild(fragment);
     resultsDiv.appendChild(gridContainer);
-    console.log(`✅ 카드 생성 완료: ${cardsCreated}개 (pageItems=${pageItems.length}개 중)`);
     
     // Update pagination
     updatePaginationControls(dedupedItems.length);
-    console.log(`📄 페이지네이션 업데이트: totalItems=${dedupedItems.length}, effectivePageSize=${getEffectivePageSize()}`);
     
     // 모든 항목에 대해 VPH 계산 시작 (페이지와 관계없이)
     // 첫 페이지 렌더링 시에만 실행 (중복 계산 방지)
@@ -1816,7 +1769,6 @@ function resetAutoRefreshTimer() {
         const inactiveTime = Date.now() - lastUIUpdateTime;
         
         if (inactiveTime >= AUTO_REFRESH_INACTIVE_MS) {
-            console.log(`🔄 ${Math.floor(inactiveTime / 1000 / 60)}분 동안 UI 업데이트 없음 → 자동 새로고침`);
             // 자동 새로고침은 중요한 로그이므로 유지
             // 마지막 검색어로 자동 재검색
             const lastQuery = currentSearchQuery || document.getElementById('searchInput')?.value?.trim();
@@ -2237,7 +2189,6 @@ function startVphCalculationsForAllItems() {
 async function updateMissingDataInBackground(apiKeyValue, limit = 50, keyword = null) {
     // 이미 업데이트 중이면 중복 실행 방지
     if (isUpdatingMissingData) {
-        console.log('⏸️ 백그라운드 업데이트가 이미 실행 중입니다. 중복 실행 방지.');
         return;
     }
     
@@ -2245,17 +2196,14 @@ async function updateMissingDataInBackground(apiKeyValue, limit = 50, keyword = 
         // 짧은 지연 후 실행 (검색 완료 후)
         setTimeout(async () => {
             if (isUpdatingMissingData) {
-                console.log('⏸️ 백그라운드 업데이트가 이미 실행 중입니다. 중복 실행 방지.');
                 return;
             }
             
             isUpdatingMissingData = true;
             try {
                 const keywordFilter = keyword ? ` (검색어: "${keyword}")` : '';
-                console.log(`🔄 백그라운드: NULL 데이터 자동 업데이트 시작${keywordFilter}...`);
                 const result = await updateMissingData(apiKeyValue, limit, 2, keyword);
                 if (result.updated > 0 || result.deleted > 0 || result.skipped > 0) {
-                    console.log(`✅ 백그라운드 업데이트 완료: 업데이트 ${result.updated}개, 삭제 ${result.deleted || 0}개`);
                     // 업데이트된 경우 페이지 새로고침 없이 데이터만 갱신 (선택사항)
                     // renderPage(currentPage); // 필요시 주석 해제
                 }
@@ -2384,7 +2332,6 @@ export function applyFilters(items) {
 export function updatePaginationControls(totalItems) {
     const effectivePageSize = getEffectivePageSize();
     const totalPages = Math.ceil(totalItems / effectivePageSize);
-    console.log(`🔢 updatePaginationControls: totalItems=${totalItems}, effectivePageSize=${effectivePageSize}, totalPages=${totalPages}, currentPage=${currentPage}`);
     const pageInfo = document.getElementById('pageInfo');
     const totalCount = document.getElementById('totalCount');
     const prevBtn = document.getElementById('prevPage');
@@ -2392,7 +2339,6 @@ export function updatePaginationControls(totalItems) {
     
     if (pageInfo) {
         pageInfo.innerHTML = `${currentPage} / ${totalPages} <span data-i18n="result.page">${t('result.page')}</span>`;
-        console.log(`📄 pageInfo 업데이트: "${pageInfo.innerHTML}"`);
     }
     if (totalCount) totalCount.textContent = totalItems;
     
@@ -2436,7 +2382,6 @@ function loadFromLocalCache(query) {
         const cachedData = localStorage.getItem(cacheKey);
         
         if (!cachedData) {
-            console.log(`💾 로컬 캐시 없음: "${keyword}"`);
             return null;
         }
         
@@ -2444,7 +2389,6 @@ function loadFromLocalCache(query) {
         
         // 캐시 버전 확인
         if (parsed.cacheVersion !== LOCAL_CACHE_VERSION) {
-            console.log(`🔄 로컬 캐시 버전 불일치 (${parsed.cacheVersion} → ${LOCAL_CACHE_VERSION})`);
             localStorage.removeItem(cacheKey);
             return null;
         }
@@ -2452,12 +2396,10 @@ function loadFromLocalCache(query) {
         // 만료 시간 확인
         const age = Date.now() - parsed.timestamp;
         if (age >= CACHE_TTL_MS) {
-            console.log(`⏰ 로컬 캐시 만료 (${(age / (1000 * 60 * 60)).toFixed(1)}시간 경과)`);
             localStorage.removeItem(cacheKey);
             return null;
         }
         
-        console.log(`✅ 로컬 캐시 발견: ${parsed.videos?.length || 0}개 항목, ${(age / (1000 * 60 * 60)).toFixed(1)}시간 전`);
         return parsed;
     } catch (error) {
         console.warn('⚠️ 로컬 캐시 로드 실패:', error);
@@ -2532,7 +2474,6 @@ function saveToLocalCache(query, cacheData) {
         }
         
         localStorage.setItem(cacheKey, dataString);
-        console.log(`💾 로컬 캐시 저장 완료: "${keyword}"`);
     } catch (error) {
         // localStorage 용량 초과 등 에러 처리
         if (error.name === 'QuotaExceededError') {
@@ -2612,7 +2553,6 @@ function restoreFromCache(firebaseData) {
             
             // 디버그: 첫 번째 항목만 로그
             if (item.id === firebaseData.items[0]?.id) {
-                console.log(`🔍 캐시 복원: video_id=${item.id}, item.subs=${item.subs}, channel.subs=${channel?.statistics?.subscriberCount}, 최종값=${subs}`);
             }
             
             return {
@@ -2685,7 +2625,6 @@ function restoreFromCache(firebaseData) {
         }
     }
     
-    console.log(`✅ 캐시 복원 완료: ${allItems.length}개 항목`);
     trackVideoIdsForViewHistory(allVideos);
 }
 
@@ -2699,7 +2638,6 @@ let eventListenersSetup = false;
 export function setupEventListeners() {
     // 이미 설정되었으면 중복 방지
     if (eventListenersSetup) {
-        console.log('ℹ️ 이벤트 리스너가 이미 설정되어 있습니다.');
         return;
     }
     
@@ -2824,7 +2762,6 @@ export function setupEventListeners() {
                 const newMaxResults = parseInt(value, 10);
                 setMaxResults(newMaxResults);
             }
-            console.log(`📊 최대 결과 수 변경: ${newMaxResults}개`);
             // 변경 시 현재 검색어로 다시 검색
             const currentQuery = document.getElementById('searchInput')?.value?.trim();
             if (currentQuery) {
@@ -2861,7 +2798,6 @@ export function setupEventListeners() {
     }
     
     eventListenersSetup = true;
-    console.log('✅ 이벤트 리스너 설정 완료');
     
     // 마지막 검색어 복원
     restoreLastSearchOnRefresh();
@@ -2876,8 +2812,4 @@ export function setupEventListeners() {
 
 export function initializeUI() {
     setupEventListeners();
-    console.log('✅ UI 초기화 완료');
-    
-    // 콘솔 로그 정리 초기화
-    initConsoleCleanup();
 }

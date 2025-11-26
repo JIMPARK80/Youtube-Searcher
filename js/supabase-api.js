@@ -25,7 +25,6 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
             .single();
 
         if (cacheError || !cacheMeta) {
-            console.log(`🔭 Supabase 캐시 없음: "${keyword}"`);
             return null;
         }
 
@@ -40,16 +39,11 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
                 return null;
             }
 
-            // Check if expired
             if (age >= CACHE_TTL_MS) {
-                console.log(`⏰ Supabase 캐시 만료 (${CACHE_TTL_HOURS}시간 초과)`);
                 return null;
             }
-        } else {
-            console.log(`⚠️ 할당량 초과로 만료 여부 무시하고 캐시 사용`);
         }
         
-        // ageHours는 로그 출력에 사용
 
         // Load videos for this keyword (제한 없이 모든 데이터 가져오기)
         // Supabase 기본 제한은 1000개이므로 페이지네이션 사용
@@ -99,18 +93,14 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
         const videos = allVideos;
 
         if (videosError || !videos?.length) {
-            console.log('⚠️ Supabase에서 비디오 데이터 없음');
             return null;
         }
 
         const cacheTimeToronto = formatDateTorontoSimple(new Date(cacheMeta.updated_at));
-        console.log(`☁️ Supabase 캐시 발견: ${videos.length}개 항목, ${ageHours.toFixed(1)}시간 전 (토론토: ${cacheTimeToronto})`);
-        console.log(`📊 캐시 소스: ${cacheMeta.data_source || 'unknown'}`);
         
         // 디버그: 구독자 수 데이터 확인 (첫 3개만 - 성능 최적화)
         if (videos.length > 0) {
             videos.slice(0, 3).forEach(v => {
-                console.log(`📊 비디오 ${v.video_id}: subscriber_count=${v.subscriber_count} (타입: ${typeof v.subscriber_count})`);
             });
         }
 
@@ -188,7 +178,6 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
             
             // 디버그: 구독자 수 로드 확인 (첫 번째 항목만)
             if (v.video_id === videos[0]?.video_id) {
-                console.log(`🔍 구독자 수 로드: video_id=${v.video_id}, subscriber_count=${v.subscriber_count}, 최종값=${subscriberCount}`);
             }
             
             // 채널 정보에 구독자 수 추가 (로컬 캐시에 없을 때)
@@ -275,7 +264,6 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
         // 기존 total_count와 비교해서 더 큰 값 사용 (total_count가 줄어들지 않도록)
         const totalCount = Math.max(currentCount, existingTotalCount);
         
-        console.log(`💾 search_cache 저장: keyword="${keyword}", 현재=${currentCount}개, 기존=${existingTotalCount}개, 저장=${totalCount}개, data_source=${dataSource}`);
         
         const { error: cacheError } = await supabase
             .from('search_cache')
@@ -340,10 +328,8 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
             // 디버그 로그는 조용히 처리 (서버에 데이터가 있으면 경고 없음)
             if (subscriberCount && subscriberCount > 0) {
                 // 조용히 처리 (필요시 주석 해제)
-                // console.log(`💾 구독자 수 저장: ${channelId} = ${subscriberCount}`);
             } else if (subscriberCount === -1) {
                 // 숨겨진 경우는 조용히 처리
-                // console.log(`ℹ️ 구독자 수 숨김: ${channelId}`);
             }
             // 경고는 제거 (서버에 데이터가 있으면 나중에 로드됨)
             
@@ -390,7 +376,6 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
                     );
                     
                     if (uniqueBatch.length < batch.length) {
-                        console.log(`  → 중복 제거: ${batch.length}개 → ${uniqueBatch.length}개`);
                     }
                     
                     // 중복 제거된 배치로 재시도
@@ -408,15 +393,12 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
                                 .upsert(record, { onConflict: 'video_id' });
                             if (!singleError) successCount++;
                         }
-                        console.log(`✅ Supabase 캐시 저장 완료: ${successCount}/${uniqueBatch.length}개 (batch ${i / 1000 + 1}, 개별 처리)`);
-                    } else {
-                        console.log(`✅ Supabase 캐시 저장 완료: ${uniqueBatch.length}개 (batch ${i / 1000 + 1}, 재시도 성공)`);
+                        } else {
                     }
                 } else {
                     console.error(`❌ 비디오 저장 실패 (batch ${i / 1000 + 1}):`, upsertError);
                 }
             } else {
-                console.log(`✅ Supabase 캐시 저장 완료: ${batch.length}개 (batch ${i / 1000 + 1})`);
             }
         }
 
@@ -435,7 +417,6 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
 export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 2, keyword = null) {
     try {
         const keywordFilter = keyword ? ` (검색어: "${keyword}")` : '';
-        console.log(`🔄 NULL 데이터 확인 및 업데이트 시작${keywordFilter} (최대 ${limit}개, ${maxAttempts}회 시도)`);
         
         const chunk = (arr, size) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, (i + 1) * size));
         const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -447,7 +428,6 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
         let updatedCount = 0; // 전체 업데이트 카운터 (루프 밖에서 초기화)
         
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            console.log(`\n📊 시도 ${attempt}/${maxAttempts} 시작...`);
             
             // 1. NULL 필드가 있는 비디오 조회 (특정 검색어가 있으면 해당 검색어만)
             // subscriber_count가 -1인 경우는 제외 (구독자 수가 숨겨진 경우)
@@ -466,7 +446,6 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
             if (keyword) {
                 const normalizedKeyword = keyword.trim().toLowerCase();
                 query = query.contains('keyword', [normalizedKeyword]);
-                console.log(`🔍 키워드 필터 적용: "${normalizedKeyword}"`);
             }
             
             // 스킵된 비디오 제외
@@ -484,11 +463,9 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
             }
             
             // 디버그: 조회 결과 확인
-            console.log(`🔍 쿼리 결과: ${videosWithNulls?.length || 0}개 비디오 발견`);
             
             // 디버그: 조회된 비디오 정보 출력
             if (videosWithNulls && videosWithNulls.length > 0) {
-                console.log(`📋 조회된 NULL 데이터 비디오: ${videosWithNulls.length}개`);
                 // 첫 5개만 상세 출력
                 videosWithNulls.slice(0, 5).forEach(v => {
                     const nullFields = [];
@@ -499,13 +476,9 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
                     if (!v.channel_id) nullFields.push('channel_id');
                     if (!v.duration) nullFields.push('duration');
                     if (!v.published_at) nullFields.push('published_at');
-                    console.log(`  - ${v.video_id}: NULL 필드 = [${nullFields.join(', ')}], subscriber_count=${v.subscriber_count}`);
                 });
             } else {
                 // 결과가 없을 때도 디버그 정보 출력
-                console.log(`⚠️ NULL 데이터 비디오를 찾지 못했습니다.`);
-                console.log(`   키워드: "${keyword || '전체'}"`);
-                console.log(`   쿼리 조건: subscriber_count.is.null OR 다른 필드 NULL`);
             }
             
             // 스킵된 비디오 및 -1 값 필터링 (NULL은 유지, -1만 제외)
@@ -518,22 +491,13 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
             });
             
             if (videosToProcess.length === 0) {
-                if (videosWithNulls && videosWithNulls.length > 0) {
-                    console.log(`⏭️ NULL 데이터 비디오 ${videosWithNulls.length}개가 모두 스킵됨`);
-                } else {
-                    console.log('✅ 업데이트할 NULL 데이터 없음 (모든 데이터가 채워짐 또는 모두 스킵됨)');
-                }
                 break;
             }
             
-            console.log(`📋 처리할 NULL 데이터 비디오: ${videosToProcess.length}개`);
-            
             // 2. video_id 수집 (중복 제거)
             const videoIds = [...new Set(videosToProcess.map(v => v.video_id).filter(Boolean))];
-            console.log(`📹 고유 비디오 ID: ${videoIds.length}개`);
             
             if (videoIds.length === 0) {
-                console.log('⚠️ 비디오 ID가 없어서 업데이트 불가');
                 break;
             }
             
@@ -561,7 +525,6 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
                 });
             }
             
-            console.log(`✅ 비디오 정보 조회 완료: ${Object.keys(videoDetailsMap).length}개`);
             
             // 4. 채널 ID 수집 및 채널 정보 조회
             const channelIds = [...new Set(
@@ -592,7 +555,6 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
                         channelsMap[ch.id] = ch;
                     });
                 }
-                console.log(`✅ 채널 정보 조회 완료: ${Object.keys(channelsMap).length}개`);
             }
             
             // 5. Supabase 업데이트
@@ -607,7 +569,6 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
                     attemptMap.set(videoId, (attemptMap.get(videoId) || 0) + 1);
                     if (attemptMap.get(videoId) >= maxAttempts) {
                         skippedVideoIds.add(videoId);
-                        console.log(`⏭️ 비디오 ${videoId} 스킵 (${maxAttempts}회 시도 후에도 API에서 찾을 수 없음)`);
                     }
                     continue;
                 }
@@ -659,7 +620,6 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
                         // 구독자 수가 숨겨진 경우: -1로 마킹하여 더 이상 업데이트 시도하지 않음
                         updateData.subscriber_count = -1;
                         hasUpdate = true;
-                        console.log(`🔒 비디오 ${videoId}: 구독자 수 숨김 처리 (-1로 마킹)`);
                     }
                 }
                 
@@ -675,11 +635,9 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
                         attemptMap.set(videoId, (attemptMap.get(videoId) || 0) + 1);
                         if (attemptMap.get(videoId) >= maxAttempts) {
                             skippedVideoIds.add(videoId);
-                            console.log(`⏭️ 비디오 ${videoId} 스킵 (${maxAttempts}회 시도 후에도 업데이트 실패)`);
                         }
                     } else {
                         updatedCount++;
-                        console.log(`💾 비디오 ${videoId} 업데이트 완료`);
                         // 업데이트 성공 시 시도 횟수 초기화
                         attemptMap.delete(videoId);
                         skippedVideoIds.delete(videoId);
@@ -689,16 +647,11 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
                     attemptMap.set(videoId, (attemptMap.get(videoId) || 0) + 1);
                     if (attemptMap.get(videoId) >= maxAttempts) {
                         skippedVideoIds.add(videoId);
-                        console.log(`⏭️ 비디오 ${videoId} 스킵 (${maxAttempts}회 시도 후에도 NULL 필드 존재)`);
                     }
                 }
             }
             
-            console.log(`✅ 시도 ${attempt} 완료: ${updatedCount}개 업데이트, ${skippedVideoIds.size}개 스킵`);
-            
-            // 마지막 시도가 아니면 다음 시도를 위해 대기
             if (attempt < maxAttempts && skippedVideoIds.size < videosToProcess.length) {
-                console.log(`⏳ 다음 시도를 위해 1초 대기...`);
                 await delay(1000);
             }
         }
@@ -707,7 +660,6 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
         let deletedCount = 0;
         if (skippedVideoIds.size > 0) {
             const skippedArray = Array.from(skippedVideoIds);
-            console.log(`\n🗑️ ${maxAttempts}회 시도 후에도 NULL인 비디오 ${skippedArray.length}개 삭제 중...`);
             
             // 배치로 삭제 (한 번에 너무 많이 삭제하지 않도록)
             const deleteChunks = chunk(skippedArray, 50);
@@ -722,12 +674,10 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
                     console.error(`❌ 비디오 삭제 실패 (chunk ${i + 1}):`, deleteError);
                 } else {
                     deletedCount += chunk.length;
-                    console.log(`✅ 비디오 ${chunk.length}개 삭제 완료 (chunk ${i + 1}/${deleteChunks.length})`);
                 }
             }
         }
         
-        console.log(`\n✅ NULL 데이터 업데이트 완료: 업데이트 ${updatedCount}개, 삭제 ${deletedCount}개`);
         return { updated: updatedCount, deleted: deletedCount, skipped: skippedVideoIds.size };
         
     } catch (error) {
@@ -764,7 +714,6 @@ export async function trackVideoIdsForViewHistory(videos) {
             return;
         }
         
-        console.log(`📌 추출된 videoId 목록 (${ids.length}개):`, ids.slice(0, 5)); // 처음 5개만 로그
 
         // Get current config
         const { data: config } = await supabase
@@ -793,7 +742,6 @@ export async function trackVideoIdsForViewHistory(videos) {
                 onConflict: 'id'
             });
 
-        console.log(`📌 viewTracking에 ${newIds.length}개 videoId 추가`);
     } catch (error) {
         console.warn('⚠️ viewTracking videoId 업데이트 실패:', error);
     }
@@ -811,13 +759,7 @@ const API_THROTTLE_MS = 200; // 요청 사이 200ms 딜레이
 
 export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excludeVideoIds = []) {
     try {
-        console.log('🌐 Google API 호출 중...');
-        
-        // 기존 비디오 ID 제외 Set 생성
         const excludeSet = new Set(excludeVideoIds);
-        if (excludeSet.size > 0) {
-            console.log(`🚫 제외할 비디오 ID: ${excludeSet.size}개`);
-        }
         
         let searchItems = [];
         let nextPageToken = null;
@@ -862,10 +804,7 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
         // 필요한 수만큼만 제한
         searchItems = searchItems.slice(0, MAX_RESULTS);
         
-        console.log(`✅ Google API 정상 작동 (${searchItems.length}개 검색 결과, MAX_RESULTS=${MAX_RESULTS})`);
-
         const videoIds = searchItems.map(item => item.id.videoId).filter(Boolean);
-        console.log(`📋 비디오 ID 추출: ${videoIds.length}개`);
         
         let videoDetails = [];
         const videoIdChunks = chunk(videoIds, 50);
@@ -881,8 +820,6 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
             const d = await r.json();
             videoDetails.push(...(d.items || []));
         }
-        console.log(`📹 비디오 상세 정보: ${videoDetails.length}개`);
-
         const channelIds = [...new Set(videoDetails.map(v => v.snippet.channelId))];
         let channelsMap = {};
         const channelIdChunks = chunk(channelIds, 50);
@@ -898,7 +835,6 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
             const d = await r.json();
             (d.items || []).forEach(ch => { channelsMap[ch.id] = ch; });
         }
-        console.log(`👥 채널 정보: ${Object.keys(channelsMap).length}개`);
 
         return {
             videos: videoDetails,
@@ -1208,7 +1144,6 @@ export async function getRecentVelocityForVideo(videoId) {
         };
         
         // 로그 최소화 (성능 향상)
-        // console.log(`✅ VPH 서버 데이터(Supabase)로 계산 완료 (${videoId})`);
         
         return stats;
     } catch (error) {
@@ -1234,7 +1169,6 @@ export async function invokeEdgeFunction(functionName) {
         const supabaseUrl = 'https://hteazdwvhjaexjxwiwwl.supabase.co';
         const serviceRoleKey = 'sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ'; // Service Role Key
         
-        console.log(`🚀 Edge Function 호출 중: ${functionName}`);
         
         const response = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
             method: 'POST',
@@ -1250,7 +1184,6 @@ export async function invokeEdgeFunction(functionName) {
         }
         
         const data = await response.json();
-        console.log(`✅ Edge Function 호출 성공: ${functionName}`, data);
         return data;
     } catch (error) {
         console.error(`❌ Edge Function 호출 실패: ${functionName}`, error);

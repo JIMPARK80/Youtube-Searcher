@@ -151,7 +151,7 @@ For Cursor AI automation, use this sentence:
 
 > "Cursor, create the hourlyViewTracker scheduled Cloud Function that reads config/viewTracking.videoIds, fetches each video's view count using the secret YOUTUBE_DATA_API_KEY, and stores it in Firestore under viewHistory/{videoId}/history/{timestamp}. Retain only the latest N snapshots based on retentionHours or maxEntries. Also create the updateTrendingVideoIds job that refreshes the top keywords every 72 hours and merges their video IDs into config/viewTracking."
 
-See `DEPLOYMENT_GUIDE.md` for detailed deployment steps.
+See `SUPABASE_SETUP.md` for detailed setup steps.
 
 ## 📋 Requirements
 
@@ -192,10 +192,10 @@ Youtube-Searcher/
 │   └── firebase-config.js # Firebase configuration
 ├── favicon.svg            # Site favicon
 ├── README.md              # This file
+├── SUPABASE_SETUP.md      # Supabase setup guide
 ├── GIT_WORKFLOW.md        # Git workflow guide
 ├── TRANSLATION_GUIDE.md   # Translation guide
 ├── JS_FILE_MAPPING.md     # Code structure documentation
-└── FIREBASE_SECURITY_RULES.txt # Firestore rules
 ```
 
 ## 🐛 Troubleshooting
@@ -274,10 +274,10 @@ See [GIT_WORKFLOW.md](GIT_WORKFLOW.md) for detailed Git workflow guide.
 
 ## 📚 Documentation
 
+- [Supabase Setup Guide](SUPABASE_SETUP.md) - Supabase configuration and setup
 - [Git Workflow Guide](GIT_WORKFLOW.md) - Branch strategy and commit conventions
 - [Translation Guide](TRANSLATION_GUIDE.md) - How to add new languages
 - [JS File Mapping](JS_FILE_MAPPING.md) - Code structure and architecture
-- [Firebase Setup](FIREBASE_SETUP_INSTRUCTIONS.md) - Detailed Firebase configuration
 
 ## 📄 License
 

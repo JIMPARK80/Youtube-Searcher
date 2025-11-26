@@ -143,7 +143,6 @@ async function handleLogin() {
         
         if (error) throw error;
         
-        console.log('✅ 로그인 성공:', data.user.email);
         window.currentUser = data.user;
         
         // Close modal
@@ -206,7 +205,6 @@ async function handleSignup() {
         
         if (signupError) throw signupError;
         
-        console.log('✅ 회원가입 성공:', data.user?.email);
         window.currentUser = data.user;
         
         // Save user to Supabase users table (username is in user_metadata)
@@ -220,7 +218,6 @@ async function handleSignup() {
                     }, {
                         onConflict: 'uid'
                     });
-                console.log('✅ 사용자 정보 저장 완료');
             } catch (userError) {
                 console.warn('⚠️ 사용자 테이블 저장 실패 (무시 가능):', userError);
             }
@@ -259,7 +256,6 @@ export function setupLogout() {
             try {
                 await supabase.auth.signOut();
                 window.currentUser = null;
-                console.log('✅ 로그아웃 성공');
                 alert(t('auth.logoutSuccess'));
             } catch (error) {
                 console.error('❌ 로그아웃 실패:', error);
@@ -375,7 +371,6 @@ export function setupProfileEditModal() {
                     console.warn('⚠️ 사용자 메타데이터 업데이트 실패 (무시 가능):', metadataError);
                 }
                 
-                console.log('✅ 프로필 수정 완료:', newUsername);
                 
                 // Update UI
                 document.getElementById('userName').textContent = newUsername;
@@ -434,14 +429,12 @@ export function setupAuthStateObserver() {
                     if (insertError) {
                         console.warn('⚠️ 사용자 레코드 생성 실패:', insertError);
                     } else {
-                        console.log('✅ 사용자 레코드 자동 생성됨');
                     }
                 }
                 
                 // Username is stored in user_metadata, not in users table
                 const displayName = user.user_metadata?.username || user.email;
                 userName.textContent = displayName;
-                console.log('✅ 사용자 로그인 중:', displayName);
             } catch (error) {
                 console.warn('⚠️ 사용자 정보 로드 실패:', error);
                 userName.textContent = user.user_metadata?.username || user.email;
@@ -458,7 +451,6 @@ export function setupAuthStateObserver() {
             loginBtn.style.display = 'inline-block';
             signupBtn.style.display = 'inline-block';
             userInfo.style.display = 'none';
-            console.log('🚪 사용자 로그아웃됨');
         }
     });
 }
@@ -477,5 +469,4 @@ export function initializeAuth() {
     setupProfileEditModal();
     setupAuthStateObserver();
     
-    console.log('✅ 인증 시스템 초기화 완료');
 }

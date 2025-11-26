@@ -16,7 +16,6 @@ try {
     // Make available globally
     window.supabase = supabase;
     
-    console.log('✅ Supabase initialized successfully');
 } catch (error) {
     console.error('❌ Supabase 초기화 실패:', error);
     // 에러가 발생해도 앱이 계속 작동하도록 빈 객체라도 export
@@ -26,15 +25,4 @@ try {
 }
 
 export { supabase };
-
-// Helper function to sanitize document IDs (for compatibility)
-function toDocId(s) {
-    return (s || '')
-        .toLowerCase()
-        .trim()
-        .replace(/[\/.#\[\]]/g, '_')
-        .slice(0, 500);
-}
-
-window.toDocId = toDocId;
 
