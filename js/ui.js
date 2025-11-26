@@ -422,10 +422,30 @@ export async function search(shouldReload = false) {
                 return;
             }
             
-            // 로컬 캐시가 선택한 수보다 부족하면 기존 ID 제외하고 필요한 수만 추가로 가져오기
+            // 로컬 캐시가 선택한 수보다 부족하면 Supabase에서 먼저 확인
             if (localCount < targetCount) {
+                debugLog(`📈 로컬 캐시 ${localCount}개 < 요청 ${targetCount}개 → Supabase 확인`);
+                
+                // Supabase에서 모든 데이터 가져오기 시도 (만료 여부 무시)
+                const supabaseData = await loadFromSupabase(query, true); // ignoreExpiry = true
+                if (supabaseData && supabaseData.videos && supabaseData.videos.length >= targetCount) {
+                    console.log(`✅ Supabase에서 ${supabaseData.videos.length}개 데이터 발견 → Supabase 데이터 사용`);
+                    restoreFromCache(supabaseData);
+                    
+                    // 선택한 개수로 제한
+                    if (allVideos.length > targetCount) {
+                        allVideos = allVideos.slice(0, targetCount);
+                        allItems = allItems.slice(0, targetCount);
+                    }
+                    
+                    renderPage(1);
+                    lastUIUpdateTime = Date.now();
+                    return;
+                }
+                
+                // Supabase에도 부족하면 기존 ID 제외하고 필요한 수만 추가로 가져오기
                 const neededCount = targetCount - localCount;
-                debugLog(`📈 로컬 캐시 ${localCount}개 < 요청 ${targetCount}개 → 기존 ID 제외하고 ${neededCount}개 추가 필요`);
+                debugLog(`📈 Supabase에도 부족 → 기존 ID 제외하고 ${neededCount}개 추가 필요`);
                 
                 // 기존 캐시의 비디오 ID 추출
                 const existingVideoIds = (cacheData.videos || cacheData.items || []).map(item => 
@@ -737,8 +757,23 @@ async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVid
         });
         
         if (!result) {
-            // API 할당량 초과로 실패한 경우 기존 캐시만 사용
-            debugLog(`⚠️ 추가 비디오 검색 실패 (할당량 초과), 기존 캐시만 사용`);
+            // API 할당량 초과로 실패한 경우 Supabase에서 모든 데이터 가져오기
+            debugLog(`⚠️ 추가 비디오 검색 실패 (할당량 초과) → Supabase에서 모든 데이터 가져오기`);
+            
+            // Supabase에서 모든 데이터 가져오기 (만료 여부 무시)
+            const cacheData = await loadFromSupabase(query, true); // ignoreExpiry = true
+            if (cacheData && cacheData.videos && cacheData.videos.length > 0) {
+                console.log(`✅ Supabase에서 ${cacheData.videos.length}개 데이터 사용 (할당량 초과)`);
+                restoreFromCache(cacheData);
+                
+                // 할당량 초과 시에는 제한 없이 모든 데이터 사용
+                renderPage(1);
+                lastUIUpdateTime = Date.now();
+                return;
+            }
+            
+            // Supabase에도 없으면 기존 캐시만 사용
+            debugLog(`⚠️ Supabase에도 데이터 없음, 기존 캐시만 사용`);
             return;
         }
         
