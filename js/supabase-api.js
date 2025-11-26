@@ -59,14 +59,12 @@ export async function loadFromSupabase(query) {
         console.log(`☁️ Supabase 캐시 발견: ${videos.length}개 항목, ${ageHours.toFixed(1)}시간 전`);
         console.log(`📊 캐시 소스: ${cacheMeta.data_source || 'unknown'}`);
         
-        // 디버그: 구독자 수 데이터 확인 (모든 항목 - 문제 진단용)
-        console.log(`📊 Supabase에서 로드된 비디오 ${videos.length}개`);
-        videos.forEach(v => {
-            const subCount = v.subscriber_count;
-            const subType = typeof subCount;
-            const subParsed = Number(subCount);
-            console.log(`📊 video_id=${v.video_id}: subscriber_count=${subCount} (타입: ${subType}, 파싱: ${subParsed}, isNaN: ${isNaN(subParsed)}, isNull: ${subCount === null}, isUndefined: ${subCount === undefined})`);
-        });
+        // 디버그: 구독자 수 데이터 확인 (첫 3개만 - 성능 최적화)
+        if (videos.length > 0) {
+            videos.slice(0, 3).forEach(v => {
+                console.log(`📊 비디오 ${v.video_id}: subscriber_count=${v.subscriber_count} (타입: ${typeof v.subscriber_count})`);
+            });
+        }
 
         // Convert to Firestore-compatible format
         // 채널 정보는 로컬 캐시에서 가져오거나 items에서 복원
@@ -140,8 +138,10 @@ export async function loadFromSupabase(query) {
                 subscriberCount = localItem?.subs ?? (channel?.statistics?.subscriberCount ? Number(channel.statistics.subscriberCount) : 0);
             }
             
-            // 디버그: 구독자 수 로드 확인 (모든 항목에 대해 로그 - 문제 진단용)
-            console.log(`🔍 구독자 수 로드: video_id=${v.video_id}, subscriber_count=${v.subscriber_count} (타입: ${typeof v.subscriber_count}), 파싱값=${Number(v.subscriber_count)}, 최종값=${subscriberCount}, 로컬캐시=${localItem?.subs}, 채널=${channel?.statistics?.subscriberCount}`);
+            // 디버그: 구독자 수 로드 확인 (첫 번째 항목만)
+            if (v.video_id === videos[0]?.video_id) {
+                console.log(`🔍 구독자 수 로드: video_id=${v.video_id}, subscriber_count=${v.subscriber_count}, 최종값=${subscriberCount}`);
+            }
             
             // 채널 정보에 구독자 수 추가 (로컬 캐시에 없을 때)
             if (channel && !channel.statistics?.subscriberCount && subscriberCount > 0) {
