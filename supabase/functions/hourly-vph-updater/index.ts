@@ -1,7 +1,7 @@
 // ============================================
 // Supabase Edge Function: Hourly VPH Updater
-// 자동으로 저장된 영상의 VPH 데이터를 순차적으로 업데이트
-// 1시간마다 실행 (pg_cron으로 스케줄링)
+// Automatically updates VPH data for saved videos sequentially
+// Runs every hour (scheduled via pg_cron)
 // ============================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -10,21 +10,21 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const YOUTUBE_API_KEY = Deno.env.get("YOUTUBE_DATA_API_KEY");
 const DEFAULT_RETENTION_HOURS = 240; // 10 days
 const DEFAULT_MAX_ENTRIES = 240;
-const BATCH_SIZE = 50; // YouTube API 제한: 50개씩
-const API_THROTTLE_MS = 200; // 요청 사이 200ms 딜레이
+const BATCH_SIZE = 50; // YouTube API limit: 50 items per batch
+const API_THROTTLE_MS = 200; // Delay between requests: 200ms
 
 serve(async (_req) => {
   try {
-    // Service Role Key 가져오기 (환경 변수에서)
+    // Get Service Role Key from environment variables
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     
-    // Supabase URL 가져오기
+    // Get Supabase URL from environment variables
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     
-    // 디버깅 로그 (환경 변수 확인)
+    // Debug log (check environment variables)
     console.log(`🔍 Environment check: SUPABASE_URL=${supabaseUrl ? "set" : "not set"}, SERVICE_ROLE_KEY=${serviceRoleKey ? "set" : "not set"}`);
     
-    // Supabase 클라이언트 생성
+    // Create Supabase client
     const supabase = createClient(
       supabaseUrl,
       serviceRoleKey || (Deno.env.get("SUPABASE_ANON_KEY") ?? "")
@@ -34,7 +34,7 @@ serve(async (_req) => {
       throw new Error("YOUTUBE_DATA_API_KEY environment variable is required");
     }
 
-    // 1. view_tracking_config에서 비디오 ID 목록 가져오기
+    // 1. Get video ID list from view_tracking_config
     const { data: configData, error: configError } = await supabase
       .from("view_tracking_config")
       .select("video_ids, retention_hours, max_entries")
@@ -63,7 +63,7 @@ serve(async (_req) => {
 
     console.log(`📹 Processing ${videoIds.length} videos for VPH update`);
 
-    // 2. 비디오 ID를 50개씩 배치로 나누기
+    // 2. Split video IDs into batches of 50
     const chunks: string[][] = [];
     for (let i = 0; i < videoIds.length; i += BATCH_SIZE) {
       chunks.push(videoIds.slice(i, i + BATCH_SIZE));
@@ -73,17 +73,17 @@ serve(async (_req) => {
     let totalSuccess = 0;
     const fetchedAt = new Date().toISOString();
 
-    // 3. 각 배치에 대해 YouTube API 호출
+    // 3. Call YouTube API for each batch
     for (let i = 0; i < chunks.length; i++) {
       const chunkIds = chunks[i];
 
-      // Throttle: 배치 사이 딜레이
+      // Throttle: delay between batches
       if (i > 0) {
         await new Promise((resolve) => setTimeout(resolve, API_THROTTLE_MS));
       }
 
       try {
-        // YouTube API videos.list 호출 (statistics만 필요)
+        // Call YouTube API videos.list (only statistics needed)
         const url = new URL("https://www.googleapis.com/youtube/v3/videos");
         url.searchParams.set("part", "statistics");
         url.searchParams.set("id", chunkIds.join(","));
@@ -102,11 +102,11 @@ serve(async (_req) => {
 
         const data = await response.json();
 
-        // 4. VPH 데이터 저장
+        // 4. Save VPH data
         for (const item of data.items || []) {
           const viewCount = Number(item.statistics?.viewCount || 0);
           if (viewCount > 0) {
-            // view_history 테이블에 스냅샷 저장
+            // Save snapshot to view_history table
             const { error: insertError } = await supabase
               .from("view_history")
               .insert({
@@ -122,8 +122,8 @@ serve(async (_req) => {
 
             totalSuccess++;
 
-            // 5. 오래된 데이터 정리 (prune)
-            // 시간 기반 정리
+            // 5. Clean up old data (prune)
+            // Time-based cleanup
             const cutoff = new Date(
               Date.now() - retentionHours * 60 * 60 * 1000
             ).toISOString();
@@ -134,7 +134,7 @@ serve(async (_req) => {
               .eq("video_id", item.id)
               .lt("fetched_at", cutoff);
 
-            // 개수 기반 정리
+            // Count-based cleanup
             const { data: allRecords } = await supabase
               .from("view_history")
               .select("id")
@@ -159,7 +159,7 @@ serve(async (_req) => {
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error(`❌ Error processing batch ${i + 1}:`, errorMessage);
         
-        // 할당량 초과 시 조기 종료 (다음 시간에 자동 재시도)
+        // Early exit on quota exceeded (will auto-retry on next schedule)
         if (errorMessage.includes("quota exceeded")) {
           console.log(`⚠️ Quota exceeded at batch ${i + 1}. Will retry automatically on next schedule.`);
           return new Response(
@@ -175,7 +175,7 @@ serve(async (_req) => {
           );
         }
         
-        // 다른 에러는 다음 배치 계속 처리
+        // Continue processing next batch for other errors
         continue;
       }
     }
