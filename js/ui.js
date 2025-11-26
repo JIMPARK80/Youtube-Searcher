@@ -1075,7 +1075,7 @@ function getFilteredDedupedItems() {
     return dedupeItemsByVideo(filteredItems);
 }
 
-export function renderPage(page) {
+export function renderPage(page, skipSort = false) {
     currentPage = page;
     
     // 선택한 최대 결과 수로 제한 (필터링 전에 적용)
@@ -1097,19 +1097,22 @@ export function renderPage(page) {
     const sortSelect = document.getElementById('sortVpdSelect');
     const sortValue = sortSelect?.value || 'desc'; // 기본값: 높은 순
     
-    // 전체 allItems를 먼저 정렬 (모든 페이지의 데이터가 올바르게 정렬되도록)
-    if (sortValue === 'asc') {
-        allItems.sort((a, b) => {
-            const valA = getVelocityValue(a, currentVelocityMetric);
-            const valB = getVelocityValue(b, currentVelocityMetric);
-            return valA - valB;
-        });
-    } else if (sortValue === 'desc') {
-        allItems.sort((a, b) => {
-            const valA = getVelocityValue(a, currentVelocityMetric);
-            const valB = getVelocityValue(b, currentVelocityMetric);
-            return valB - valA; // 높은 순
-        });
+    // skipSort가 true이면 정렬 건너뛰기 (이미 정렬된 경우)
+    if (!skipSort) {
+        // 전체 allItems를 먼저 정렬 (모든 페이지의 데이터가 올바르게 정렬되도록)
+        if (sortValue === 'asc') {
+            allItems.sort((a, b) => {
+                const valA = getVelocityValue(a, currentVelocityMetric);
+                const valB = getVelocityValue(b, currentVelocityMetric);
+                return valA - valB;
+            });
+        } else if (sortValue === 'desc') {
+            allItems.sort((a, b) => {
+                const valA = getVelocityValue(a, currentVelocityMetric);
+                const valB = getVelocityValue(b, currentVelocityMetric);
+                return valB - valA; // 높은 순
+            });
+        }
     }
     
     // 정렬된 allItems를 필터링하고 중복 제거
@@ -1364,6 +1367,9 @@ function processVphQueue() {
         });
 }
 
+// VPH 재정렬 중 플래그 (페이지 리셋 방지)
+let isVphResorting = false;
+
 // 모든 VPH 계산이 완료되었는지 확인하고 재정렬
 function checkAndResortWhenAllCalculated() {
     // 모든 데이터의 VPH 계산이 완료되었는지 확인
@@ -1377,6 +1383,12 @@ function checkAndResortWhenAllCalculated() {
                          (vphCalculationQueue.length === 0 && vphCalculationRunning === 0);
     
     if (allCalculated && vphCalculatedVideos.size > 0) {
+        // 재정렬 플래그 설정 (페이지 리셋 방지)
+        isVphResorting = true;
+        
+        // 현재 페이지 저장 (재정렬 후 복원)
+        const savedPage = currentPage;
+        
         // 현재 정렬 옵션과 표시 단위 가져오기
         const sortSelect = document.getElementById('sortVpdSelect');
         const sortValue = sortSelect?.value || 'desc';
@@ -1394,10 +1406,15 @@ function checkAndResortWhenAllCalculated() {
             }
         });
         
-        // 현재 페이지 유지하며 재렌더링 (페이지 리셋 방지)
-        renderPage(currentPage);
+        // 저장된 페이지로 재렌더링 (페이지 리셋 방지, 정렬은 이미 완료했으므로 skipSort=true)
+        renderPage(savedPage, true);
+        
+        // 재정렬 플래그 해제
+        setTimeout(() => {
+            isVphResorting = false;
+        }, 100);
     } else if (vphCalculationQueue.length > 0 || vphCalculationRunning > 0) {
-        // 아직 계산 중이면 2초 후 다시 확인
+        // 아직 계산 중이면 1초 후 다시 확인
         if (window.vphResortTimer) {
             clearTimeout(window.vphResortTimer);
         }
@@ -2165,10 +2182,20 @@ export function setupEventListeners() {
     
     // Sort controls
     document.getElementById('sortVpdSelect')?.addEventListener('change', () => {
-        renderPage(1);
+        // VPH 재정렬 중이면 페이지 유지, 아니면 1페이지로
+        if (isVphResorting) {
+            renderPage(currentPage);
+        } else {
+            renderPage(1);
+        }
     });
     document.getElementById('velocityMetricSelect')?.addEventListener('change', () => {
-        renderPage(1);
+        // VPH 재정렬 중이면 페이지 유지, 아니면 1페이지로
+        if (isVphResorting) {
+            renderPage(currentPage);
+        } else {
+            renderPage(1);
+        }
     });
     
     // 최대 결과 수 선택 드롭다운 이벤트 리스너
