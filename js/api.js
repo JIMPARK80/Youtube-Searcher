@@ -155,19 +155,28 @@ export function mergeCacheWithMore(cache, newVideos, newChannelsMap) {
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const API_THROTTLE_MS = 200; // 요청 사이 200ms 딜레이
 
-export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30) {
+export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excludeVideoIds = []) {
     try {
         console.log('🌐 Google API 호출 중...');
         
-        // ① Step 1: Search for videos (동적 최대 개수, 첫 페이지만 - API 호출 최소화)
+        // 기존 비디오 ID 제외 Set 생성
+        const excludeSet = new Set(excludeVideoIds);
+        if (excludeSet.size > 0) {
+            console.log(`🚫 제외할 비디오 ID: ${excludeSet.size}개`);
+        }
+        
+        // ① Step 1: Search for videos (동적 최대 개수, 기존 ID 제외)
         let searchItems = [];
         let nextPageToken = null;
         const MAX_RESULTS = maxResults; // 동적으로 설정된 최대 결과 수
+        let attempts = 0;
+        const MAX_ATTEMPTS = 10; // 최대 10페이지까지 시도
         
-        // Only fetch first page (30 results) to minimize API calls
-        for (let page = 0; page < 1 && searchItems.length < MAX_RESULTS; page++) {
+        // 기존 ID를 제외하고 필요한 수만큼 가져올 때까지 반복
+        while (searchItems.length < MAX_RESULTS && attempts < MAX_ATTEMPTS) {
+            attempts++;
             // Throttle: 첫 페이지 이후 딜레이 추가
-            if (page > 0) {
+            if (attempts > 1) {
                 await delay(API_THROTTLE_MS);
             }
             
@@ -182,13 +191,22 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30) {
                 throw new Error("quotaExceeded");
             }
             
-            searchItems.push(...(searchData.items || []));
+            // 기존 ID 제외하고 필터링
+            const newItems = (searchData.items || []).filter(item => {
+                const videoId = item.id?.videoId;
+                return videoId && !excludeSet.has(videoId);
+            });
+            
+            searchItems.push(...newItems);
             nextPageToken = searchData.nextPageToken;
             
-            if (!nextPageToken || searchItems.length >= MAX_RESULTS) break; // 더 이상 결과 없음 또는 30개 도달
+            // 필요한 수만큼 모았거나 더 이상 결과가 없으면 종료
+            if (!nextPageToken || searchItems.length >= MAX_RESULTS) {
+                break;
+            }
         }
         
-        // 30개로 제한
+        // 필요한 수만큼만 제한
         searchItems = searchItems.slice(0, MAX_RESULTS);
         
         console.log(`✅ Google API 정상 작동 (${searchItems.length}개 검색 결과, MAX_RESULTS=${MAX_RESULTS})`);

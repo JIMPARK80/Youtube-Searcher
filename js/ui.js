@@ -387,10 +387,21 @@ export async function search(shouldReload = false) {
             // 선택한 최대 결과 수 확인
             const targetCount = getMaxResults();
             
-            // 로컬 캐시가 선택한 수보다 부족하면 전체 검색
+            // 로컬 캐시가 선택한 수보다 부족하면 기존 ID 제외하고 필요한 수만 추가로 가져오기
             if (localCount < targetCount) {
-                debugLog(`📈 로컬 캐시 ${localCount}개 < 요청 ${targetCount}개 → 전체 검색`);
-                await performFullGoogleSearch(query, apiKeyValue);
+                const neededCount = targetCount - localCount;
+                debugLog(`📈 로컬 캐시 ${localCount}개 < 요청 ${targetCount}개 → 기존 ID 제외하고 ${neededCount}개 추가 필요`);
+                
+                // 기존 캐시의 비디오 ID 추출
+                const existingVideoIds = (cacheData.videos || cacheData.items || []).map(item => 
+                    item.id || item.raw?.id || item.video_id
+                ).filter(Boolean);
+                
+                // 기존 캐시 복원
+                restoreFromCache(cacheData);
+                
+                // 기존 ID 제외하고 필요한 수만 추가로 가져오기
+                await fetchAdditionalVideos(query, apiKeyValue, neededCount, existingVideoIds);
                 return;
             }
             
@@ -510,14 +521,25 @@ export async function search(shouldReload = false) {
                 return;
             }
             
-            restoreFromCache(cacheData);
-            
-            // 캐시가 선택한 수보다 부족하면 72시간 제한 없이 전체 검색
+            // 캐시가 선택한 수보다 부족하면 기존 ID 제외하고 필요한 수만 추가로 가져오기
             if (count < targetCount) {
-                debugLog(`📈 캐시 ${count}개 < 요청 ${targetCount}개 → 72시간 제한 없이 전체 검색`);
-                await performFullGoogleSearch(query, apiKeyValue);
+                const neededCount = targetCount - count;
+                debugLog(`📈 캐시 ${count}개 < 요청 ${targetCount}개 → 기존 ID 제외하고 ${neededCount}개 추가 필요`);
+                
+                // 기존 캐시의 비디오 ID 추출
+                const existingVideoIds = (cacheData.items || cacheData.videos || []).map(item => 
+                    item.id || item.raw?.id || item.video_id
+                ).filter(Boolean);
+                
+                // 기존 캐시 복원
+                restoreFromCache(cacheData);
+                
+                // 기존 ID 제외하고 필요한 수만 추가로 가져오기
+                await fetchAdditionalVideos(query, apiKeyValue, neededCount, existingVideoIds);
                 return;
             }
+            
+            restoreFromCache(cacheData);
             
             // 정확히 일치하거나 더 많으면 선택한 개수로 제한
             if (count >= targetCount) {
@@ -543,11 +565,22 @@ export async function search(shouldReload = false) {
             debugLog('⚠️ Supabase 캐시에 데이터가 0개 → API 재호출');
         }
         
-        // 만료된 캐시 처리: 선택한 수보다 부족하면 72시간 제한 없이 전체 검색
+        // 만료된 캐시 처리: 선택한 수보다 부족하면 기존 ID 제외하고 필요한 수만 추가로 가져오기
         const targetCount = getMaxResults();
         if (count > 0 && count < targetCount) {
-            debugLog(`📈 만료된 캐시 ${count}개 < 요청 ${targetCount}개 → 72시간 제한 없이 전체 검색`);
-            await performFullGoogleSearch(query, apiKeyValue);
+            const neededCount = targetCount - count;
+            debugLog(`📈 만료된 캐시 ${count}개 < 요청 ${targetCount}개 → 기존 ID 제외하고 ${neededCount}개 추가 필요`);
+            
+            // 기존 캐시의 비디오 ID 추출
+            const existingVideoIds = (cacheData.items || cacheData.videos || []).map(item => 
+                item.id || item.raw?.id || item.video_id
+            ).filter(Boolean);
+            
+            // 기존 캐시 복원
+            restoreFromCache(cacheData);
+            
+            // 기존 ID 제외하고 필요한 수만 추가로 가져오기
+            await fetchAdditionalVideos(query, apiKeyValue, neededCount, existingVideoIds);
             return;
         }
         
@@ -614,6 +647,75 @@ export async function search(shouldReload = false) {
 // ============================================
 // 검색 실행 함수들
 // ============================================
+
+// 기존 비디오 ID를 제외하고 필요한 수만 추가로 가져오기
+async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVideoIds) {
+    const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('추가 검색 타임아웃: 60초 내에 응답이 없습니다.')), 60000);
+    });
+    
+    try {
+        debugLog(`🔍 기존 ${excludeVideoIds.length}개 ID 제외하고 ${neededCount}개 추가 검색`);
+        
+        // 기존 ID 제외하고 필요한 수만 검색
+        const result = await Promise.race([
+            searchYouTubeAPI(query, apiKeyValue, neededCount, excludeVideoIds),
+            timeoutPromise
+        ]);
+        
+        if (!result || result.videos.length === 0) {
+            debugLog(`⚠️ 추가 비디오 없음, 기존 캐시만 사용`);
+            return;
+        }
+        
+        debugLog(`✅ 추가 비디오 ${result.videos.length}개 가져옴`);
+        
+        // 기존 비디오와 병합
+        allVideos = [...allVideos, ...result.videos];
+        Object.assign(allChannelMap, result.channels);
+        
+        // Enrich with velocity data
+        const newItems = result.videos.map(video => {
+            const channel = result.channels[video.snippet.channelId];
+            const vpd = viewVelocityPerDay(video);
+            const vclass = classifyVelocity(vpd);
+            const cband = channelSizeBand(channel);
+            const subs = Number(channel?.statistics?.subscriberCount ?? 0);
+            
+            return {
+                raw: video,
+                vpd: vpd,
+                vclass: vclass,
+                cband: cband,
+                subs: subs
+            };
+        });
+        
+        allItems = [...allItems, ...newItems];
+        
+        // 선택한 최대 결과 수로 제한
+        const maxResults = getMaxResults();
+        if (allVideos.length > maxResults) {
+            debugLog(`✂️ 병합 후 ${allVideos.length}개 → ${maxResults}개로 제한`);
+            allVideos = allVideos.slice(0, maxResults);
+            allItems = allItems.slice(0, maxResults);
+        }
+        
+        // Supabase에 저장
+        await saveToSupabase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken);
+        
+        // Track video IDs for view history
+        trackVideoIdsForViewHistory(result.videos)
+            .catch(err => console.warn('⚠️ Video ID 추적 실패:', err));
+        
+        renderPage(1);
+        
+    } catch (error) {
+        console.error('❌ 추가 비디오 검색 오류:', error);
+        // 에러 발생 시 기존 캐시만 사용
+        renderPage(1);
+    }
+}
 
 async function performFullGoogleSearch(query, apiKeyValue) {
     // 타임아웃 설정 (60초)
