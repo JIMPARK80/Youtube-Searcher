@@ -286,20 +286,23 @@ export function setupProfileEditModal() {
         userName.addEventListener('click', async () => {
             if (window.currentUser) {
                 try {
-                    const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', window.currentUser.uid);
-                    const userDocSnap = await window.firebaseGetDoc(userDocRef);
+                    // Load user data from Supabase
+                    const { data: userData, error } = await supabase
+                        .from('users')
+                        .select('*')
+                        .eq('uid', window.currentUser.id)
+                        .maybeSingle();
                     
-                    if (userDocSnap.exists()) {
-                        const userData = userDocSnap.data();
-                        editUsername.value = userData.username || '';
+                    if (userData) {
+                        editUsername.value = userData.username || window.currentUser.user_metadata?.username || '';
                         editEmail.value = window.currentUser.email || '';
                     } else {
-                        editUsername.value = '';
+                        editUsername.value = window.currentUser.user_metadata?.username || '';
                         editEmail.value = window.currentUser.email || '';
                     }
                 } catch (error) {
                     console.warn('⚠️ 사용자 정보 로드 실패:', error);
-                    editUsername.value = '';
+                    editUsername.value = window.currentUser.user_metadata?.username || '';
                     editEmail.value = window.currentUser.email || '';
                 }
                 
@@ -348,11 +351,29 @@ export function setupProfileEditModal() {
             }
             
             try {
-                const userDocRef = window.firebaseDoc(window.firebaseDb, 'users', window.currentUser.uid);
-                await window.firebaseSetDoc(userDocRef, {
-                    username: newUsername,
-                    updatedAt: Date.now()
-                }, { merge: true });
+                // Update user in Supabase
+                const { error: updateError } = await supabase
+                    .from('users')
+                    .upsert({
+                        uid: window.currentUser.id,
+                        username: newUsername,
+                        updated_at: new Date().toISOString()
+                    }, {
+                        onConflict: 'uid'
+                    });
+                
+                if (updateError) throw updateError;
+                
+                // Update user metadata in Supabase Auth
+                const { error: metadataError } = await supabase.auth.updateUser({
+                    data: {
+                        username: newUsername
+                    }
+                });
+                
+                if (metadataError) {
+                    console.warn('⚠️ 사용자 메타데이터 업데이트 실패 (무시 가능):', metadataError);
+                }
                 
                 console.log('✅ 프로필 수정 완료:', newUsername);
                 

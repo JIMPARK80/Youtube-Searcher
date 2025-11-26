@@ -293,6 +293,33 @@ body {
     color: #1a1a1a;
 }
 
+.vph-graph-container {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.vph-graph {
+    width: 100%;
+    height: 60px;
+    display: block;
+}
+
+.vph-line {
+    stroke: #667eea;
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.vph-current-point {
+    fill: #ff4444;
+    stroke: #fff;
+    stroke-width: 1.5;
+    transition: opacity 0.3s ease;
+}
+
 .stat-item {
     display: flex;
     align-items: center;

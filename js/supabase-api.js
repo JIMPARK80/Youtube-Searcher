@@ -923,32 +923,13 @@ export async function getRecentVelocityForVideo(videoId) {
         // ⚠️ 중요: 항상 서버(Supabase) 데이터만 사용
         // 로그 최소화 (성능 향상 - 50개 영상 시 로그 폭주 방지)
         
-        // 최근 2개 스냅샷 가져오기 (VPH 계산용)
-        const { data: recentData, error: recentError } = await supabase
+        // 전체 스냅샷 개수 확인
+        const { count: totalSnapshotCount } = await supabase
             .from('view_history')
-            .select('view_count, fetched_at')
-            .eq('video_id', videoId)
-            .order('fetched_at', { ascending: false })
-            .limit(2);
+            .select('*', { count: 'exact', head: true })
+            .eq('video_id', videoId);
 
-        if (recentError) {
-            console.warn(`⚠️ VPH 데이터 로드 실패 (${videoId}):`, recentError);
-            return null;
-        }
-        
-        if (!recentData || recentData.length < 2) {
-            // 스냅샷 개수에 따른 상세 정보 반환 (UI에서 더 나은 메시지 표시용)
-            return {
-                insufficient: true,
-                snapshotCount: recentData?.length || 0,
-                requiredCount: 2,
-                message: recentData?.length === 1 
-                    ? '데이터 수집 중 (1/2)' 
-                    : '데이터 없음'
-            };
-        }
-
-        // 최초 스냅샷 가져오기 (전체 경과 시간 계산용)
+        // 최초 스냅샷 가져오기
         const { data: firstData, error: firstError } = await supabase
             .from('view_history')
             .select('view_count, fetched_at')
@@ -961,24 +942,244 @@ export async function getRecentVelocityForVideo(videoId) {
             console.warn(`⚠️ 최초 스냅샷 로드 실패 (${videoId}):`, firstError);
         }
 
-        const [latest, previous] = recentData;
-        const growth = latest.view_count - previous.view_count;
-        const diffHours = (new Date(latest.fetched_at).getTime() - new Date(previous.fetched_at).getTime()) / (1000 * 60 * 60);
-        const vph = diffHours > 0 ? growth / diffHours : 0;
+        // 최신 스냅샷 가져오기
+        const { data: latestData, error: latestError } = await supabase
+            .from('view_history')
+            .select('view_count, fetched_at')
+            .eq('video_id', videoId)
+            .order('fetched_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (latestError) {
+            console.warn(`⚠️ 최신 스냅샷 로드 실패 (${videoId}):`, latestError);
+            return null;
+        }
+
+        // 최소 2개 스냅샷 필요
+        if (!firstData || !latestData || totalSnapshotCount < 2) {
+            return {
+                insufficient: true,
+                snapshotCount: totalSnapshotCount || 0,
+                requiredCount: 2,
+                message: totalSnapshotCount === 1 
+                    ? '데이터 수집 중 (1/2)' 
+                    : '데이터 없음'
+            };
+        }
+
+        // 현재 시간 정의
+        const now = new Date();
+
+        // VPH 계산 방식 결정
+        // max_entries 제한으로 최초 스냅샷이 삭제될 수 있으므로
+        // 스냅샷이 많을 때는 최근 일정 기간(최근 24시간 또는 최근 48시간) 사용
+        // 또는 최근 N개 스냅샷의 첫 번째와 마지막 사용
+        let growth, diffHours, vph;
+        let calculationBase = null; // 계산 기준 스냅샷 (가장 오래된 것)
+        
+        if (totalSnapshotCount >= 3) {
+            // 스냅샷이 많을 때는 최근 일정 기간 사용 (더 안정적)
+            // 최근 24시간 또는 최근 48시간의 첫 번째와 마지막 사용
+            const recentHours = totalSnapshotCount >= 48 ? 48 : 24; // 스냅샷이 48개 이상이면 48시간, 아니면 24시간
+            const cutoffTime = new Date(now.getTime() - recentHours * 60 * 60 * 1000);
+            
+            // 최근 기간 내의 모든 스냅샷 가져오기
+            const { data: recentPeriodData } = await supabase
+                .from('view_history')
+                .select('view_count, fetched_at')
+                .eq('video_id', videoId)
+                .gte('fetched_at', cutoffTime.toISOString())
+                .order('fetched_at', { ascending: true });
+            
+            if (recentPeriodData && recentPeriodData.length >= 2) {
+                // 최근 기간 내의 첫 번째와 마지막 사용
+                const periodFirst = recentPeriodData[0];
+                const periodLast = recentPeriodData[recentPeriodData.length - 1];
+                calculationBase = periodFirst;
+                growth = periodLast.view_count - periodFirst.view_count;
+                diffHours = (new Date(periodLast.fetched_at).getTime() - new Date(periodFirst.fetched_at).getTime()) / (1000 * 60 * 60);
+                vph = diffHours > 0 ? growth / diffHours : 0;
+            } else {
+                // 최근 기간 내 데이터가 부족하면 전체 데이터 사용
+                // (firstData는 현재 존재하는 가장 오래된 스냅샷)
+                calculationBase = firstData;
+                growth = latestData.view_count - firstData.view_count;
+                diffHours = (new Date(latestData.fetched_at).getTime() - new Date(firstData.fetched_at).getTime()) / (1000 * 60 * 60);
+                vph = diffHours > 0 ? growth / diffHours : 0;
+            }
+        } else {
+            // 스냅샷이 2개일 때는 최근 2개 사용
+            const { data: recentData } = await supabase
+                .from('view_history')
+                .select('view_count, fetched_at')
+                .eq('video_id', videoId)
+                .order('fetched_at', { ascending: false })
+                .limit(2);
+            
+            if (!recentData || recentData.length < 2) {
+                return {
+                    insufficient: true,
+                    snapshotCount: recentData?.length || 0,
+                    requiredCount: 2,
+                    message: '데이터 없음'
+                };
+            }
+            
+            const [latest, previous] = recentData;
+            calculationBase = previous;
+            growth = latest.view_count - previous.view_count;
+            diffHours = (new Date(latest.fetched_at).getTime() - new Date(previous.fetched_at).getTime()) / (1000 * 60 * 60);
+            vph = diffHours > 0 ? growth / diffHours : 0;
+        }
 
         // 최초 데이터와 현재 시간 정보
-        const first = firstData || null;
-        const now = new Date();
+        const first = firstData; // 현재 존재하는 가장 오래된 스냅샷 (삭제되었을 수 있음)
+        const latest = latestData;
+        // now는 이미 972번 줄에서 선언되었으므로 재사용
         
-        // 전체 경과 시간 계산
-        let totalElapsedHours = 0;
-        let totalElapsedDays = 0;
-        let totalGrowth = 0;
+        // 전체 경과 시간 계산 (first가 존재하는 경우만)
+        const totalElapsedHours = first ? (now.getTime() - new Date(first.fetched_at).getTime()) / (1000 * 60 * 60) : 0;
+        const totalElapsedDays = totalElapsedHours / 24;
+        const totalGrowth = first ? (latest.view_count - first.view_count) : 0;
+
+        // previous 정보 가져오기 (스냅샷이 2개일 때만 필요)
+        let previous = null;
+        if (totalSnapshotCount === 2) {
+            const { data: recentData } = await supabase
+                .from('view_history')
+                .select('view_count, fetched_at')
+                .eq('video_id', videoId)
+                .order('fetched_at', { ascending: false })
+                .limit(2);
+            if (recentData && recentData.length >= 2) {
+                previous = recentData[1];
+            }
+        }
+
+        // VPH 그래프용 데이터: 최근 5개 구간 + 현재값
+        let graphData = null;
+        let trend = null;
         
-        if (first) {
-            totalElapsedHours = (now.getTime() - new Date(first.fetched_at).getTime()) / (1000 * 60 * 60);
-            totalElapsedDays = totalElapsedHours / 24;
-            totalGrowth = latest.view_count - first.view_count;
+        if (totalSnapshotCount >= 2) {
+            // 최근 6개 스냅샷 가져오기 (5개 구간 + 현재값 표시용)
+            const limitCount = Math.min(6, totalSnapshotCount);
+            const { data: recentSnapshots } = await supabase
+                .from('view_history')
+                .select('view_count, fetched_at')
+                .eq('video_id', videoId)
+                .order('fetched_at', { ascending: false })
+                .limit(limitCount);
+
+            if (recentSnapshots && recentSnapshots.length >= 2) {
+                // 시간순으로 정렬 (오래된 것부터)
+                const sortedSnapshots = [...recentSnapshots].reverse();
+                
+                // 각 구간의 VPH 계산 (최근 5개 구간)
+                const vphSegments = [];
+                for (let i = 1; i < sortedSnapshots.length; i++) {
+                    const prev = sortedSnapshots[i - 1];
+                    const curr = sortedSnapshots[i];
+                    const segmentGrowth = curr.view_count - prev.view_count;
+                    const segmentHours = (new Date(curr.fetched_at).getTime() - new Date(prev.fetched_at).getTime()) / (1000 * 60 * 60);
+                    const segmentVph = segmentHours > 0 ? segmentGrowth / segmentHours : 0;
+                    
+                    vphSegments.push({
+                        vph: segmentVph,
+                        from: new Date(prev.fetched_at),
+                        to: new Date(curr.fetched_at),
+                        fromViews: prev.view_count,
+                        toViews: curr.view_count,
+                        index: i - 1 // 구간 인덱스 (0부터 시작)
+                    });
+                }
+                
+                // 최근 5개 구간만 선택 (그래프용)
+                const recent5Segments = vphSegments.slice(-5);
+                
+                // 현재값 (가장 최신 구간의 VPH)
+                const currentVph = recent5Segments.length > 0 
+                    ? recent5Segments[recent5Segments.length - 1].vph 
+                    : vph;
+                
+                // 그래프 데이터 구성
+                graphData = {
+                    segments: recent5Segments.map((seg, idx) => ({
+                        vph: seg.vph,
+                        time: seg.to, // 구간 종료 시간 (표시용)
+                        label: `구간 ${idx + 1}`,
+                        isCurrent: idx === recent5Segments.length - 1 // 마지막 구간이 현재값
+                    })),
+                    currentVph: currentVph,
+                    currentIndex: recent5Segments.length - 1 // 현재 구간 인덱스
+                };
+                
+                // 전체 추세 분석 (기존 로직 유지)
+                if (totalSnapshotCount >= 3) {
+                    // 최근 10개 스냅샷 가져오기 (또는 전체가 10개 미만이면 전체)
+                    const trendLimitCount = Math.min(10, totalSnapshotCount);
+                    const { data: allSnapshots } = await supabase
+                        .from('view_history')
+                        .select('view_count, fetched_at')
+                        .eq('video_id', videoId)
+                        .order('fetched_at', { ascending: true })
+                        .limit(trendLimitCount);
+
+                    if (allSnapshots && allSnapshots.length >= 3) {
+                        // 각 구간의 VPH 계산 (전체 추세 분석용)
+                        const allVphSegments = [];
+                        for (let i = 1; i < allSnapshots.length; i++) {
+                            const prev = allSnapshots[i - 1];
+                            const curr = allSnapshots[i];
+                            const segmentGrowth = curr.view_count - prev.view_count;
+                            const segmentHours = (new Date(curr.fetched_at).getTime() - new Date(prev.fetched_at).getTime()) / (1000 * 60 * 60);
+                            const segmentVph = segmentHours > 0 ? segmentGrowth / segmentHours : 0;
+                            
+                            allVphSegments.push({
+                                vph: segmentVph,
+                                from: new Date(prev.fetched_at),
+                                to: new Date(curr.fetched_at),
+                                fromViews: prev.view_count,
+                                toViews: curr.view_count
+                            });
+                        }
+
+                        // 최고 VPH 구간 찾기 (Peak)
+                        const peakSegment = allVphSegments.reduce((max, seg) => seg.vph > max.vph ? seg : max, allVphSegments[0]);
+                        
+                        // 최근 3개 구간의 평균 VPH (최근 추세)
+                        const recentSegments = allVphSegments.slice(-3);
+                        const recentAvgVph = recentSegments.reduce((sum, seg) => sum + seg.vph, 0) / recentSegments.length;
+                        
+                        // 초반 3개 구간의 평균 VPH (초반 추세)
+                        const earlySegments = allVphSegments.slice(0, 3);
+                        const earlyAvgVph = earlySegments.reduce((sum, seg) => sum + seg.vph, 0) / earlySegments.length;
+                        
+                        // 추세 분석
+                        const isExploding = recentAvgVph > earlyAvgVph * 1.5; // 최근이 초반보다 50% 이상 높으면 폭발
+                        const isDeclining = recentAvgVph < peakSegment.vph * 0.7; // 최근이 peak의 70% 미만이면 하락
+                        const isAtPeak = peakSegment === allVphSegments[allVphSegments.length - 1] || 
+                                        peakSegment === allVphSegments[allVphSegments.length - 2]; // 최근 2개 구간 중 하나가 peak
+                        
+                        trend = {
+                            segments: allVphSegments,
+                            peak: {
+                                vph: peakSegment.vph,
+                                from: peakSegment.from,
+                                to: peakSegment.to,
+                                fromViews: peakSegment.fromViews,
+                                toViews: peakSegment.toViews
+                            },
+                            recentAvgVph,
+                            earlyAvgVph,
+                            isExploding,
+                            isDeclining,
+                            isAtPeak,
+                            trendDirection: isExploding ? 'exploding' : (isDeclining ? 'declining' : 'stable')
+                        };
+                    }
+                }
+            }
         }
 
         const stats = {
@@ -987,12 +1188,16 @@ export async function getRecentVelocityForVideo(videoId) {
             recentGrowth: growth,
             diffHours,
             latest: { viewCount: latest.view_count, fetchedAt: new Date(latest.fetched_at) },
-            previous: { viewCount: previous.view_count, fetchedAt: new Date(previous.fetched_at) },
-            first: first ? { viewCount: first.view_count, fetchedAt: new Date(first.fetched_at) } : null,
+            previous: previous ? { viewCount: previous.view_count, fetchedAt: new Date(previous.fetched_at) } : null,
+            first: { viewCount: first.view_count, fetchedAt: new Date(first.fetched_at) },
             now: now,
             totalElapsedHours,
             totalElapsedDays,
-            totalGrowth
+            totalGrowth,
+            snapshotCount: totalSnapshotCount,
+            calculationMethod: totalSnapshotCount >= 3 ? 'first-to-latest' : 'recent-2',
+            trend, // VPH 추세 분석 결과
+            graphData // VPH 그래프용 데이터 (최근 5개 구간 + 현재값)
         };
         
         // 로그 최소화 (성능 향상)

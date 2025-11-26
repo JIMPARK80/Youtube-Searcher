@@ -1656,6 +1656,12 @@ function createVideoCard(video, item) {
                     <span class="label" data-i18n="velocity.daily">${t('velocity.daily')}</span>
                     <span class="value daily-vpd">${formatNumber(computedVpd || 0)}/day</span>
                 </div>
+                <div class="vph-graph-container" style="display: none;">
+                    <svg class="vph-graph" viewBox="0 0 200 60" preserveAspectRatio="none">
+                        <polyline class="vph-line" fill="none" stroke="#667eea" stroke-width="2"/>
+                        <circle class="vph-current-point" r="3" fill="#ff4444" opacity="0"/>
+                    </svg>
+                </div>
             </div>
         </div>
     `;
@@ -1845,6 +1851,56 @@ function checkAndResortWhenAllCalculated() {
     }
 }
 
+// VPH 그래프 그리기 함수
+function drawVphGraph(panelEl, graphData) {
+    if (!panelEl || !graphData || !graphData.segments || graphData.segments.length < 2) {
+        return;
+    }
+    
+    const graphContainer = panelEl.querySelector('.vph-graph-container');
+    const graphSvg = panelEl.querySelector('.vph-graph');
+    const lineEl = panelEl.querySelector('.vph-line');
+    const currentPointEl = panelEl.querySelector('.vph-current-point');
+    
+    if (!graphContainer || !graphSvg || !lineEl || !currentPointEl) {
+        return;
+    }
+    
+    // 그래프 표시
+    graphContainer.style.display = 'block';
+    
+    const segments = graphData.segments;
+    const vphValues = segments.map(s => s.vph);
+    const maxVph = Math.max(...vphValues, 1); // 최소값 1로 설정 (0으로 나누기 방지)
+    const minVph = Math.min(...vphValues, 0);
+    const range = maxVph - minVph || 1; // 범위가 0이면 1로 설정
+    
+    const width = 200;
+    const height = 60;
+    const padding = 5;
+    const graphWidth = width - padding * 2;
+    const graphHeight = height - padding * 2;
+    
+    // 좌표 계산 함수
+    const getX = (index) => padding + (index / (segments.length - 1)) * graphWidth;
+    const getY = (vph) => padding + graphHeight - ((vph - minVph) / range) * graphHeight;
+    
+    // 선 그리기
+    const points = segments.map((seg, idx) => `${getX(idx)},${getY(seg.vph)}`).join(' ');
+    lineEl.setAttribute('points', points);
+    
+    // 현재 위치 표시
+    const currentIndex = graphData.currentIndex;
+    if (currentIndex >= 0 && currentIndex < segments.length) {
+        const currentVph = segments[currentIndex].vph;
+        currentPointEl.setAttribute('cx', getX(currentIndex));
+        currentPointEl.setAttribute('cy', getY(currentVph));
+        currentPointEl.setAttribute('opacity', '1');
+    } else {
+        currentPointEl.setAttribute('opacity', '0');
+    }
+}
+
 async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', item = null) {
     // panelEl이 없어도 VPH 계산은 수행 (나중에 DOM이 생성될 때 업데이트됨)
     const recentEl = panelEl?.querySelector('.recent-vph');
@@ -1878,6 +1934,12 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
         
         // 스냅샷이 부족한 경우 (2개 미만)
         if (stats.insufficient) {
+            // 그래프 숨기기
+            const graphContainer = panelEl?.querySelector('.vph-graph-container');
+            if (graphContainer) {
+                graphContainer.style.display = 'none';
+            }
+            
             // 재시도 횟수 확인
             const retryCount = vphRetryCount.get(videoId) || 0;
             
@@ -1944,6 +2006,11 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
                 const velocityValue = getVelocityValue(item);
                 badgeEl.textContent = formatVelocityBadge(velocityValue);
             }
+        }
+        
+        // VPH 그래프 그리기
+        if (panelEl && stats.graphData) {
+            drawVphGraph(panelEl, stats.graphData);
         }
         
         // 계산 완료 표시 (재계산 방지)

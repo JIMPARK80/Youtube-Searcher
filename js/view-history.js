@@ -14,11 +14,18 @@ let browserTrackerTimer = null;
 
 async function getViewTrackingConfig() {
     try {
-        const { data, error } = await supabase
+        // 타임아웃 추가 (5초)
+        const configPromise = supabase
             .from('view_tracking_config')
             .select('*')
             .limit(1)
             .single();
+        
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('View tracking config 타임아웃')), 5000)
+        );
+        
+        const { data, error } = await Promise.race([configPromise, timeoutPromise]);
         
         if (error || !data) return null;
         
@@ -190,12 +197,19 @@ async function captureViewsForIds(videoIds = [], apiKey) {
 // 마지막 스냅샷 시간 확인 함수
 async function getLastSnapshotTime() {
     try {
-        const { data, error } = await supabase
+        // 타임아웃 추가 (5초)
+        const queryPromise = supabase
             .from('view_history')
             .select('fetched_at')
             .order('fetched_at', { ascending: false })
             .limit(1)
             .single();
+        
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('getLastSnapshotTime 타임아웃')), 5000)
+        );
+        
+        const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
         
         if (error || !data) {
             return null;
@@ -203,6 +217,7 @@ async function getLastSnapshotTime() {
         
         return new Date(data.fetched_at).getTime();
     } catch (error) {
+        console.warn('⚠️ 마지막 스냅샷 시간 확인 실패:', error);
         return null;
     }
 }
@@ -214,9 +229,15 @@ export async function initializeViewTrackingFallback() {
         return;
     }
     
-    const config = await getViewTrackingConfig();
-    if (!config?.browserFallbackEnabled) {
-        console.log('ℹ️ Browser view tracker disabled');
+    let config;
+    try {
+        config = await getViewTrackingConfig();
+        if (!config?.browserFallbackEnabled) {
+            console.log('ℹ️ Browser view tracker disabled');
+            return;
+        }
+    } catch (error) {
+        console.warn('⚠️ View tracking config 로드 실패:', error);
         return;
     }
     
