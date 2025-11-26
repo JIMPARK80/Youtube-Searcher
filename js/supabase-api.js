@@ -242,13 +242,10 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
             });
         }
 
-        // Delete old videos for this keyword
-        await supabase
-            .from('videos')
-            .delete()
-            .eq('keyword', keyword);
-
-        // Insert new videos (구독자 수 포함)
+        // Note: 기존 비디오 삭제 제거 - upsert로 중복 처리하므로 불필요
+        // Delete old videos for this keyword - REMOVED to prevent data loss on insert failure
+        
+        // Prepare video records (구독자 수 포함)
         const videoRecords = videos.map(v => {
             const channelId = v.snippet?.channelId;
             const channel = channels?.[channelId];
@@ -296,15 +293,32 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
             };
         });
 
-        // Insert in batches of 1000
+        // Upsert in batches of 1000 (handle duplicate video_id gracefully)
         for (let i = 0; i < videoRecords.length; i += 1000) {
             const batch = videoRecords.slice(i, i + 1000);
-            const { error: insertError } = await supabase
+            const { error: upsertError } = await supabase
                 .from('videos')
-                .insert(batch);
+                .upsert(batch, {
+                    onConflict: 'video_id',
+                    ignoreDuplicates: false // Update existing records
+                });
 
-            if (insertError) {
-                console.error(`❌ 비디오 저장 실패 (batch ${i}):`, insertError);
+            if (upsertError) {
+                // 409 Conflict는 중복 키 에러이므로 경고만 출력 (정상 동작)
+                if (upsertError.code === '23505' || upsertError.message?.includes('duplicate key')) {
+                    console.warn(`⚠️ 중복 비디오 감지 (batch ${i / 1000 + 1}), upsert로 재시도...`);
+                    // 개별 upsert로 재시도
+                    let successCount = 0;
+                    for (const record of batch) {
+                        const { error: singleError } = await supabase
+                            .from('videos')
+                            .upsert(record, { onConflict: 'video_id' });
+                        if (!singleError) successCount++;
+                    }
+                    console.log(`✅ Supabase 캐시 저장 완료: ${successCount}/${batch.length}개 (batch ${i / 1000 + 1})`);
+                } else {
+                    console.error(`❌ 비디오 저장 실패 (batch ${i / 1000 + 1}):`, upsertError);
+                }
             } else {
                 console.log(`✅ Supabase 캐시 저장 완료: ${batch.length}개 (batch ${i / 1000 + 1})`);
             }
