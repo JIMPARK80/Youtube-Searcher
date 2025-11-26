@@ -59,18 +59,59 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
         let videosError = null; // 루프 밖에서도 접근 가능하도록 선언
         
         while (hasMore) {
-            const { data: videos, error: error } = await supabase
+            // keyword가 배열 타입인 경우를 대비
+            // 먼저 .eq() 시도, 배열 에러 발생 시 .cs() (contains) 사용
+            let query = supabase
                 .from('videos')
                 .select('video_id, channel_id, title, view_count, like_count, subscriber_count, duration, channel_title, published_at, thumbnail_url')
-                .eq('keyword', keyword)
                 .order('created_at', { ascending: false })
                 .range(from, from + pageSize - 1);
+            
+            // keyword 필터 적용 (문자열 또는 배열 모두 지원)
+            query = query.eq('keyword', keyword);
+            
+            const { data: videos, error: error } = await query;
             
             videosError = error; // 에러 저장
             
             if (videosError) {
-                console.error('❌ Supabase 비디오 로드 오류:', videosError);
-                break;
+                // 배열 타입 에러인 경우 contains로 재시도
+                if (videosError.message?.includes('array literal') || videosError.message?.includes('malformed array')) {
+                    console.warn('⚠️ keyword가 배열 타입으로 감지됨, contains로 재시도');
+                    const retryQuery = supabase
+                        .from('videos')
+                        .select('video_id, channel_id, title, view_count, like_count, subscriber_count, duration, channel_title, published_at, thumbnail_url')
+                        .contains('keyword', [keyword])
+                        .order('created_at', { ascending: false })
+                        .range(from, from + pageSize - 1);
+                    
+                    const { data: retryVideos, error: retryError } = await retryQuery;
+                    
+                    if (retryError) {
+                        console.error('❌ Supabase 비디오 로드 오류 (재시도 실패):', retryError);
+                        videosError = retryError;
+                        break;
+                    }
+                    
+                    // 재시도 성공
+                    videosError = null;
+                    if (!retryVideos || retryVideos.length === 0) {
+                        hasMore = false;
+                        break;
+                    }
+                    
+                    allVideos = allVideos.concat(retryVideos);
+                    
+                    if (retryVideos.length < pageSize) {
+                        hasMore = false;
+                    } else {
+                        from += pageSize;
+                    }
+                    continue;
+                } else {
+                    console.error('❌ Supabase 비디오 로드 오류:', videosError);
+                    break;
+                }
             }
             
             if (!videos || videos.length === 0) {
