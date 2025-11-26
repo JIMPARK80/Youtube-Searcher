@@ -59,10 +59,13 @@ export async function loadFromSupabase(query) {
         console.log(`☁️ Supabase 캐시 발견: ${videos.length}개 항목, ${ageHours.toFixed(1)}시간 전`);
         console.log(`📊 캐시 소스: ${cacheMeta.data_source || 'unknown'}`);
         
-        // 디버그: 구독자 수 데이터 확인 (첫 3개만)
-        const sampleVideos = videos.slice(0, 3);
-        sampleVideos.forEach(v => {
-            console.log(`📊 비디오 ${v.video_id}: subscriber_count=${v.subscriber_count} (타입: ${typeof v.subscriber_count})`);
+        // 디버그: 구독자 수 데이터 확인 (모든 항목 - 문제 진단용)
+        console.log(`📊 Supabase에서 로드된 비디오 ${videos.length}개`);
+        videos.forEach(v => {
+            const subCount = v.subscriber_count;
+            const subType = typeof subCount;
+            const subParsed = Number(subCount);
+            console.log(`📊 video_id=${v.video_id}: subscriber_count=${subCount} (타입: ${subType}, 파싱: ${subParsed}, isNaN: ${isNaN(subParsed)}, isNull: ${subCount === null}, isUndefined: ${subCount === undefined})`);
         });
 
         // Convert to Firestore-compatible format
