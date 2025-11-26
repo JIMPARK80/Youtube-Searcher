@@ -1209,6 +1209,19 @@ function createVideoCard(video, item) {
     item.vpd = computedVpd;
     const velocityValue = getVelocityValue(item);
     const videoId = video.id || video?.raw?.id || item?.raw?.id;
+    
+    // 구독자 수: item.subs > 채널 정보 순으로 확인
+    const channelId = video.snippet?.channelId;
+    const channel = allChannelMap?.[channelId];
+    let subscriberCount = item.subs;
+    
+    // item.subs가 없거나 0이면 채널 정보에서 확인
+    if (!subscriberCount || subscriberCount === 0) {
+        subscriberCount = channel?.statistics?.subscriberCount 
+            ? Number(channel.statistics.subscriberCount) 
+            : (item.subs || 0);
+    }
+    
     card.innerHTML = `
         <div class="thumbnail-container">
             <img src="${thumbnail}" alt="${video.snippet.title}" loading="lazy" data-fallback-index="0" data-fallbacks="${JSON.stringify(fallbackThumbnails)}">
@@ -1223,7 +1236,7 @@ function createVideoCard(video, item) {
             <div class="stats">
                 <span class="stat-item">👁 ${formatNumber(video.statistics?.viewCount || 0)}</span>
                 <span class="stat-item">👍 ${formatNumber(video.statistics?.likeCount || 0)}</span>
-                <span class="stat-item">👥 ${formatNumber(item.subs || 0)}</span>
+                <span class="stat-item">👥 ${formatNumber(subscriberCount || 0)}</span>
                 <span class="stat-item">📅 ${daysText}</span>
             </div>
             <div class="velocity-panel">
