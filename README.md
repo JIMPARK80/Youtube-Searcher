@@ -151,7 +151,7 @@ For Cursor AI automation, use this sentence:
 
 > "Cursor, create the hourlyViewTracker scheduled Cloud Function that reads config/viewTracking.videoIds, fetches each video's view count using the secret YOUTUBE_DATA_API_KEY, and stores it in Firestore under viewHistory/{videoId}/history/{timestamp}. Retain only the latest N snapshots based on retentionHours or maxEntries. Also create the updateTrendingVideoIds job that refreshes the top keywords every 72 hours and merges their video IDs into config/viewTracking."
 
-See `SUPABASE_SETUP.md` for detailed setup steps.
+See [README-EDGE-FUNCTIONS.md](README-EDGE-FUNCTIONS.md) for detailed setup steps.
 
 ## 📋 Requirements
 
@@ -192,7 +192,8 @@ Youtube-Searcher/
 │   └── firebase-config.js # Firebase configuration
 ├── favicon.svg            # Site favicon
 ├── README.md              # This file
-├── SUPABASE_SETUP.md      # Supabase setup guide
+├── README-EDGE-FUNCTIONS.md  # Edge Functions & Supabase setup guide
+├── API_DOCUMENTATION.md      # API usage & quota documentation
 ├── GIT_WORKFLOW.md        # Git workflow guide
 ├── TRANSLATION_GUIDE.md   # Translation guide
 ├── JS_FILE_MAPPING.md     # Code structure documentation
@@ -274,7 +275,8 @@ See [GIT_WORKFLOW.md](GIT_WORKFLOW.md) for detailed Git workflow guide.
 
 ## 📚 Documentation
 
-- [Supabase Setup Guide](SUPABASE_SETUP.md) - Supabase configuration and setup
+- [Edge Functions & Supabase Setup Guide](README-EDGE-FUNCTIONS.md) - Edge Functions management and Supabase configuration
+- [API Documentation](API_DOCUMENTATION.md) - YouTube API usage, quota management, and optimization
 - [Git Workflow Guide](GIT_WORKFLOW.md) - Branch strategy and commit conventions
 - [Translation Guide](TRANSLATION_GUIDE.md) - How to add new languages
 - [JS File Mapping](JS_FILE_MAPPING.md) - Code structure and architecture
