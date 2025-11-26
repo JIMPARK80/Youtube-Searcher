@@ -297,6 +297,20 @@ body {
     margin-top: 8px;
     padding-top: 8px;
     border-top: 1px solid rgba(102, 126, 234, 0.2);
+    position: relative;
+}
+
+.vph-graph-label {
+    position: absolute;
+    top: 8px;
+    left: 0;
+    font-size: 0.7em;
+    font-weight: 600;
+    color: #667eea;
+    z-index: 1;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 2px 4px;
+    border-radius: 3px;
 }
 
 .vph-graph {
