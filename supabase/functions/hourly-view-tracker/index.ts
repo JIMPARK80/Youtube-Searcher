@@ -35,7 +35,7 @@ serve(async (req) => {
     const maxEntries = config.max_entries || 240;
 
     // Process in batches of 50
-    const chunks = [];
+    const chunks: string[][] = [];
     for (let i = 0; i < videoIds.length; i += MAX_BATCH) {
       chunks.push(videoIds.slice(i, i + MAX_BATCH));
     }
