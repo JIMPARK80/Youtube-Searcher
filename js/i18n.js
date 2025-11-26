@@ -69,7 +69,7 @@ const translations = {
         'sort.velocityMetric.day': '일간(VPD)',
         'sort.velocityMetric.hour': '시간당(VPH)',
         'velocity.recent': '최근 VPH',
-        'velocity.daily': '일간 속도',
+        'velocity.daily': '평균일일속도',
         'velocity.unavailable': '데이터 없음',
         'velocity.loading': '계산 중...',
         
@@ -190,7 +190,7 @@ const translations = {
         'sort.velocityMetric.day': 'Per Day (VPD)',
         'sort.velocityMetric.hour': 'Per Hour (VPH)',
         'velocity.recent': 'Recent VPH',
-        'velocity.daily': 'Daily Velocity',
+        'velocity.daily': 'Average Daily Velocity',
         'velocity.unavailable': 'Not available',
         'velocity.loading': 'Calculating...',
         

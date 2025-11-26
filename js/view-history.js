@@ -4,6 +4,7 @@
 // ============================================
 
 import { supabase } from './supabase-config.js';
+import { formatDateTorontoSimple } from './ui.js';
 
 const DEFAULT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_INTERVAL_MINUTES = 60; // 1시간마다
@@ -305,8 +306,9 @@ export async function initializeViewTrackingFallback() {
             const remainingSeconds = Math.floor(remaining / 1000);
             const minutes = Math.floor(remainingSeconds / 60);
             const seconds = remainingSeconds % 60;
-            const lastSnapshotDate = new Date(lastSnapshotTime).toLocaleString();
-            console.log(`📊 마지막 VPH 스냅샷: ${lastSnapshotDate}`);
+            // 토론토 시간으로 변환
+            const lastSnapshotDate = formatDateTorontoSimple(new Date(lastSnapshotTime));
+            console.log(`📊 마지막 VPH 스냅샷 (토론토 시간): ${lastSnapshotDate}`);
             console.log(`⏰ 다음 VPH 스냅샷까지: ${minutes}분 ${seconds}초 남음`);
             
             // 남은 시간만큼 대기 후 첫 실행

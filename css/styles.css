@@ -280,17 +280,44 @@ body {
     margin-bottom: 0;
 }
 
-.velocity-row .label {
+.velocity-row-horizontal {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    gap: 8px;
+    color: #222;
+}
+
+.velocity-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    gap: 2px;
+}
+
+.velocity-separator {
+    color: #999;
+    font-weight: 300;
+    padding: 0 4px;
+}
+
+.velocity-row .label,
+.velocity-item .label {
     font-weight: 600;
     color: #555555;
+    font-size: 0.85em;
 }
-.velocity-row.recent .label {
+
+.velocity-item:first-child .label {
     color: #0044ff;
 }
 
-.velocity-row .value {
+.velocity-row .value,
+.velocity-item .value {
     font-weight: 700;
     color: #1a1a1a;
+    font-size: 0.95em;
 }
 
 .vph-graph-container {
