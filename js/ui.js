@@ -28,16 +28,22 @@ export const pageSize = 8;
 export let currentPage = 1;
 export let allChannelMap = {};
 export let currentSearchQuery = '';
+export let currentTotalCount = 0; // 서버의 total_count 추적
 
-// 최대 결과 수 설정 (기본값 30)
+// 최대 결과 수 설정 (기본값 10, 최대값 100)
 const MAX_RESULTS_STORAGE_KEY = 'youtube_searcher_max_results';
+const MAX_RESULTS_LIMIT = 100; // 최대 100개로 제한
+const LOAD_MORE_INCREMENT = 20; // 추가 로드 시 20개씩
+
 export function getMaxResults() {
     const stored = localStorage.getItem(MAX_RESULTS_STORAGE_KEY);
     return stored ? parseInt(stored, 10) : 10;
 }
 
 export function setMaxResults(count) {
-    localStorage.setItem(MAX_RESULTS_STORAGE_KEY, count.toString());
+    // 최대 100개로 제한
+    const limitedCount = Math.min(count, MAX_RESULTS_LIMIT);
+    localStorage.setItem(MAX_RESULTS_STORAGE_KEY, limitedCount.toString());
 }
 
 // 백그라운드 업데이트 중복 실행 방지
@@ -392,17 +398,20 @@ export async function search(shouldReload = false) {
             // total_count 확인 (Supabase의 total_count 우선 사용)
             const meta = cacheData.meta || {};
             const totalCount = meta.total || localCount;
+            currentTotalCount = totalCount; // total_count 추적
             
             // 캐시에 이미 충분한 데이터가 있으면 API 호출 안 함 (maxResults 변경해도)
             if (totalCount >= targetCount) {
                 debugLog(`✅ 로컬 캐시에 충분한 데이터 있음 (${totalCount}개 >= ${targetCount}개) → API 호출 생략`);
                 restoreFromCache(cacheData);
-                // 선택한 개수로 제한
-                if (allVideos.length > targetCount) {
-                    allVideos = allVideos.slice(0, targetCount);
-                    allItems = allItems.slice(0, targetCount);
+                // 선택한 개수로 제한 (최대 100개)
+                const displayCount = Math.min(targetCount, MAX_RESULTS_LIMIT);
+                if (allVideos.length > displayCount) {
+                    allVideos = allVideos.slice(0, displayCount);
+                    allItems = allItems.slice(0, displayCount);
                 }
                 renderPage(1);
+                updateLoadMoreButton(); // 버튼 상태 업데이트
                 lastUIUpdateTime = Date.now();
                 const nextToken = cacheData.meta?.nextPageToken || null;
                 saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'local-cache', nextToken)
@@ -434,13 +443,20 @@ export async function search(shouldReload = false) {
                     console.log(`✅ Supabase에서 ${supabaseData.videos.length}개 데이터 발견 → Supabase 데이터 사용`);
                     restoreFromCache(supabaseData);
                     
-                    // 선택한 개수로 제한
-                    if (allVideos.length > targetCount) {
-                        allVideos = allVideos.slice(0, targetCount);
-                        allItems = allItems.slice(0, targetCount);
+                    // total_count 업데이트
+                    if (supabaseData.meta?.total) {
+                        currentTotalCount = supabaseData.meta.total;
+                    }
+                    
+                    // 선택한 개수로 제한 (최대 100개)
+                    const displayCount = Math.min(targetCount, MAX_RESULTS_LIMIT);
+                    if (allVideos.length > displayCount) {
+                        allVideos = allVideos.slice(0, displayCount);
+                        allItems = allItems.slice(0, displayCount);
                     }
                     
                     renderPage(1);
+                    updateLoadMoreButton(); // 버튼 상태 업데이트
                     lastUIUpdateTime = Date.now();
                     return;
                 }
@@ -810,27 +826,111 @@ async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVid
         
         allItems = [...allItems, ...newItems];
         
-        // 선택한 최대 결과 수로 제한
-        const maxResults = getMaxResults();
-        if (allVideos.length > maxResults) {
-            debugLog(`✂️ 병합 후 ${allVideos.length}개 → ${maxResults}개로 제한`);
-            allVideos = allVideos.slice(0, maxResults);
-            allItems = allItems.slice(0, maxResults);
+        // 최대 100개로 제한 (Load More 기능을 위해)
+        if (allVideos.length > MAX_RESULTS_LIMIT) {
+            debugLog(`✂️ 병합 후 ${allVideos.length}개 → ${MAX_RESULTS_LIMIT}개로 제한`);
+            allVideos = allVideos.slice(0, MAX_RESULTS_LIMIT);
+            allItems = allItems.slice(0, MAX_RESULTS_LIMIT);
         }
         
-        // Supabase에 저장
+        // Supabase에 저장 (전체 개수 저장)
         await saveToSupabase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken);
+        
+        // total_count 업데이트
+        if (result.videos.length > 0) {
+            // Supabase에서 최신 total_count 확인
+            try {
+                const supabaseData = await loadFromSupabase(query, true);
+                if (supabaseData?.meta?.total) {
+                    currentTotalCount = supabaseData.meta.total;
+                } else {
+                    currentTotalCount = allVideos.length;
+                }
+            } catch (err) {
+                currentTotalCount = allVideos.length;
+            }
+        }
         
         // Track video IDs for view history
         trackVideoIdsForViewHistory(result.videos)
             .catch(err => console.warn('⚠️ Video ID 추적 실패:', err));
         
         renderPage(1);
+        updateLoadMoreButton(); // 버튼 상태 업데이트
         
     } catch (error) {
         console.error('❌ 추가 비디오 검색 오류:', error);
         // 에러 발생 시 기존 캐시만 사용
         renderPage(1);
+        updateLoadMoreButton(); // 버튼 상태 업데이트
+    }
+}
+
+// Load More 버튼 클릭 시 추가 비디오 로드
+async function loadMoreVideos(query) {
+    const apiKeyValue = await getApiKeys();
+    if (!apiKeyValue) {
+        console.error('❌ API 키가 없습니다');
+        return;
+    }
+    
+    const currentCount = allVideos.length;
+    const targetCount = Math.min(currentCount + LOAD_MORE_INCREMENT, MAX_RESULTS_LIMIT);
+    const neededCount = targetCount - currentCount;
+    
+    // total_count 확인
+    if (currentTotalCount > 0 && currentCount >= currentTotalCount) {
+        console.log(`ℹ️ 이미 모든 데이터를 표시 중 (${currentCount}/${currentTotalCount})`);
+        updateLoadMoreButton();
+        return;
+    }
+    
+    // 기존 비디오 ID 추출
+    const existingVideoIds = allVideos.map(v => v.id).filter(Boolean);
+    
+    console.log(`📥 추가 로드: ${currentCount}개 → ${targetCount}개 (${neededCount}개 추가)`);
+    
+    // 추가 비디오 가져오기
+    await fetchAdditionalVideos(query, apiKeyValue, neededCount, existingVideoIds);
+    
+    // total_count 업데이트 (Supabase에서 확인)
+    try {
+        const supabaseData = await loadFromSupabase(query, true);
+        if (supabaseData?.meta?.total) {
+            currentTotalCount = supabaseData.meta.total;
+        }
+    } catch (err) {
+        console.warn('⚠️ total_count 업데이트 실패:', err);
+    }
+}
+
+// Load More 버튼 상태 업데이트
+function updateLoadMoreButton() {
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    if (!loadMoreBtn) return;
+    
+    const currentCount = allVideos.length;
+    const maxResults = getMaxResults();
+    
+    // 100개 미만이고, total_count가 더 많거나 알 수 없는 경우에만 표시
+    const shouldShow = currentCount < MAX_RESULTS_LIMIT && 
+                      (currentTotalCount === 0 || currentCount < currentTotalCount) &&
+                      currentCount >= maxResults; // 최소 maxResults 이상일 때만 표시
+    
+    if (shouldShow) {
+        loadMoreBtn.style.display = 'inline-block';
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = `+${LOAD_MORE_INCREMENT}개 더`;
+        
+        // 남은 개수 표시
+        if (currentTotalCount > 0) {
+            const remaining = Math.min(currentTotalCount - currentCount, LOAD_MORE_INCREMENT);
+            if (remaining < LOAD_MORE_INCREMENT) {
+                loadMoreBtn.textContent = `+${remaining}개 더`;
+            }
+        }
+    } else {
+        loadMoreBtn.style.display = 'none';
     }
 }
 
@@ -1230,13 +1330,16 @@ export function renderPage(page, skipSort = false) {
     
     // 할당량 초과 시에는 제한을 적용하지 않음
     if (!isQuotaExceeded) {
-        // 선택한 최대 결과 수로 제한 (필터링 전에 적용)
-        const maxResults = getMaxResults();
+        // 선택한 최대 결과 수로 제한 (필터링 전에 적용, 최대 100개)
+        const maxResults = Math.min(getMaxResults(), MAX_RESULTS_LIMIT);
         if (allVideos.length > maxResults) {
             allVideos = allVideos.slice(0, maxResults);
             allItems = allItems.slice(0, maxResults);
         }
     }
+    
+    // Load More 버튼 상태 업데이트
+    updateLoadMoreButton();
     
     // VPH 계산 큐 초기화 (이전 페이지의 큐 정리)
     // 주의: 계산된 비디오 추적은 유지 (같은 검색 결과에서 페이지 이동 시 재계산 방지)
@@ -2383,6 +2486,31 @@ export function setupEventListeners() {
             const currentQuery = document.getElementById('searchInput')?.value?.trim();
             if (currentQuery) {
                 search(true); // 강제 재검색
+            }
+        });
+    }
+    
+    // Load More 버튼 이벤트 리스너
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    if (loadMoreBtn) {
+        loadMoreBtn.addEventListener('click', async () => {
+            const currentQuery = document.getElementById('searchInput')?.value?.trim();
+            if (!currentQuery) {
+                console.warn('⚠️ 검색어가 없습니다');
+                return;
+            }
+            
+            // 버튼 비활성화 (중복 클릭 방지)
+            loadMoreBtn.disabled = true;
+            loadMoreBtn.textContent = '로딩 중...';
+            
+            try {
+                await loadMoreVideos(currentQuery);
+            } catch (error) {
+                console.error('❌ 추가 로드 실패:', error);
+            } finally {
+                // 버튼 상태 복원
+                updateLoadMoreButton();
             }
         });
     }

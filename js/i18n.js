@@ -85,6 +85,7 @@ const translations = {
         'filter.subCount': '구독자 필터',
         'filter.subCount.rookie': '신입',
         'filter.subCount.beginner': '초보',
+        'filter.subCount.intermediate': '중급',
         'filter.subCount.silver': '실버버튼',
         'filter.subCount.gold': '골드버튼',
         'filter.subCount.diamond': '다이아버튼',
