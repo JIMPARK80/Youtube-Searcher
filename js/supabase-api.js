@@ -119,8 +119,16 @@ export async function loadFromSupabase(query) {
             let subscriberCount = 0;
             
             // Supabase에서 구독자 수 확인 (null, undefined가 아니고 -1이 아닌 경우)
+            // 0도 유효한 값이므로 명시적으로 체크
             if (v.subscriber_count !== null && v.subscriber_count !== undefined && v.subscriber_count !== -1) {
-                subscriberCount = Number(v.subscriber_count);
+                const parsedCount = Number(v.subscriber_count);
+                // NaN이 아니고 유효한 숫자인 경우만 사용
+                if (!isNaN(parsedCount) && isFinite(parsedCount)) {
+                    subscriberCount = parsedCount;
+                } else {
+                    // 파싱 실패 시 로컬 캐시나 채널 정보 사용
+                    subscriberCount = localItem?.subs ?? (channel?.statistics?.subscriberCount ? Number(channel.statistics.subscriberCount) : 0);
+                }
             } else if (v.subscriber_count === -1) {
                 // 숨겨진 경우
                 subscriberCount = 0;
@@ -129,10 +137,8 @@ export async function loadFromSupabase(query) {
                 subscriberCount = localItem?.subs ?? (channel?.statistics?.subscriberCount ? Number(channel.statistics.subscriberCount) : 0);
             }
             
-            // 디버그: 구독자 수 로드 확인 (첫 번째 항목만)
-            if (v.video_id === videos[0]?.video_id) {
-                console.log(`🔍 구독자 수 로드: video_id=${v.video_id}, subscriber_count=${v.subscriber_count}, 최종값=${subscriberCount}`);
-            }
+            // 디버그: 구독자 수 로드 확인 (모든 항목에 대해 로그 - 문제 진단용)
+            console.log(`🔍 구독자 수 로드: video_id=${v.video_id}, subscriber_count=${v.subscriber_count} (타입: ${typeof v.subscriber_count}), 파싱값=${Number(v.subscriber_count)}, 최종값=${subscriberCount}, 로컬캐시=${localItem?.subs}, 채널=${channel?.statistics?.subscriberCount}`);
             
             // 채널 정보에 구독자 수 추가 (로컬 캐시에 없을 때)
             if (channel && !channel.statistics?.subscriberCount && subscriberCount > 0) {
