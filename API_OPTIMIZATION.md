@@ -268,54 +268,18 @@ The system uses Supabase Edge Functions for view history tracking:
 
 시스템은 조회수 추적을 위해 Supabase Edge Function을 사용합니다:
 
-```typescript
-// supabase/functions/hourly-view-tracker/index.ts
-// Runs every 60 minutes via pg_cron
-serve(async (req) => {
-  // Batch process video IDs (50 at a time)
-  // Update view_history table
-  // Auto-cleanup old records
-});
-```
+### Note: Server-side Automation Removed
 
-### Benefits of Edge Function Approach
+Server-side automatic updates (hourly-view-tracker, daily-video-accumulator) have been removed.
+VPH data collection is now handled client-side using YouTube API.
 
-- ✅ **API key protection**: Keys stored server-side (environment variables)
-- ✅ **Batch processing**: Processes multiple videos efficiently
-- ✅ **Reduced quota usage**: Optimized API calls
-- ✅ **Scheduled execution**: Automatic updates without user interaction
+### Current Approach
 
-### Future Enhancement
-
-For search operations, an Edge Function could:
-- Batch multiple search requests
-- Update cache centrally
-- Return results to clients
-- Further reduce API quota usage
+- ✅ **Client-side VPH collection**: Using YouTube API directly
+- ✅ **Manual updates**: User-triggered updates when needed
+- ✅ **API usage**: YouTube API for all data (search, channel, and VPH)
 
 ---
-
-## 7. Scheduled Refresh (Cron Jobs)
-
-### View History Auto-Update
-
-A scheduled function refreshes view counts every 60 minutes:
-
-예약된 함수가 60분마다 조회수를 갱신합니다:
-
-```sql
--- pg_cron schedule
-SELECT cron.schedule(
-  'hourly-view-tracker',
-  '0 * * * *',  -- Every hour
-  $$
-  SELECT net.http_post(
-    url := 'https://your-project.supabase.co/functions/v1/hourly-view-tracker',
-    headers := '{"Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb
-  );
-  $$
-);
-```
 
 ### Benefits
 

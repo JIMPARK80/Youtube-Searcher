@@ -3,13 +3,29 @@
 // Runs every 72 hours via pg_cron
 // ============================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { serve } from "std/http/server";
+import { createClient } from "supabase";
+
+// Type definitions
+interface YouTubeSearchItem {
+  id: {
+    videoId: string;
+  };
+}
+
+interface YouTubeSearchResponse {
+  items?: YouTubeSearchItem[];
+}
+
+interface ViewTrackingConfig {
+  id?: string;
+  video_ids?: string[];
+}
 
 const YOUTUBE_API_KEY = Deno.env.get("YOUTUBE_DATA_API_KEY");
 const TRENDING_KEYWORD = "인생사연"; // 또는 다른 트렌딩 키워드
 
-serve(async (req) => {
+serve(async (_req) => {
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -29,32 +45,50 @@ serve(async (req) => {
       throw new Error(`YouTube API error: ${await response.text()}`);
     }
 
-    const data = await response.json();
-    const trendingIds = (data.items || []).map((item: any) => item.id.videoId);
+    const data = await response.json() as YouTubeSearchResponse;
+    const trendingIds = (data.items || []).map((item: YouTubeSearchItem) => item.id.videoId).filter(Boolean);
 
-    // Get current config
-    const { data: config } = await supabase
+    if (trendingIds.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "No trending videos found" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Get current config (first row only, may not exist)
+    const { data: configData } = await supabase
       .from("view_tracking_config")
-      .select("video_ids")
+      .select("id, video_ids")
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    const existingIds = config?.video_ids || [];
+    // Handle case where config doesn't exist yet
+    const existingIds = (configData as ViewTrackingConfig | null)?.video_ids || [];
     const merged = Array.from(new Set([...existingIds, ...trendingIds]));
 
-    // Update config
+    // Update or insert config
+    const updateData: {
+      id?: string;
+      video_ids: string[];
+      trending_updated_at: string;
+    } = {
+      video_ids: merged,
+      trending_updated_at: new Date().toISOString(),
+    };
+
+    // If config exists, include id for update
+    if (configData?.id) {
+      updateData.id = configData.id;
+    }
+
     const { error: updateError } = await supabase
       .from("view_tracking_config")
-      .upsert({
-        id: config?.id || null,
-        video_ids: merged,
-        trending_updated_at: new Date().toISOString(),
-      }, {
+      .upsert(updateData, {
         onConflict: "id",
       });
 
     if (updateError) {
-      throw updateError;
+      throw new Error(`Failed to update config: ${updateError.message}`);
     }
 
     return new Response(
@@ -67,8 +101,13 @@ serve(async (req) => {
       { headers: { "Content-Type": "application/json" } }
     );
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Update trending videos error:", errorMessage);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: "Internal server error",
+        details: errorMessage 
+      }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }

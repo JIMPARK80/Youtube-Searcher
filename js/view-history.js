@@ -1,13 +1,17 @@
 // ============================================
 // VIEW-HISTORY.JS - View snapshot helpers
 // Handles Supabase view_history table + VPH calculations
+// 
+// 중요: 
+// - 키워드 검색, 영상 정보, 채널 정보는 YouTube API만 사용 (js/api.js)
+// - VPH 데이터 수집도 YouTube API 사용
 // ============================================
 
 import { supabase } from './supabase-config.js';
 import { formatDateTorontoSimple } from './ui.js';
 
 const DEFAULT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const DEFAULT_INTERVAL_MINUTES = 60; // 1시간마다
+const DEFAULT_INTERVAL_MINUTES = 60; // 60분마다
 const DEFAULT_RETENTION_HOURS = 240; // 10 days
 
 const velocityCache = new Map();
@@ -167,80 +171,68 @@ async function captureViewsForIds(videoIds = [], apiKey) {
     const retentionHours = config?.retentionHours || DEFAULT_RETENTION_HOURS;
     const maxEntries = config?.maxEntries || 240;
     
+    // YouTube API를 사용하여 조회수 가져오기
+    // 50개씩 배치 처리 (YouTube API 제한)
     const chunks = [];
     for (let i = 0; i < videoIds.length; i += 50) {
         chunks.push(videoIds.slice(i, i + 50));
     }
     
-    let quotaExceeded = false;
+    console.log(`🔄 YouTube API로 VPH 데이터 가져오기 시작... (${videoIds.length}개 비디오)`);
     
-    for (const chunkIds of chunks) {
-        const url = new URL('https://www.googleapis.com/youtube/v3/videos');
-        url.searchParams.set('part', 'statistics');
-        url.searchParams.set('id', chunkIds.join(','));
-        url.searchParams.set('key', apiKey);
+    const API_THROTTLE_MS = 200; // 요청 사이 200ms 딜레이
+    
+    // 각 청크에 대해 YouTube API 호출
+    for (let i = 0; i < chunks.length; i++) {
+        const chunkIds = chunks[i];
+        
+        // Throttle: 배치 사이 딜레이
+        if (i > 0) {
+            await new Promise(resolve => setTimeout(resolve, API_THROTTLE_MS));
+        }
         
         try {
-            const response = await fetch(url);
-            const responseText = await response.text();
+            // YouTube API videos.list 호출 (statistics만 필요)
+            const url = new URL('https://www.googleapis.com/youtube/v3/videos');
+            url.searchParams.set('part', 'statistics');
+            url.searchParams.set('id', chunkIds.join(','));
+            url.searchParams.set('key', apiKey);
+            
+            const response = await fetch(url.toString());
             
             if (!response.ok) {
-                // API 할당량 초과 확인
-                if (response.status === 403) {
-                    try {
-                        const errorData = JSON.parse(responseText);
-                        if (errorData.error?.code === 403 || 
-                            errorData.error?.message?.toLowerCase().includes('quota') ||
-                            errorData.error?.message?.toLowerCase().includes('blocked')) {
-                            quotaExceeded = true;
-                            console.error('❌ YouTube API 할당량 초과: VPH 업데이트 중단');
-                            console.warn('⚠️ API 할당량이 초과되어 VPH 데이터를 업데이트할 수 없습니다.');
-                            break; // 할당량 초과 시 루프 중단
-                        }
-                    } catch (e) {
-                        // JSON 파싱 실패 시에도 403이면 할당량 초과로 간주
-                        if (response.status === 403) {
-                            quotaExceeded = true;
-                            console.error('❌ YouTube API 할당량 초과 (403): VPH 업데이트 중단');
-                            break;
-                        }
-                    }
+                const errorData = await response.json().catch(() => ({}));
+                if (errorData.error?.errors?.[0]?.reason === 'quotaExceeded') {
+                    console.warn('⚠️ YouTube API 할당량 초과 - VPH 업데이트 중단');
+                    break; // 할당량 초과 시 중단
                 }
-                console.error('❌ VPH 폴백 fetch 실패', response.status, responseText);
+                console.error(`❌ YouTube API 오류: ${response.status} ${response.statusText}`);
                 continue;
             }
             
-            const payload = JSON.parse(responseText);
+            const data = await response.json();
+            const fetchedAt = new Date();
             
-            // 응답에 에러가 있는 경우 확인
-            if (payload.error) {
-                if (payload.error.code === 403 || 
-                    payload.error.message?.toLowerCase().includes('quota') ||
-                    payload.error.message?.toLowerCase().includes('blocked')) {
-                    quotaExceeded = true;
-                    console.error('❌ YouTube API 할당량 초과: VPH 업데이트 중단');
-                    console.warn('⚠️ API 할당량이 초과되어 VPH 데이터를 업데이트할 수 없습니다.');
-                    break;
+            // VPH 데이터 저장
+            for (const item of data.items || []) {
+                const viewCount = Number(item.statistics?.viewCount || 0);
+                if (viewCount > 0) {
+                    await persistSnapshot(item.id, viewCount, fetchedAt);
+                    await pruneHistory(item.id, retentionHours, maxEntries);
                 }
-                console.error('❌ VPH API 에러:', payload.error);
-                continue;
             }
             
-            const now = new Date();
-            for (const item of payload.items || []) {
-                const viewCount = Number(item.statistics?.viewCount ?? 0);
-                await persistSnapshot(item.id, viewCount, now);
-                await pruneHistory(item.id, retentionHours, maxEntries);
+            const successCount = (data.items || []).length;
+            if (successCount > 0) {
+                console.log(`✅ ${successCount}/${chunkIds.length}개 VPH 데이터 저장 완료`);
             }
         } catch (error) {
-            console.error('❌ VPH 폴백 처리 중 에러:', error);
+            console.error('❌ YouTube API 처리 중 에러:', error);
             continue;
         }
     }
     
-    if (quotaExceeded) {
-        console.warn('⚠️ VPH 업데이트 실패: YouTube API 할당량 초과. 다음 업데이트는 1시간 후에 시도됩니다.');
-    }
+    console.log('✅ YouTube API를 통한 VPH 데이터 업데이트 완료.');
 }
 
 // 마지막 스냅샷 시간 확인 함수
@@ -284,7 +276,7 @@ export async function initializeViewTrackingFallback() {
     }
     
     const intervalMinutes = Number(config.intervalMinutes || DEFAULT_INTERVAL_MINUTES);
-    const intervalMs = Math.max(intervalMinutes, 15) * 60 * 1000; // 최소 15분
+    const intervalMs = Math.max(intervalMinutes, 60) * 60 * 1000; // 최소 60분
 
     let lastRunTime = Date.now();
     let countdownTimer = null;

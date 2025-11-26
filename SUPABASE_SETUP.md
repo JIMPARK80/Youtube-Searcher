@@ -23,7 +23,9 @@ const supabaseAnonKey = 'YOUR_ANON_KEY_HERE'; // anon public 키 붙여넣기
 4. **Run** 버튼 클릭
 5. 성공 메시지 확인
 
-### 1.3 YouTube API 키 저장
+### 1.3 API 키 저장
+
+#### YouTube API 키 (필수)
 
 **방법 1: Supabase Dashboard에서 직접 입력**
 1. **Table Editor** → `config` 테이블 선택
@@ -41,14 +43,14 @@ ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 ## ✅ 2단계: Edge Functions 설정 (선택사항)
 
-### 2.1 Edge Functions 배포
+필요한 경우 다른 Edge Functions를 배포할 수 있습니다.
 
-#### 방법 A: Supabase Dashboard (권장)
+#### 방법 A: Supabase Dashboard
 
 1. Supabase Dashboard → **Edge Functions** 메뉴
 2. **"Deploy a new function"** 버튼 클릭
 3. **"Via Editor"** 선택
-4. Function 이름 입력 (예: `hourly-view-tracker`)
+4. Function 이름 입력
 5. `supabase/functions/[function-name]/index.ts` 파일 내용 복사하여 붙여넣기
 6. **Deploy** 버튼 클릭
 
@@ -65,9 +67,7 @@ supabase login
 supabase link --project-ref YOUR_PROJECT_REF
 
 # Edge Function 배포
-supabase functions deploy hourly-view-tracker
-supabase functions deploy daily-video-accumulator
-supabase functions deploy update-trending-videos
+supabase functions deploy [function-name]
 ```
 
 ### 2.2 환경 변수 설정
@@ -96,9 +96,6 @@ SELECT * FROM cron.job;
 ```sql
 -- 모든 cron 작업 확인
 SELECT * FROM cron.job;
-
--- 특정 작업 확인
-SELECT * FROM cron.job WHERE jobname = 'hourly-view-tracker';
 ```
 
 ### 3.2 Edge Functions 확인
@@ -164,7 +161,7 @@ CREATE POLICY "Anyone can read view history" ON view_history
 - [ ] Supabase 프로젝트 정보 입력 완료 (`js/supabase-config.js`)
 - [ ] 데이터베이스 스키마 생성 완료 (`supabase/schema.sql`)
 - [ ] YouTube API 키 저장 완료 (`config` 테이블)
-- [ ] Edge Functions 배포 완료 (선택사항)
+- [ ] 기타 Edge Functions 배포 완료 (선택사항)
 - [ ] 환경 변수 설정 완료 (선택사항)
 - [ ] Cron 작업 등록 완료 (선택사항, Pro 플랜 필요)
 
