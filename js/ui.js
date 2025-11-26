@@ -29,6 +29,17 @@ export let currentPage = 1;
 export let allChannelMap = {};
 export let currentSearchQuery = '';
 
+// 최대 결과 수 설정 (기본값 30)
+const MAX_RESULTS_STORAGE_KEY = 'youtube_searcher_max_results';
+export function getMaxResults() {
+    const stored = localStorage.getItem(MAX_RESULTS_STORAGE_KEY);
+    return stored ? parseInt(stored, 10) : 30;
+}
+
+export function setMaxResults(count) {
+    localStorage.setItem(MAX_RESULTS_STORAGE_KEY, count.toString());
+}
+
 // 백그라운드 업데이트 중복 실행 방지
 let isUpdatingMissingData = false;
 let currentVelocityMetric = 'recent-vph'; // 기본값: 최근 VPH
@@ -467,25 +478,31 @@ export async function search(shouldReload = false) {
                 searchTimeoutTimer = null;
             }
             
-            restoreFromCache(cacheData);
+            // 선택한 최대 결과 수 확인
+            const targetCount = getMaxResults();
             
-            // 캐시가 30개 미만이면 추가로 가져오기 또는 전체 검색
-            const TARGET_COUNT = 30;
-            if (count < TARGET_COUNT) {
-                if (meta.nextPageToken) {
-                    // nextPageToken이 있으면 증분 검색
-                    const needed = TARGET_COUNT - count;
-                    debugLog(`📈 캐시 ${count}개 → ${TARGET_COUNT}개까지 ${needed}개 추가 필요 (nextPageToken 있음)`);
-                    await performIncrementalFetch(query, apiKeyValue, cacheData, needed);
-                    return;
-                } else {
-                    // nextPageToken이 없으면 전체 검색으로 30개 가져오기
-                    debugLog(`📈 캐시 ${count}개 → ${TARGET_COUNT}개까지 전체 검색 필요 (nextPageToken 없음)`);
-                    await performFullGoogleSearch(query, apiKeyValue);
-                    return;
-                }
+            // 캐시가 선택한 수보다 많으면 최신 것만 반환
+            if (count > targetCount) {
+                debugLog(`📊 캐시 ${count}개 > 요청 ${targetCount}개 → 최신 ${targetCount}개만 사용`);
+                restoreFromCache(cacheData);
+                // 최신 것만 선택 (created_at 기준 내림차순)
+                allVideos = allVideos.slice(0, targetCount);
+                allItems = allItems.slice(0, targetCount);
+                renderPage(1);
+                lastUIUpdateTime = Date.now();
+                return;
             }
             
+            restoreFromCache(cacheData);
+            
+            // 캐시가 선택한 수보다 부족하면 72시간 제한 없이 전체 검색
+            if (count < targetCount) {
+                debugLog(`📈 캐시 ${count}개 < 요청 ${targetCount}개 → 72시간 제한 없이 전체 검색`);
+                await performFullGoogleSearch(query, apiKeyValue);
+                return;
+            }
+            
+            // 정확히 일치하면 그대로 사용
             renderPage(1);
             lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
             const nextToken = meta.nextPageToken || null;
@@ -504,14 +521,22 @@ export async function search(shouldReload = false) {
             debugLog('⚠️ Supabase 캐시에 데이터가 0개 → API 재호출');
         }
         
-        // 캐시가 30개 미만이고 nextPageToken이 있으면 추가로 가져오기 (만료된 캐시도 포함)
-        const TARGET_COUNT = 30;
-        if (count > 0 && count < TARGET_COUNT && meta.nextPageToken) {
-            const needed = TARGET_COUNT - count;
-            debugLog(`📈 만료된 캐시 ${count}개 → ${TARGET_COUNT}개까지 ${needed}개 추가 필요`);
-            // 먼저 캐시 복원
+        // 만료된 캐시 처리: 선택한 수보다 부족하면 72시간 제한 없이 전체 검색
+        const targetCount = getMaxResults();
+        if (count > 0 && count < targetCount) {
+            debugLog(`📈 만료된 캐시 ${count}개 < 요청 ${targetCount}개 → 72시간 제한 없이 전체 검색`);
+            await performFullGoogleSearch(query, apiKeyValue);
+            return;
+        }
+        
+        // 만료된 캐시가 선택한 수보다 많으면 최신 것만 반환
+        if (count > targetCount) {
+            debugLog(`📊 만료된 캐시 ${count}개 > 요청 ${targetCount}개 → 최신 ${targetCount}개만 사용`);
             restoreFromCache(cacheData);
-            await performIncrementalFetch(query, apiKeyValue, cacheData, needed);
+            // 최신 것만 선택 (created_at 기준 내림차순)
+            allVideos = allVideos.slice(0, targetCount);
+            allItems = allItems.slice(0, targetCount);
+            renderPage(1);
             return;
         }
         
@@ -575,11 +600,12 @@ async function performFullGoogleSearch(query, apiKeyValue) {
     });
     
     try {
-        debugLog('🌐 Google API 전체 검색 (최대 300개)');
+        const maxResults = getMaxResults();
+        debugLog(`🌐 Google API 전체 검색 (최대 ${maxResults}개)`);
         
-        // 타임아웃과 함께 실행
+        // 타임아웃과 함께 실행 (동적 MAX_RESULTS 사용)
         const result = await Promise.race([
-            searchYouTubeAPI(query, apiKeyValue),
+            searchYouTubeAPI(query, apiKeyValue, maxResults),
             timeoutPromise
         ]);
         debugLog(`🎯 fetch 완료: ${result.videos.length}개`);
@@ -1991,6 +2017,25 @@ export function setupEventListeners() {
     document.getElementById('velocityMetricSelect')?.addEventListener('change', () => {
         renderPage(1);
     });
+    
+    // 최대 결과 수 선택 드롭다운 이벤트 리스너
+    const maxResultsSelect = document.getElementById('maxResultsSelect');
+    if (maxResultsSelect) {
+        // 저장된 값으로 초기화
+        const savedMaxResults = getMaxResults();
+        maxResultsSelect.value = savedMaxResults.toString();
+        
+        maxResultsSelect.addEventListener('change', (e) => {
+            const newMaxResults = parseInt(e.target.value, 10);
+            setMaxResults(newMaxResults);
+            console.log(`📊 최대 결과 수 변경: ${newMaxResults}개`);
+            // 변경 시 현재 검색어로 다시 검색
+            const currentQuery = document.getElementById('searchInput')?.value?.trim();
+            if (currentQuery) {
+                search(true); // 강제 재검색
+            }
+        });
+    }
     
     eventListenersSetup = true;
     console.log('✅ 이벤트 리스너 설정 완료');

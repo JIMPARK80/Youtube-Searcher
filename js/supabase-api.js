@@ -698,13 +698,13 @@ const chunk = (a, n = 50) => Array.from({length: Math.ceil(a.length/n)}, (_,i)=>
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const API_THROTTLE_MS = 200; // 요청 사이 200ms 딜레이
 
-export async function searchYouTubeAPI(query, apiKeyValue) {
+export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30) {
     try {
         console.log('🌐 Google API 호출 중...');
         
         let searchItems = [];
         let nextPageToken = null;
-        const MAX_RESULTS = 30; // Increased to 30 for better results
+        const MAX_RESULTS = maxResults; // 동적으로 설정된 최대 결과 수
         
         // Only fetch first page (30 results) to minimize API calls
         for (let page = 0; page < 1 && searchItems.length < MAX_RESULTS; page++) {
