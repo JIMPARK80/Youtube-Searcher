@@ -24,8 +24,7 @@ $SERVICE_ROLE_KEY = "sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ"
 # 사용 가능한 함수 목록
 $AVAILABLE_FUNCTIONS = @(
     "hourly-vph-updater",
-    "daily-statistics-updater",
-    "update-trending-videos"
+    "daily-statistics-updater"
 )
 
 # ============================================
@@ -76,39 +75,78 @@ function Deploy-Function {
     
     Write-Host "📦 배포 중: $FunctionName" -ForegroundColor Green
     
-    $functionPath = "supabase\functions\$FunctionName\index.ts"
+    $functionPath = "supabase\functions\$FunctionName"
     
     if (-not (Test-Path $functionPath)) {
-        Write-Host "  ❌ 함수 파일을 찾을 수 없습니다: $functionPath" -ForegroundColor Red
+        Write-Host "  ❌ 함수 폴더를 찾을 수 없습니다: $functionPath" -ForegroundColor Red
         return $false
     }
     
-    $code = Get-Content $functionPath -Raw -Encoding UTF8
+    # Supabase CLI 확인
+    $supabaseInstalled = Get-Command supabase -ErrorAction SilentlyContinue
     
-    Write-Host "  📄 코드 읽기 완료 ($($code.Length) bytes)" -ForegroundColor Gray
-    
-    # Supabase Management API를 통한 배포는 직접 지원하지 않으므로
-    # 수동 배포 가이드 제공
-    Write-Host ""
-    Write-Host "  💡 Supabase Dashboard에서 수동으로 배포하세요:" -ForegroundColor Yellow
-    Write-Host "     1. Dashboard 열기: https://supabase.com/dashboard/project/hteazdwvhjaexjxwiwwl/functions" -ForegroundColor Gray
-    Write-Host "     2. '$FunctionName' 함수 선택" -ForegroundColor Gray
-    Write-Host "     3. Code 탭 클릭" -ForegroundColor Gray
-    Write-Host "     4. 아래 파일 내용 복사하여 붙여넣기:" -ForegroundColor Gray
-    Write-Host "        $functionPath" -ForegroundColor Cyan
-    Write-Host "     5. Deploy 버튼 클릭" -ForegroundColor Gray
-    Write-Host ""
-    
-    # 코드 미리보기 (처음 10줄)
-    Write-Host "  📝 코드 미리보기 (처음 10줄):" -ForegroundColor Cyan
-    $codeLines = $code -split "`n"
-    $codeLines[0..9] | ForEach-Object { Write-Host "     $_" -ForegroundColor Gray }
-    if ($codeLines.Length -gt 10) {
-        Write-Host "     ... ($($codeLines.Length - 10) more lines)" -ForegroundColor Gray
+    if (-not $supabaseInstalled) {
+        Write-Host "  ❌ Supabase CLI가 설치되어 있지 않습니다" -ForegroundColor Red
+        Write-Host "  먼저 .\setup-supabase-cli.ps1을 실행하세요" -ForegroundColor Yellow
+        return $false
     }
-    Write-Host ""
     
-    return $true
+    # Supabase 로그인 확인
+    try {
+        $null = supabase projects list 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  ⚠️ Supabase에 로그인되지 않았습니다" -ForegroundColor Yellow
+            Write-Host "  supabase login을 실행하세요" -ForegroundColor Gray
+            return $false
+        }
+    } catch {
+        Write-Host "  ⚠️ Supabase 연결 확인 실패" -ForegroundColor Yellow
+        Write-Host "  supabase login을 실행하세요" -ForegroundColor Gray
+        return $false
+    }
+    
+    # 프로젝트 연결 확인
+    $projectRef = "hteazdwvhjaexjxwiwwl"
+    if (-not (Test-Path ".supabase")) {
+        Write-Host "  프로젝트 연결 중..." -ForegroundColor Gray
+        supabase link --project-ref $projectRef
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  ❌ 프로젝트 연결 실패" -ForegroundColor Red
+            return $false
+        }
+    }
+    
+    try {
+        # Supabase CLI로 배포
+        Write-Host "  배포 실행 중..." -ForegroundColor Gray
+        supabase functions deploy $FunctionName --project-ref $projectRef
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  ✅ 배포 완료: $FunctionName" -ForegroundColor Green
+            return $true
+        } else {
+            Write-Host "  ❌ 배포 실패: $FunctionName" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "  💡 Supabase Dashboard에서 수동으로 배포하세요:" -ForegroundColor Yellow
+            Write-Host "     1. Dashboard 열기: https://supabase.com/dashboard/project/hteazdwvhjaexjxwiwwl/functions" -ForegroundColor Gray
+            Write-Host "     2. '$FunctionName' 함수 선택" -ForegroundColor Gray
+            Write-Host "     3. Code 탭 클릭" -ForegroundColor Gray
+            Write-Host "     4. $functionPath\index.ts 파일 내용 복사하여 붙여넣기" -ForegroundColor Gray
+            Write-Host "     5. Deploy 버튼 클릭" -ForegroundColor Gray
+            return $false
+        }
+    } catch {
+        Write-Host "  ❌ 배포 실패: $FunctionName" -ForegroundColor Red
+        Write-Host "  에러: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "  💡 Supabase Dashboard에서 수동으로 배포하세요:" -ForegroundColor Yellow
+        Write-Host "     1. Dashboard 열기: https://supabase.com/dashboard/project/hteazdwvhjaexjxwiwwl/functions" -ForegroundColor Gray
+        Write-Host "     2. '$FunctionName' 함수 선택" -ForegroundColor Gray
+        Write-Host "     3. Code 탭 클릭" -ForegroundColor Gray
+        Write-Host "     4. $functionPath\index.ts 파일 내용 복사하여 붙여넣기" -ForegroundColor Gray
+        Write-Host "     5. Deploy 버튼 클릭" -ForegroundColor Gray
+        return $false
+    }
 }
 
 # ============================================

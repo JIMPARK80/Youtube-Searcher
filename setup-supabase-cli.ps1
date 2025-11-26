@@ -85,5 +85,5 @@ Write-Host ""
 Write-Host "다음 단계:" -ForegroundColor Cyan
 Write-Host "  1. supabase login" -ForegroundColor Gray
 Write-Host "  2. supabase link --project-ref hteazdwvhjaexjxwiwwl" -ForegroundColor Gray
-Write-Host "  3. .\deploy-edge-functions-cli.ps1" -ForegroundColor Gray
+Write-Host "  3. .\manage-edge-functions.ps1 -Action deploy -All" -ForegroundColor Gray
 
