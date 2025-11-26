@@ -661,7 +661,20 @@ async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVid
         const result = await Promise.race([
             searchYouTubeAPI(query, apiKeyValue, neededCount, excludeVideoIds),
             timeoutPromise
-        ]);
+        ]).catch(error => {
+            // API 할당량 초과 시 기존 캐시만 사용
+            if (error.message === 'quotaExceeded' || error.message?.includes('quota')) {
+                console.warn('⚠️ API 할당량 초과 → 기존 캐시만 사용');
+                return null;
+            }
+            throw error;
+        });
+        
+        if (!result) {
+            // API 할당량 초과로 실패한 경우 기존 캐시만 사용
+            debugLog(`⚠️ 추가 비디오 검색 실패 (할당량 초과), 기존 캐시만 사용`);
+            return;
+        }
         
         if (!result || result.videos.length === 0) {
             debugLog(`⚠️ 추가 비디오 없음, 기존 캐시만 사용`);
