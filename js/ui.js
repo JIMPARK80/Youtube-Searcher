@@ -386,6 +386,14 @@ export async function search(shouldReload = false) {
             
             restoreFromCache(cacheData);
             
+            // 선택한 최대 결과 수로 제한
+            const targetCount = getMaxResults();
+            if (allVideos.length > targetCount) {
+                debugLog(`✂️ 로컬 캐시 ${allVideos.length}개 → ${targetCount}개로 제한`);
+                allVideos = allVideos.slice(0, targetCount);
+                allItems = allItems.slice(0, targetCount);
+            }
+            
             // 로컬 캐시 사용 시에도 Supabase에서 구독자 수만 가져와서 병합
             try {
                 const supabaseData = await loadFromSupabase(query);
