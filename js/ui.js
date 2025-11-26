@@ -744,7 +744,18 @@ async function performFullGoogleSearch(query, apiKeyValue) {
         const result = await Promise.race([
             searchYouTubeAPI(query, apiKeyValue, maxResults),
             timeoutPromise
-        ]);
+        ]).catch(error => {
+            // API 할당량 초과 시 에러 표시
+            if (error.message === 'quotaExceeded' || error.message?.includes('quota')) {
+                console.error('❌ YouTube API 할당량 초과: 오늘은 더 이상 검색할 수 없습니다. 내일 다시 시도해주세요.');
+                const resultsDiv = document.getElementById('results');
+                if (resultsDiv) {
+                    resultsDiv.innerHTML = `<div class="error">⚠️ YouTube API 할당량 초과<br>오늘은 더 이상 검색할 수 없습니다.<br>내일 다시 시도해주세요.</div>`;
+                }
+                throw error;
+            }
+            throw error;
+        });
         debugLog(`🎯 fetch 완료: ${result.videos.length}개`);
         allVideos = result.videos;
         allChannelMap = result.channels;
