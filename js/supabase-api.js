@@ -56,14 +56,17 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
         let from = 0;
         const pageSize = 1000; // Supabase 기본 제한
         let hasMore = true;
+        let videosError = null; // 루프 밖에서도 접근 가능하도록 선언
         
         while (hasMore) {
-            const { data: videos, error: videosError } = await supabase
+            const { data: videos, error: error } = await supabase
                 .from('videos')
                 .select('video_id, channel_id, title, view_count, like_count, subscriber_count, duration, channel_title, published_at, thumbnail_url')
                 .eq('keyword', keyword)
                 .order('created_at', { ascending: false })
                 .range(from, from + pageSize - 1);
+            
+            videosError = error; // 에러 저장
             
             if (videosError) {
                 console.error('❌ Supabase 비디오 로드 오류:', videosError);
