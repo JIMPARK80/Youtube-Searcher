@@ -505,7 +505,24 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
                 // 클라이언트 측에서 필터링
             }
             
-            const { data: videosWithNulls, error: fetchError } = await query;
+            let { data: videosWithNulls, error: fetchError } = await query;
+            
+            // 배열 타입 에러인 경우 contains로 재시도
+            if (fetchError && (fetchError.message?.includes('array literal') || fetchError.message?.includes('malformed array'))) {
+                console.warn('⚠️ keyword가 배열 타입으로 감지됨, contains로 재시도');
+                if (keyword) {
+                    const normalizedKeyword = keyword.trim().toLowerCase();
+                    const retryQuery = supabase
+                        .from('videos')
+                        .select('video_id, channel_id, title, view_count, like_count, subscriber_count, duration, channel_title, published_at')
+                        .or('subscriber_count.is.null,view_count.is.null,like_count.is.null,title.is.null,channel_id.is.null,duration.is.null,published_at.is.null')
+                        .contains('keyword', [normalizedKeyword])
+                        .limit(limit);
+                    const retryResult = await retryQuery;
+                    videosWithNulls = retryResult.data;
+                    fetchError = retryResult.error;
+                }
+            }
             
             if (fetchError) {
                 console.error('❌ NULL 데이터 비디오 조회 실패:', fetchError);
