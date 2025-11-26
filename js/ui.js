@@ -815,15 +815,16 @@ async function performFullGoogleSearch(query, apiKeyValue) {
             if (error.message === 'quotaExceeded' || error.message?.includes('quota')) {
                 console.warn('⚠️ YouTube API 할당량 초과 → 캐시에서 최대 데이터 가져오기');
                 
-                // 캐시에서 최대 데이터 가져오기 시도
-                const cacheData = await loadFromSupabase(query);
+                // 캐시에서 최대 데이터 가져오기 시도 (만료 여부 무시)
+                const cacheData = await loadFromSupabase(query, true); // ignoreExpiry = true
                 if (cacheData && cacheData.videos && cacheData.videos.length > 0) {
-                    console.log(`✅ 캐시에서 ${cacheData.videos.length}개 데이터 사용 (할당량 초과)`);
+                    console.log(`✅ 캐시에서 ${cacheData.videos.length}개 데이터 사용 (할당량 초과, 만료 무시)`);
                     restoreFromCache(cacheData);
                     
-                    // 캐시에 있는 모든 데이터 사용 (제한 없이)
+                    // 할당량 초과 시에는 제한 없이 모든 데이터 사용
+                    // targetCount 제한을 적용하지 않음
                     const resultsDiv = document.getElementById('results');
-                    if (resultsDiv && allVideos.length === 0) {
+                    if (resultsDiv) {
                         resultsDiv.innerHTML = `<div class="info">⚠️ API 할당량 초과로 캐시 데이터를 사용합니다 (${allVideos.length}개)</div>`;
                     }
                     

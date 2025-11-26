@@ -12,7 +12,7 @@ const CACHE_TTL_HOURS = 72;
 // 캐시 로드 함수
 // ============================================
 
-export async function loadFromSupabase(query) {
+export async function loadFromSupabase(query, ignoreExpiry = false) {
     try {
         const keyword = query.trim().toLowerCase();
         
@@ -31,25 +31,61 @@ export async function loadFromSupabase(query) {
         const age = Date.now() - new Date(cacheMeta.updated_at).getTime();
         const ageHours = age / (1000 * 60 * 60);
 
-        // Check cache version
-        const CURRENT_VERSION = '1.32';
-        if (cacheMeta.cache_version < CURRENT_VERSION) {
-            console.warn(`🔄 구버전 캐시 (v${cacheMeta.cache_version} → v${CURRENT_VERSION})`);
-            return null;
-        }
+        // Check cache version (할당량 초과 시에는 버전 체크 스킵)
+        if (!ignoreExpiry) {
+            const CURRENT_VERSION = '1.32';
+            if (cacheMeta.cache_version < CURRENT_VERSION) {
+                console.warn(`🔄 구버전 캐시 (v${cacheMeta.cache_version} → v${CURRENT_VERSION})`);
+                return null;
+            }
 
-        // Check if expired
-        if (age >= CACHE_TTL_MS) {
-            console.log(`⏰ Supabase 캐시 만료 (${CACHE_TTL_HOURS}시간 초과)`);
-            return null;
+            // Check if expired
+            if (age >= CACHE_TTL_MS) {
+                console.log(`⏰ Supabase 캐시 만료 (${CACHE_TTL_HOURS}시간 초과)`);
+                return null;
+            }
+        } else {
+            console.log(`⚠️ 할당량 초과로 만료 여부 무시하고 캐시 사용`);
         }
+        
+        // ageHours는 로그 출력에 사용
 
-        // Load videos for this keyword
-        const { data: videos, error: videosError } = await supabase
-            .from('videos')
-            .select('video_id, channel_id, title, view_count, like_count, subscriber_count, duration, channel_title, published_at, thumbnail_url')
-            .eq('keyword', keyword)
-            .order('created_at', { ascending: false });
+        // Load videos for this keyword (제한 없이 모든 데이터 가져오기)
+        // Supabase 기본 제한은 1000개이므로 페이지네이션 사용
+        let allVideos = [];
+        let from = 0;
+        const pageSize = 1000; // Supabase 기본 제한
+        let hasMore = true;
+        
+        while (hasMore) {
+            const { data: videos, error: videosError } = await supabase
+                .from('videos')
+                .select('video_id, channel_id, title, view_count, like_count, subscriber_count, duration, channel_title, published_at, thumbnail_url')
+                .eq('keyword', keyword)
+                .order('created_at', { ascending: false })
+                .range(from, from + pageSize - 1);
+            
+            if (videosError) {
+                console.error('❌ Supabase 비디오 로드 오류:', videosError);
+                break;
+            }
+            
+            if (!videos || videos.length === 0) {
+                hasMore = false;
+                break;
+            }
+            
+            allVideos = allVideos.concat(videos);
+            
+            // 1000개 미만이면 마지막 페이지
+            if (videos.length < pageSize) {
+                hasMore = false;
+            } else {
+                from += pageSize;
+            }
+        }
+        
+        const videos = allVideos;
 
         if (videosError || !videos?.length) {
             console.log('⚠️ Supabase에서 비디오 데이터 없음');
