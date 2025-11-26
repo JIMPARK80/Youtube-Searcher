@@ -810,13 +810,33 @@ async function performFullGoogleSearch(query, apiKeyValue) {
         const result = await Promise.race([
             searchYouTubeAPI(query, apiKeyValue, maxResults),
             timeoutPromise
-        ]).catch(error => {
-            // API 할당량 초과 시 에러 표시
+        ]).catch(async error => {
+            // API 할당량 초과 시 캐시에서 최대 데이터 가져오기
             if (error.message === 'quotaExceeded' || error.message?.includes('quota')) {
-                console.error('❌ YouTube API 할당량 초과: 오늘은 더 이상 검색할 수 없습니다. 내일 다시 시도해주세요.');
+                console.warn('⚠️ YouTube API 할당량 초과 → 캐시에서 최대 데이터 가져오기');
+                
+                // 캐시에서 최대 데이터 가져오기 시도
+                const cacheData = await loadFromSupabase(query);
+                if (cacheData && cacheData.videos && cacheData.videos.length > 0) {
+                    console.log(`✅ 캐시에서 ${cacheData.videos.length}개 데이터 사용 (할당량 초과)`);
+                    restoreFromCache(cacheData);
+                    
+                    // 캐시에 있는 모든 데이터 사용 (제한 없이)
+                    const resultsDiv = document.getElementById('results');
+                    if (resultsDiv && allVideos.length === 0) {
+                        resultsDiv.innerHTML = `<div class="info">⚠️ API 할당량 초과로 캐시 데이터를 사용합니다 (${allVideos.length}개)</div>`;
+                    }
+                    
+                    renderPage(1);
+                    lastUIUpdateTime = Date.now();
+                    return; // 캐시 데이터 사용, 정상 종료
+                }
+                
+                // 캐시도 없으면 에러 표시
+                console.error('❌ YouTube API 할당량 초과: 캐시 데이터도 없습니다.');
                 const resultsDiv = document.getElementById('results');
                 if (resultsDiv) {
-                    resultsDiv.innerHTML = `<div class="error">⚠️ YouTube API 할당량 초과<br>오늘은 더 이상 검색할 수 없습니다.<br>내일 다시 시도해주세요.</div>`;
+                    resultsDiv.innerHTML = `<div class="error">⚠️ YouTube API 할당량 초과<br>캐시 데이터도 없습니다.<br>내일 다시 시도해주세요.</div>`;
                 }
                 throw error;
             }
