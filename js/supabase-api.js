@@ -67,51 +67,17 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
                 .order('created_at', { ascending: false })
                 .range(from, from + pageSize - 1);
             
-            // keyword 필터 적용 (문자열 또는 배열 모두 지원)
-            query = query.eq('keyword', keyword);
+            // keyword 필터 적용 (배열 타입이므로 contains 사용)
+            // keyword 컬럼이 배열 타입이므로 처음부터 .contains() 사용
+            query = query.contains('keyword', [keyword]);
             
             const { data: videos, error: error } = await query;
             
             videosError = error; // 에러 저장
             
             if (videosError) {
-                // 배열 타입 에러인 경우 contains로 재시도
-                if (videosError.message?.includes('array literal') || videosError.message?.includes('malformed array')) {
-                    console.warn('⚠️ keyword가 배열 타입으로 감지됨, contains로 재시도');
-                    const retryQuery = supabase
-                        .from('videos')
-                        .select('video_id, channel_id, title, view_count, like_count, subscriber_count, duration, channel_title, published_at, thumbnail_url')
-                        .contains('keyword', [keyword])
-                        .order('created_at', { ascending: false })
-                        .range(from, from + pageSize - 1);
-                    
-                    const { data: retryVideos, error: retryError } = await retryQuery;
-                    
-                    if (retryError) {
-                        console.error('❌ Supabase 비디오 로드 오류 (재시도 실패):', retryError);
-                        videosError = retryError;
-                        break;
-                    }
-                    
-                    // 재시도 성공
-                    videosError = null;
-                    if (!retryVideos || retryVideos.length === 0) {
-                        hasMore = false;
-                        break;
-                    }
-                    
-                    allVideos = allVideos.concat(retryVideos);
-                    
-                    if (retryVideos.length < pageSize) {
-                        hasMore = false;
-                    } else {
-                        from += pageSize;
-                    }
-                    continue;
-                } else {
-                    console.error('❌ Supabase 비디오 로드 오류:', videosError);
-                    break;
-                }
+                console.error('❌ Supabase 비디오 로드 오류:', videosError);
+                break;
             }
             
             if (!videos || videos.length === 0) {
@@ -380,9 +346,11 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
             // 경고는 제거 (서버에 데이터가 있으면 나중에 로드됨)
             
             // Map에 추가 (중복이면 마지막 값으로 덮어쓰기)
+            // keyword는 배열 타입이므로 배열로 변환
+            const keywordArray = Array.isArray(keyword) ? keyword : [keyword];
             videoRecordsMap.set(v.id, {
                 video_id: v.id,
-                keyword,
+                keyword: keywordArray, // 배열로 저장
                 title: v.snippet?.title,
                 channel_id: channelId,
                 channel_title: v.snippet?.channelTitle,
@@ -492,9 +460,10 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
             // NULL과 -1을 구분하기 위해 별도 필터링 필요
             
             // 특정 검색어가 있으면 해당 검색어의 비디오만 체크
+            // keyword 컬럼이 배열 타입이므로 .contains() 사용
             if (keyword) {
                 const normalizedKeyword = keyword.trim().toLowerCase();
-                query = query.eq('keyword', normalizedKeyword);
+                query = query.contains('keyword', [normalizedKeyword]);
                 console.log(`🔍 키워드 필터 적용: "${normalizedKeyword}"`);
             }
             
@@ -506,23 +475,6 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
             }
             
             let { data: videosWithNulls, error: fetchError } = await query;
-            
-            // 배열 타입 에러인 경우 contains로 재시도
-            if (fetchError && (fetchError.message?.includes('array literal') || fetchError.message?.includes('malformed array'))) {
-                console.warn('⚠️ keyword가 배열 타입으로 감지됨, contains로 재시도');
-                if (keyword) {
-                    const normalizedKeyword = keyword.trim().toLowerCase();
-                    const retryQuery = supabase
-                        .from('videos')
-                        .select('video_id, channel_id, title, view_count, like_count, subscriber_count, duration, channel_title, published_at')
-                        .or('subscriber_count.is.null,view_count.is.null,like_count.is.null,title.is.null,channel_id.is.null,duration.is.null,published_at.is.null')
-                        .contains('keyword', [normalizedKeyword])
-                        .limit(limit);
-                    const retryResult = await retryQuery;
-                    videosWithNulls = retryResult.data;
-                    fetchError = retryResult.error;
-                }
-            }
             
             if (fetchError) {
                 console.error('❌ NULL 데이터 비디오 조회 실패:', fetchError);
