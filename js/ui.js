@@ -33,7 +33,7 @@ export let currentSearchQuery = '';
 const MAX_RESULTS_STORAGE_KEY = 'youtube_searcher_max_results';
 export function getMaxResults() {
     const stored = localStorage.getItem(MAX_RESULTS_STORAGE_KEY);
-    return stored ? parseInt(stored, 10) : 30;
+    return stored ? parseInt(stored, 10) : 10;
 }
 
 export function setMaxResults(count) {
