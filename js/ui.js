@@ -1274,7 +1274,7 @@ function createVideoCard(video, item) {
 // VPH 계산 큐 관리 (동시 실행 제한)
 let vphCalculationQueue = [];
 let vphCalculationRunning = 0;
-const MAX_CONCURRENT_VPH_CALCULATIONS = 3; // 동시 최대 3개만 실행
+const MAX_CONCURRENT_VPH_CALCULATIONS = 10; // 동시 최대 10개 실행 (성능 최적화)
 const vphCalculatedVideos = new Set(); // 이미 계산된 비디오 ID 추적
 const vphRetryCount = new Map(); // 데이터 부족 시 재시도 횟수 추적 (최대 3번)
 const MAX_VPH_RETRY_COUNT = 3; // 최대 재시도 횟수
@@ -1356,13 +1356,13 @@ function processVphQueue() {
     executeVphCalculation(videoId, panelEl, baseVpd, label, item)
         .finally(() => {
             vphCalculationRunning--;
-            // 다음 항목 처리
-            setTimeout(() => processVphQueue(), 100); // 100ms 딜레이
+            // 다음 항목 즉시 처리 (딜레이 제거로 성능 향상)
+            processVphQueue();
             
             // 계산 완료 후 모든 계산이 끝났는지 확인
             if (vphCalculationQueue.length === 0 && vphCalculationRunning === 0) {
                 // 모든 계산이 완료되었으므로 재정렬 확인
-                setTimeout(() => checkAndResortWhenAllCalculated(), 500);
+                setTimeout(() => checkAndResortWhenAllCalculated(), 300);
             }
         });
 }
