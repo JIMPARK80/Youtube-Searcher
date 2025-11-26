@@ -384,10 +384,19 @@ export async function search(shouldReload = false) {
                 searchTimeoutTimer = null;
             }
             
+            // 선택한 최대 결과 수 확인
+            const targetCount = getMaxResults();
+            
+            // 로컬 캐시가 선택한 수보다 부족하면 전체 검색
+            if (localCount < targetCount) {
+                debugLog(`📈 로컬 캐시 ${localCount}개 < 요청 ${targetCount}개 → 전체 검색`);
+                await performFullGoogleSearch(query, apiKeyValue);
+                return;
+            }
+            
             restoreFromCache(cacheData);
             
-            // 선택한 최대 결과 수로 제한
-            const targetCount = getMaxResults();
+            // 선택한 최대 결과 수로 제한 (캐시가 더 많아도)
             if (allVideos.length > targetCount) {
                 debugLog(`✂️ 로컬 캐시 ${allVideos.length}개 → ${targetCount}개로 제한`);
                 allVideos = allVideos.slice(0, targetCount);
@@ -966,6 +975,13 @@ function getFilteredDedupedItems() {
 
 export function renderPage(page) {
     currentPage = page;
+    
+    // 선택한 최대 결과 수로 제한 (필터링 전에 적용)
+    const maxResults = getMaxResults();
+    if (allVideos.length > maxResults) {
+        allVideos = allVideos.slice(0, maxResults);
+        allItems = allItems.slice(0, maxResults);
+    }
     
     // VPH 계산 큐 초기화 (이전 페이지의 큐 정리)
     // 주의: 계산된 비디오 추적은 유지 (같은 검색 결과에서 페이지 이동 시 재계산 방지)
