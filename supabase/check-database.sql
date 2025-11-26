@@ -30,6 +30,21 @@ FROM (VALUES
 -- 2. View History Check
 -- ============================================
 
+-- Total statistics
+SELECT 
+    COUNT(*) AS total_snapshots,
+    COUNT(DISTINCT video_id) AS unique_videos,
+    MIN(fetched_at) AS oldest_snapshot,
+    MAX(fetched_at) AS newest_snapshot,
+    MAX(id) AS max_id,
+    ROUND(AVG(snapshot_count), 1) AS avg_snapshots_per_video
+FROM view_history
+CROSS JOIN LATERAL (
+    SELECT COUNT(*) as snapshot_count
+    FROM view_history vh2
+    WHERE vh2.video_id = view_history.video_id
+) sub;
+
 -- Recent snapshots
 SELECT 
     video_id,
@@ -57,11 +72,32 @@ SELECT
     video_id,
     COUNT(*) AS snapshot_count,
     MAX(fetched_at) AS last_fetched,
-    MIN(fetched_at) AS first_fetched
+    MIN(fetched_at) AS first_fetched,
+    EXTRACT(EPOCH FROM (MAX(fetched_at) - MIN(fetched_at))) / 3600 AS hours_tracked
 FROM view_history
 GROUP BY video_id
 ORDER BY last_fetched DESC
 LIMIT 20;
+
+-- Data growth by hour (last 24 hours)
+SELECT 
+    DATE_TRUNC('hour', fetched_at) AS hour,
+    COUNT(*) AS snapshots_added,
+    COUNT(DISTINCT video_id) AS unique_videos
+FROM view_history
+WHERE fetched_at > NOW() - INTERVAL '24 hours'
+GROUP BY DATE_TRUNC('hour', fetched_at)
+ORDER BY hour DESC;
+
+-- Data growth by day (last 7 days)
+SELECT 
+    DATE_TRUNC('day', fetched_at) AS day,
+    COUNT(*) AS snapshots_added,
+    COUNT(DISTINCT video_id) AS unique_videos
+FROM view_history
+WHERE fetched_at > NOW() - INTERVAL '7 days'
+GROUP BY DATE_TRUNC('day', fetched_at)
+ORDER BY day DESC;
 
 -- ============================================
 -- 3. View Tracking Config Check

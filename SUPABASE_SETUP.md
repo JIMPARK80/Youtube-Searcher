@@ -41,52 +41,80 @@ VALUES ('apiKeys', '{"youtube": "YOUR_YOUTUBE_API_KEY"}'::jsonb)
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 ```
 
-## ✅ 2단계: Edge Functions 설정 (선택사항)
+## ✅ 2단계: Edge Functions 설정
 
-필요한 경우 다른 Edge Functions를 배포할 수 있습니다.
+### 2.1 Edge Function 배포
 
-#### 방법 A: Supabase Dashboard
+#### 방법 A: Supabase Dashboard (권장)
 
-1. Supabase Dashboard → **Edge Functions** 메뉴
-2. **"Deploy a new function"** 버튼 클릭
-3. **"Via Editor"** 선택
-4. Function 이름 입력
-5. `supabase/functions/[function-name]/index.ts` 파일 내용 복사하여 붙여넣기
-6. **Deploy** 버튼 클릭
+1. **Supabase Dashboard** 접속: https://supabase.com/dashboard
+2. 프로젝트 선택: `hteazdwvhjaexjxwiwwl`
+3. 왼쪽 메뉴에서 **Edge Functions** 클릭
+4. **"Deploy a new function"** 버튼 클릭
+5. **"Via Editor"** 선택
+6. Function 이름 입력 (예: `update-trending-videos`, `hourly-vph-updater`)
+7. `supabase/functions/[function-name]/index.ts` 파일 내용 전체 복사
+8. Editor에 붙여넣기
+9. **Deploy** 버튼 클릭
 
 #### 방법 B: Supabase CLI
 
 ```bash
-# Supabase CLI 설치
-npm install -g supabase
-
-# Supabase 로그인
-supabase login
+# Supabase CLI 설치 (Windows에서는 npx 사용 권장)
+npx supabase login
 
 # 프로젝트 링크
-supabase link --project-ref YOUR_PROJECT_REF
+npx supabase link --project-ref hteazdwvhjaexjxwiwwl
 
 # Edge Function 배포
-supabase functions deploy [function-name]
+npx supabase functions deploy update-trending-videos
+npx supabase functions deploy hourly-vph-updater
 ```
 
-### 2.2 환경 변수 설정
+### 2.2 환경 변수 설정 (Secrets)
 
 1. **Project Settings** → **Edge Functions** → **Secrets** 탭
-2. **Add new secret** 클릭
-3. Name: `YOUTUBE_DATA_API_KEY`
-4. Value: YouTube API 키 입력
-5. **Save** 클릭
+2. **Add new secret** 클릭하여 다음 3개 추가:
 
-### 2.3 Cron 작업 설정 (선택사항)
+| Name | Value | 설명 |
+|------|-------|------|
+| `YOUTUBE_DATA_API_KEY` | YouTube API 키 | Google Cloud Console에서 발급 |
+| `SUPABASE_URL` | `https://hteazdwvhjaexjxwiwwl.supabase.co` | 프로젝트 URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service Role Key | Settings → API → service_role 키 |
 
-**참고**: pg_cron은 Pro 플랜 이상에서만 사용 가능합니다.
+**Service Role Key 찾는 방법:**
+- Supabase Dashboard → **Settings** → **API**
+- **service_role** 키 복사 (⚠️ 주의: 서버에서만 사용)
 
-1. **SQL Editor**에서 `supabase/cron.sql` 파일 내용 실행
-2. Cron 작업 확인:
+### 2.3 Cron 작업 설정 (자동 VPH 업데이트)
+
+**⚠️ 주의**: pg_cron은 **Pro 플랜 이상**에서만 사용 가능합니다.
+
+#### Dashboard에서 설정
+
+1. **Supabase Dashboard** → **SQL Editor** 클릭
+2. **New query** 클릭
+3. `supabase/cron.sql` 파일 내용 전체 복사 (Ctrl+A, Ctrl+C)
+4. SQL Editor에 붙여넣기 (Ctrl+V)
+5. **Run** 버튼 클릭 (또는 Ctrl+Enter)
+
+#### 설정 확인
+
 ```sql
-SELECT * FROM cron.job;
+-- Cron 작업 확인
+SELECT 
+    jobid,
+    jobname,
+    schedule,
+    active
+FROM cron.job
+WHERE jobname = 'hourly-vph-updater';
 ```
+
+**예상 결과:**
+- `jobname`: `hourly-vph-updater`
+- `schedule`: `0 * * * *` (1시간마다)
+- `active`: `true`
 
 ## ✅ 3단계: Dashboard 확인
 
@@ -169,4 +197,4 @@ CREATE POLICY "Anyone can read view history" ON view_history
 
 - **Edge Functions 코드**: `supabase/functions/` 디렉토리
 - **SQL 스크립트**: `supabase/` 디렉토리
-- **프로젝트 구조**: [JS_FILE_MAPPING.md](JS_FILE_MAPPING.md) 참조
+- **자동화 작업**: [SERVER_AUTOMATION_SUMMARY.md](SERVER_AUTOMATION_SUMMARY.md) 참조
