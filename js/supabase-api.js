@@ -1064,12 +1064,16 @@ export async function getRecentVelocityForVideo(videoId) {
         if (totalSnapshotCount >= 2) {
             // 최근 6개 스냅샷 가져오기 (5개 구간 + 현재값 표시용)
             const limitCount = Math.min(6, totalSnapshotCount);
-            const { data: recentSnapshots } = await supabase
+            const { data: recentSnapshots, error: snapshotError } = await supabase
                 .from('view_history')
                 .select('view_count, fetched_at')
                 .eq('video_id', videoId)
                 .order('fetched_at', { ascending: false })
                 .limit(limitCount);
+
+            if (snapshotError) {
+                console.warn(`⚠️ 그래프 데이터 로드 실패 (${videoId}):`, snapshotError);
+            }
 
             if (recentSnapshots && recentSnapshots.length >= 2) {
                 // 시간순으로 정렬 (오래된 것부터)
@@ -1097,22 +1101,23 @@ export async function getRecentVelocityForVideo(videoId) {
                 // 최근 5개 구간만 선택 (그래프용)
                 const recent5Segments = vphSegments.slice(-5);
                 
-                // 현재값 (가장 최신 구간의 VPH)
-                const currentVph = recent5Segments.length > 0 
-                    ? recent5Segments[recent5Segments.length - 1].vph 
-                    : vph;
-                
-                // 그래프 데이터 구성
-                graphData = {
-                    segments: recent5Segments.map((seg, idx) => ({
-                        vph: seg.vph,
-                        time: seg.to, // 구간 종료 시간 (표시용)
-                        label: `구간 ${idx + 1}`,
-                        isCurrent: idx === recent5Segments.length - 1 // 마지막 구간이 현재값
-                    })),
-                    currentVph: currentVph,
-                    currentIndex: recent5Segments.length - 1 // 현재 구간 인덱스
-                };
+                // 그래프 데이터는 최소 1개 구간만 있어도 생성
+                if (recent5Segments.length >= 1) {
+                    // 현재값 (가장 최신 구간의 VPH)
+                    const currentVph = recent5Segments[recent5Segments.length - 1].vph;
+                    
+                    // 그래프 데이터 구성
+                    graphData = {
+                        segments: recent5Segments.map((seg, idx) => ({
+                            vph: seg.vph,
+                            time: seg.to, // 구간 종료 시간 (표시용)
+                            label: `구간 ${idx + 1}`,
+                            isCurrent: idx === recent5Segments.length - 1 // 마지막 구간이 현재값
+                        })),
+                        currentVph: currentVph,
+                        currentIndex: recent5Segments.length - 1 // 현재 구간 인덱스
+                    };
+                }
                 
                 // 전체 추세 분석 (기존 로직 유지)
                 if (totalSnapshotCount >= 3) {
