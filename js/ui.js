@@ -1394,9 +1394,8 @@ function checkAndResortWhenAllCalculated() {
             }
         });
         
-        // 첫 페이지로 이동하여 재렌더링 (상위 8개가 1페이지에 표시됨)
-        currentPage = 1;
-        renderPage(1);
+        // 현재 페이지 유지하며 재렌더링 (페이지 리셋 방지)
+        renderPage(currentPage);
     } else if (vphCalculationQueue.length > 0 || vphCalculationRunning > 0) {
         // 아직 계산 중이면 2초 후 다시 확인
         if (window.vphResortTimer) {
@@ -1423,9 +1422,9 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
         return;
     }
     
-    // 타임아웃 설정 (5초로 단축)
+    // 타임아웃 설정 (3초)
     const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('VPH 계산 타임아웃')), 5000);
+        setTimeout(() => reject(new Error('VPH 계산 타임아웃')), 3000);
     });
     
     try {
@@ -1523,13 +1522,30 @@ async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', 
         }, 500); // 0.5초 딜레이로 여러 계산 완료를 기다림
         
     } catch (error) {
-        // 타임아웃 또는 기타 에러 처리
+        // 타임아웃 또는 기타 에러 처리 (3초 타임아웃 시 0으로 처리)
         if (error.message === 'VPH 계산 타임아웃') {
-            console.warn(`⚠️ VPH 계산 타임아웃 (${videoId}): 5초 초과`);
+            console.warn(`⚠️ VPH 계산 타임아웃 (${videoId}): 3초 초과, 0으로 처리`);
+            // 타임아웃 시 0으로 표시
+            if (recentEl) {
+                recentEl.textContent = '0/hr';
+                recentEl.style.opacity = '1.0';
+            }
+            if (item) item.vph = 0; // 0으로 저장
+            // 배지 업데이트
+            const badgeEl = panelEl?.closest('.video-card')?.querySelector('.vpd-badge');
+            if (badgeEl && item && currentVelocityMetric === 'recent-vph') {
+                const velocityValue = getVelocityValue(item);
+                badgeEl.textContent = formatVelocityBadge(velocityValue);
+            }
         } else {
             console.warn('⚠️ 최근 VPH 로드 실패:', error);
+            // 일반 에러도 0으로 처리
+            if (recentEl) {
+                recentEl.textContent = '0/hr';
+                recentEl.style.opacity = '1.0';
+            }
+            if (item) item.vph = 0;
         }
-        if (recentEl) recentEl.textContent = t('velocity.unavailable');
         // 재계산 방지 (에러 발생 시에도 무한 재시도 방지)
         vphCalculatedVideos.add(videoId);
         // 앱이 멈추지 않도록 에러를 무시
