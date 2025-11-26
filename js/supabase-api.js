@@ -1226,7 +1226,7 @@ export { CACHE_TTL_MS, CACHE_TTL_HOURS };
 
 /**
  * Edge Function을 수동으로 호출하는 함수
- * @param {string} functionName - 호출할 Edge Function 이름 (예: 'hourly-view-tracker', 'daily-video-accumulator')
+ * @param {string} functionName - 호출할 Edge Function 이름
  * @returns {Promise<Object>} - Edge Function 응답
  */
 export async function invokeEdgeFunction(functionName) {
@@ -1258,10 +1258,4 @@ export async function invokeEdgeFunction(functionName) {
     }
 }
 
-/**
- * daily-video-accumulator Edge Function 수동 호출
- */
-export async function triggerDailyVideoAccumulator() {
-    return await invokeEdgeFunction('daily-video-accumulator');
-}
 
