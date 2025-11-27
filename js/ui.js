@@ -1554,8 +1554,8 @@ export function renderPage(page, skipSort = false) {
     gridContainer.appendChild(fragment);
     resultsDiv.appendChild(gridContainer);
     
-    // Update pagination
-    updatePaginationControls(dedupedItems.length, dedupedItems.length || 1);
+    // Update result count
+    updateResultCount(dedupedItems.length);
     
     // 모든 항목에 대해 VPH 계산 시작 (페이지와 관계없이)
     // 첫 페이지 렌더링 시에만 실행 (중복 계산 방지)
@@ -2294,38 +2294,9 @@ export function applyFilters(items) {
 // 페이지네이션
 // ============================================
 
-export function updatePaginationControls(totalItems, pageSizeOverride = null) {
-    const effectivePageSize = pageSizeOverride || getEffectivePageSize();
-    const totalPages = Math.ceil(totalItems / effectivePageSize);
-    const pageInfo = document.getElementById('pageInfo');
+export function updateResultCount(totalItems) {
     const totalCount = document.getElementById('totalCount');
-    const prevBtn = document.getElementById('prevPage');
-    const nextBtn = document.getElementById('nextPage');
-    
-    if (pageInfo) {
-        pageInfo.innerHTML = `${currentPage} / ${totalPages} <span data-i18n="result.page">${t('result.page')}</span>`;
-    }
     if (totalCount) totalCount.textContent = totalItems;
-    
-    if (prevBtn) prevBtn.disabled = currentPage <= 1;
-    if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
-}
-
-export function setupPaginationHandlers() {
-    document.getElementById('prevPage')?.addEventListener('click', () => {
-        if (currentPage > 1) {
-            renderPage(currentPage - 1);
-        }
-    });
-    
-    document.getElementById('nextPage')?.addEventListener('click', () => {
-        const dedupedItems = getFilteredDedupedItems();
-        const effectivePageSize = dedupedItems.length || 1;
-        const totalPages = Math.ceil(dedupedItems.length / effectivePageSize);
-        if (currentPage < totalPages) {
-            renderPage(currentPage + 1);
-        }
-    });
 }
 
 // ============================================
@@ -2697,9 +2668,6 @@ export function setupEventListeners() {
             });
         }
     });
-    
-    // Pagination
-    setupPaginationHandlers();
     
     // Sort controls
     document.getElementById('sortVpdSelect')?.addEventListener('change', () => {

@@ -199,35 +199,36 @@
                         <input type="number" id="durationMax" data-i18n-placeholder="filter.duration.maxPlaceholder" placeholder="최대 (분)" min="0"> <small data-i18n="filter.duration.unit">(분 단위)</small>
                     </div>
                 </details>
+                
+                <!-- Sort and Display Controls -->
+                <details class="filter-group sort-filter" open>
+                    <summary>
+                        <span data-i18n="filter.sort">정렬 및 표시</span>
+                        <span class="summary-indicator" aria-hidden="true">›</span>
+                    </summary>
+                    <div class="filter-options">
+                        <div class="sort-control">
+                            <label for="sortVpdSelect" data-i18n="sort.vpd">조회수 정렬</label>
+                            <select id="sortVpdSelect">
+                                <option value="none" data-i18n="sort.vpd.none">기본</option>
+                                <option value="desc" selected data-i18n="sort.vpd.desc">높은 순</option>
+                                <option value="asc" data-i18n="sort.vpd.asc">낮은 순</option>
+                            </select>
+                        </div>
+                        <div class="sort-control">
+                            <label for="velocityMetricSelect" data-i18n="sort.velocityMetric">표시 단위</label>
+                            <select id="velocityMetricSelect">
+                                <option value="recent-vph" data-i18n="sort.velocityMetric.recentVph">최근 VPH</option>
+                                <option value="day" selected data-i18n="sort.velocityMetric.day">일간(VPD)</option>
+                                <option value="hour" data-i18n="sort.velocityMetric.hour">시간당(VPH)</option>
+                            </select>
+                        </div>
+                    </div>
+                </details>
             </div>
 
-        <div class="pagination-section">
-            <div class="result-summary" id="resultSummary">
-                <span data-i18n="result.summary">검색 결과</span>: <span id="totalCount">0</span><span data-i18n="result.count">개</span>
-            </div>
-            <div class="sort-controls">
-                <div class="sort-control">
-                    <label for="sortVpdSelect" data-i18n="sort.vpd">조회수/정렬</label>
-                    <select id="sortVpdSelect">
-                        <option value="none" data-i18n="sort.vpd.none">기본</option>
-                        <option value="desc" selected data-i18n="sort.vpd.desc">높은 순</option>
-                        <option value="asc" data-i18n="sort.vpd.asc">낮은 순</option>
-                    </select>
-                </div>
-                <div class="sort-control">
-                    <label for="velocityMetricSelect" data-i18n="sort.velocityMetric">표시 단위</label>
-                    <select id="velocityMetricSelect">
-                        <option value="recent-vph" data-i18n="sort.velocityMetric.recentVph">최근 VPH</option>
-                        <option value="day" selected data-i18n="sort.velocityMetric.day">일간(VPD)</option>
-                        <option value="hour" data-i18n="sort.velocityMetric.hour">시간당(VPH)</option>
-                    </select>
-                </div>
-            </div>
-            <div class="pagination-bar">
-                <button id="prevPage" class="page-btn" aria-label="Previous page">◀</button>
-                <span id="pageInfo" class="page-info">1 / 1 <span data-i18n="result.page">page</span></span>
-                <button id="nextPage" class="page-btn" aria-label="Next page">▶</button>
-            </div>
+        <div class="result-summary" id="resultSummary">
+            <span data-i18n="result.summary">검색 결과</span>: <span id="totalCount">0</span><span data-i18n="result.count">개</span>
         </div>
 
         <div id="results"></div>

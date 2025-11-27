@@ -233,10 +233,6 @@ body {
         width: 100%;
     }
 
-    .pagination-bar {
-        flex-direction: column;
-        gap: 8px;
-    }
 
     .card-grid {
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -261,16 +257,8 @@ body {
         font-size: 0.9em;
     }
 
-    .pagination-section {
-        gap: 6px;
-    }
-
-    .page-btn {
-        width: 100%;
-    }
-
     .sort-controls {
-        gap: 8px;
+        gap: 10px;
     }
 }
 
@@ -693,35 +681,23 @@ body {
     border-color: #667eea;
 }
 
-.pagination-section {
-    text-align: center;
-    margin-bottom: 30px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
 .sort-controls {
     display: flex;
-    align-items: flex-end;
-    gap: 16px;
-    font-size: 0.9em;
-    color: #f5f5f5;
-    justify-content: center;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .sort-control {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    min-width: 150px;
+    gap: 6px;
 }
 
 .sort-control label {
-    font-size: 0.85em;
-    color: rgba(255,255,255,0.85);
+    font-size: 0.9em;
+    color: rgba(255,255,255,0.9);
     text-align: left;
+    font-weight: 500;
 }
 
 .sort-control select {
@@ -729,52 +705,16 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.4);
     border-radius: 8px;
     color: #1a1a1a;
-    padding: 6px 14px;
-    font-weight: 600;
+    padding: 8px 12px;
+    font-weight: 500;
     font-size: 0.95em;
+    width: 100%;
 }
 
 .sort-control select:focus {
     outline: none;
     border-color: #6a82fb;
     box-shadow: 0 0 0 2px rgba(106, 130, 251, 0.25);
-}
-
-.pagination-bar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 14px;
-    margin: 18px 0 10px;
-}
-
-.page-btn {
-    border: none;
-    padding: 10px 14px;
-    border-radius: 999px;
-    font-weight: 700;
-    cursor: pointer;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: #fff;
-    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.page-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-}
-
-.page-btn:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-}
-
-.page-info {
-    font-weight: 700;
-    color: #fff;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
-    font-size: 16px;
 }
 
 .result-summary {
@@ -950,11 +890,6 @@ details.filter-group[open] .summary-indicator {
 
     .summary-indicator {
         font-size: 1.1rem;
-    }
-
-    .page-btn {
-        width: 100%;
-        padding: 15px 40px;
     }
 
     .card-grid {
