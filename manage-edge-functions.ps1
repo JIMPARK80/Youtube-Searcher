@@ -61,8 +61,14 @@ function Show-FunctionList {
         $func = $AVAILABLE_FUNCTIONS[$i]
         $path = "supabase\functions\$func\index.ts"
         $exists = Test-Path $path
-        $status = if ($exists) { "✅" } else { "❌" }
-        Write-Host "  $($i + 1). $status $func" -ForegroundColor $(if ($exists) { "Green" } else { "Red" })
+        if ($exists) {
+            $status = "✅"
+            $color = "Green"
+        } else {
+            $status = "❌"
+            $color = "Red"
+        }
+        Write-Host "  $($i + 1). $status $func" -ForegroundColor $color
     }
     Write-Host ""
 }

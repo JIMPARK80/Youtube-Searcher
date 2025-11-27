@@ -16,7 +16,10 @@ const API_THROTTLE_MS = 200; // Delay between requests: 200ms
 serve(async (_req) => {
   try {
     // Get Service Role Key from environment variables
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const serviceRoleKey =
+      Deno.env.get("SR_SERVICE_ROLE_KEY") ??
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+      "";
     
     // Get Supabase URL from environment variables
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
