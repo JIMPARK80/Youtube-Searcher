@@ -1,7 +1,8 @@
 // ============================================
 // Supabase Edge Function: Daily Statistics Updater
-// Updates like_count and subscriber_count data daily
+// Updates all video metadata (title, duration, tags, like_count, subscriber_count) daily
 // Runs every day at midnight (scheduled via pg_cron)
+// This function updates each video's metadata daily using batch processing
 // ============================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -71,6 +72,7 @@ serve(async (_req) => {
     let totalUpdated = 0;
     let likeCountUpdated = 0;
     let subscriberCountUpdated = 0;
+    let metadataUpdated = 0;
 
     // 3. Call YouTube API for each batch
     for (let i = 0; i < chunks.length; i++) {
@@ -82,9 +84,9 @@ serve(async (_req) => {
       }
 
       try {
-        // 3-1. Get like count (videos.list)
+        // 3-1. Get full video metadata (videos.list) - batch processing
         const videosUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
-        videosUrl.searchParams.set("part", "snippet,statistics");
+        videosUrl.searchParams.set("part", "id,snippet,contentDetails,statistics");
         videosUrl.searchParams.set("id", chunkIds.join(","));
         videosUrl.searchParams.set("key", YOUTUBE_API_KEY);
 
@@ -100,21 +102,57 @@ serve(async (_req) => {
         }
 
         const videosData = await videosResponse.json();
-        const videosMap = new Map<string, { likeCount: number; channelId: string }>();
+        const videosMap = new Map<
+          string,
+          {
+            likeCount: number;
+            channelId: string;
+            title: string;
+            description: string;
+            duration: string;
+            tags: string[];
+            thumbnailUrl: string;
+            publishedAt: string;
+            channelTitle: string;
+            viewCount: number;
+            commentCount: number;
+          }
+        >();
 
         // Store video information and collect channel IDs
         const channelIds = new Set<string>();
         for (const item of videosData.items || []) {
           const likeCount = Number(item.statistics?.likeCount || 0);
-          const channelId = item.snippet?.channelId;
-          
+          const viewCount = Number(item.statistics?.viewCount || 0);
+          const commentCount = Number(item.statistics?.commentCount || 0);
+          const channelId = item.snippet?.channelId || "";
+          const title = item.snippet?.title || "";
+          const description = item.snippet?.description || "";
+          const duration = item.contentDetails?.duration || "";
+          const tags = item.snippet?.tags || [];
+          const thumbnailUrl =
+            item.snippet?.thumbnails?.medium?.url ||
+            item.snippet?.thumbnails?.default?.url ||
+            "";
+          const publishedAt = item.snippet?.publishedAt || "";
+          const channelTitle = item.snippet?.channelTitle || "";
+
           if (channelId) {
             channelIds.add(channelId);
           }
-          
+
           videosMap.set(item.id, {
             likeCount,
-            channelId: channelId || "",
+            channelId,
+            title,
+            description,
+            duration,
+            tags,
+            thumbnailUrl,
+            publishedAt,
+            channelTitle,
+            viewCount,
+            commentCount,
           });
         }
 
@@ -164,7 +202,7 @@ serve(async (_req) => {
           }
         }
 
-        // 3-3. Update videos table
+        // 3-3. Update videos table with full metadata
         for (const videoId of chunkIds) {
           const videoInfo = videosMap.get(videoId);
           if (!videoInfo) {
@@ -172,18 +210,40 @@ serve(async (_req) => {
           }
 
           const updateData: {
+            title?: string;
+            description?: string;
+            duration?: string;
+            tags?: string[];
+            thumbnail_url?: string;
+            published_at?: string;
+            channel_title?: string;
+            view_count?: number;
             like_count?: number;
+            comment_count?: number;
             subscriber_count?: number;
             updated_at?: string;
           } = {
             updated_at: new Date().toISOString(),
           };
 
-          // Update like count
+          // Update all metadata fields
+          if (videoInfo.title) updateData.title = videoInfo.title;
+          if (videoInfo.description !== undefined)
+            updateData.description = videoInfo.description;
+          if (videoInfo.duration) updateData.duration = videoInfo.duration;
+          if (videoInfo.tags && videoInfo.tags.length > 0)
+            updateData.tags = videoInfo.tags;
+          if (videoInfo.thumbnailUrl) updateData.thumbnail_url = videoInfo.thumbnailUrl;
+          if (videoInfo.publishedAt) updateData.published_at = videoInfo.publishedAt;
+          if (videoInfo.channelTitle) updateData.channel_title = videoInfo.channelTitle;
+          if (videoInfo.viewCount !== undefined && videoInfo.viewCount !== null)
+            updateData.view_count = videoInfo.viewCount;
           if (videoInfo.likeCount !== undefined && videoInfo.likeCount !== null) {
             updateData.like_count = videoInfo.likeCount;
             likeCountUpdated++;
           }
+          if (videoInfo.commentCount !== undefined && videoInfo.commentCount !== null)
+            updateData.comment_count = videoInfo.commentCount;
 
           // Update subscriber count
           if (videoInfo.channelId) {
@@ -194,7 +254,7 @@ serve(async (_req) => {
             }
           }
 
-          // Execute update
+          // Execute update (always update if we have video info)
           if (Object.keys(updateData).length > 1) {
             // Don't update if only updated_at is present
             const { error: updateError } = await supabase
@@ -208,6 +268,7 @@ serve(async (_req) => {
             }
 
             totalUpdated++;
+            metadataUpdated++;
           }
         }
 
@@ -228,6 +289,7 @@ serve(async (_req) => {
         success: true,
         processed: totalProcessed,
         updated: totalUpdated,
+        metadataUpdated,
         likeCountUpdated,
         subscriberCountUpdated,
         total: videoIds.length,

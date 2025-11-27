@@ -24,7 +24,8 @@ $SERVICE_ROLE_KEY = "sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ"
 # 사용 가능한 함수 목록
 $AVAILABLE_FUNCTIONS = @(
     "hourly-vph-updater",
-    "daily-statistics-updater"
+    "daily-statistics-updater",
+    "search-keyword-updater"
 )
 
 # ============================================

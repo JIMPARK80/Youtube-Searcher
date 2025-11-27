@@ -101,6 +101,36 @@ SELECT cron.schedule(
 );
 
 -- ============================================
+-- 검색어별 영상 업데이트 Cron 작업 (매일 오전 3시)
+-- ============================================
+-- search-keyword-updater Edge Function을 매일 오전 3시에 실행
+-- This is the most important cron function
+-- Updates videos for configured search keywords
+-- Only updates if cache is older than 24 hours
+
+-- 기존 작업이 있으면 삭제
+SELECT cron.unschedule('search-keyword-updater') WHERE EXISTS (
+    SELECT 1 FROM cron.job WHERE jobname = 'search-keyword-updater'
+);
+
+-- 새 Cron 작업 등록 (매일 오전 3시 실행)
+SELECT cron.schedule(
+    'search-keyword-updater',
+    '0 3 * * *', -- Every day at 3:00 AM
+    $$
+    SELECT
+        net.http_post(
+            url := 'https://hteazdwvhjaexjxwiwwl.supabase.co/functions/v1/search-keyword-updater',
+            headers := jsonb_build_object(
+                'Content-Type', 'application/json',
+                'Authorization', 'Bearer sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ'
+            ),
+            body := '{}'::jsonb
+        ) AS request_id;
+    $$
+);
+
+-- ============================================
 -- Cron 작업 확인
 -- ============================================
 -- 실행 중인 작업 확인:
@@ -111,6 +141,6 @@ SELECT
     active,
     command
 FROM cron.job
-WHERE jobname IN ('hourly-vph-updater', 'daily-statistics-updater')
+WHERE jobname IN ('hourly-vph-updater', 'daily-statistics-updater', 'search-keyword-updater')
 ORDER BY jobname;
 

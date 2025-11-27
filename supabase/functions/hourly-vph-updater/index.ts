@@ -60,8 +60,15 @@ serve(async (_req) => {
       );
     }
 
-    const videoIds = configData.video_ids as string[];
+    let videoIds = configData.video_ids as string[];
     const retentionHours = configData.retention_hours || DEFAULT_RETENTION_HOURS;
+    
+    // Limit to 5,000 videos for API quota management
+    const MAX_TRACKED_VIDEOS = 5000;
+    if (videoIds.length > MAX_TRACKED_VIDEOS) {
+      console.log(`⚠️ Limiting video tracking to ${MAX_TRACKED_VIDEOS} videos (from ${videoIds.length})`);
+      videoIds = videoIds.slice(0, MAX_TRACKED_VIDEOS);
+    }
     const maxEntries = configData.max_entries || DEFAULT_MAX_ENTRIES;
 
     console.log(`📹 Processing ${videoIds.length} videos for VPH update`);

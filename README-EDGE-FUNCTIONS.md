@@ -74,15 +74,33 @@ Cron 작업 설정 SQL을 클립보드에 복사하고 Dashboard를 엽니다.
 - **API:** `videos.list` (part=statistics)
 - **저장:** `view_history` 테이블
 
-### 2. daily-statistics-updater
-- **설명:** 좋아요와 구독자 데이터를 매일 업데이트
+### 2. daily-statistics-updater (Video Metadata Updater)
+- **설명:** 모든 영상의 메타데이터를 하루에 1번 업데이트 (Video Metadata Updater)
 - **실행 주기:** 매일 자정 (cron: `0 0 * * *`)
 - **API:** 
-  - `videos.list` (part=snippet,statistics) - 좋아요
+  - `videos.list` (part=id,snippet,contentDetails,statistics) - 전체 메타데이터
   - `channels.list` (part=statistics) - 구독자
 - **저장:** `videos` 테이블
+- **업데이트 항목:**
+  - title, description, duration, tags, thumbnail_url
+  - view_count, like_count, comment_count
+  - subscriber_count (채널별)
+- **핵심 포인트:** 배치(batch) 단위로 처리 (50개씩) → API 절약 극대화
 
-### 3. update-trending-videos
+### 3. search-keyword-updater ⭐ (가장 중요)
+- **설명:** 검색어별 영상 자동 업데이트 (가장 중요한 크론 함수)
+- **실행 주기:** 12시간마다 (cron: `0 */12 * * *`)
+- **API:** 
+  - `search.list` - 검색 결과 조회
+  - `videos.list` - 영상 상세 정보
+- **저장:** 
+  - `videos` 테이블 (새 영상만 upsert)
+  - `search_cache` 테이블 (검색 결과 캐시)
+  - `view_tracking_config` (VPH 추적용)
+- **캐시 전략:** 12시간 TTL (캐시가 만료된 경우에만 업데이트)
+- **핵심 포인트:** 검색어 조회는 캐시 기반이어야 하므로 매번 API 호출하지 않음
+
+### 4. update-trending-videos
 - **설명:** 트렌딩 비디오 목록 업데이트
 - **실행 주기:** 72시간마다
 - **API:** `search.list`
@@ -277,6 +295,69 @@ WHERE jobname = 'hourly-vph-updater';
 - `schedule`: `0 * * * *` (1시간마다)
 - `active`: `true`
 
+## 검색어 설정 가이드 (Search Keyword Updater)
+
+### 검색어 리스트 설정
+
+`search-keyword-updater` 함수는 `config` 테이블의 `searchKeywords` 키에서 검색어 리스트를 읽습니다.
+
+**방법 1: Supabase Dashboard에서 설정**
+
+1. **Table Editor** → `config` 테이블 선택
+2. **Insert row** 클릭 (또는 기존 `searchKeywords` 행 수정)
+3. `key`: `searchKeywords` 입력
+4. `value`: `["인생사연", "키워드2", "키워드3"]` 입력 (JSON 배열 형식)
+5. **Save** 클릭
+
+**방법 2: SQL Editor에서 실행**
+
+```sql
+-- 검색어 리스트 설정
+INSERT INTO config (key, value)
+VALUES ('searchKeywords', '["인생사연", "키워드2", "키워드3"]'::jsonb)
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+```
+
+**예시:**
+```sql
+-- 여러 검색어 설정
+INSERT INTO config (key, value)
+VALUES ('searchKeywords', '["인생사연", "요리", "여행", "게임"]'::jsonb)
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+```
+
+### 동작 방식
+
+1. **캐시 확인**: 각 검색어의 `search_cache` 테이블을 확인
+2. **캐시 만료 확인**: 캐시가 12시간 이상 지났으면 업데이트 진행
+3. **YouTube API 호출**: 
+   - `search.list` API로 검색 결과 조회 (최대 50개)
+   - `videos.list` API로 상세 정보 조회
+4. **데이터 저장**:
+   - 새 영상은 `videos` 테이블에 추가
+   - 기존 영상은 키워드 배열에 키워드 추가 (중복 방지)
+   - `search_cache` 테이블 업데이트
+   - `view_tracking_config`에 video_ids 추가 (VPH 추적 시작)
+
+### 실행 주기 조정
+
+기본값은 **12시간마다** 실행됩니다. 더 자주 업데이트하려면 `cron.sql`에서 스케줄을 변경하세요:
+
+```sql
+-- 6시간마다 실행 (급한 키워드용)
+'0 */6 * * *'
+
+-- 24시간마다 실행 (기본)
+'0 0 * * *'
+```
+
+### 중요 사항
+
+- ✅ **캐시 기반**: 검색어 조회는 캐시 기반이어야 하므로 매번 API 호출하지 않음
+- ✅ **자동 중복 제거**: 같은 영상이 여러 키워드에 포함되어도 중복 저장되지 않음
+- ✅ **VPH 자동 추적**: 새로 추가된 영상은 자동으로 VPH 추적 대상에 추가됨
+- ⚠️ **API 할당량**: 검색어가 많을수록 API 사용량이 증가하므로 주의
+
 ## 비디오 ID 추가 가이드
 
 ### 현재 설정
@@ -429,23 +510,65 @@ LIMIT 1;
 
 서버에서 자동으로 실행되는 YouTube API 작업들을 정리한 문서입니다.
 
+이 아키텍처는 실제 YouTube 애널리틱스 SaaS가 운영되는 방식과 동일합니다.
+
+### 최종 아키텍처 다이어그램
+
+```
+┌─────────────────────────────────────────┐
+│   SEARCH KEYWORD UPDATER (12시간마다)    │  ⭐ 가장 중요
+│   search.list + videos.list               │
+└──────────────┬──────────────────────────┘
+                ↓
+        public.videos updated (새 영상만 upsert)
+        public.search_cache updated
+        view_tracking_config.video_ids 추가
+
+┌─────────────────────────────────────────┐
+│   DAILY METADATA UPDATER (매일 자정)    │
+│   videos.list (batched, 50개씩)         │
+└──────────────┬──────────────────────────┘
+                ↓
+        public.videos updated (전체 메타데이터)
+        - title, description, duration, tags
+        - view_count, like_count, comment_count
+        - subscriber_count
+
+┌─────────────────────────────────────────┐
+│   HOURLY VPH UPDATER (매 시간)          │
+│   videos.list (part=statistics)         │
+└──────────────┬──────────────────────────┘
+                ↓
+        public.view_history updated
+        (video_id, view_count, fetched_at)
+```
+
+### 핵심 원칙
+
+1. **검색어 조회는 캐시 기반** - 매번 API 호출하지 않음 (12-24시간 TTL)
+2. **배치 처리** - 모든 API 호출은 50개씩 묶어서 처리 (API 절약 극대화)
+3. **자동 VPH 추적** - 새로 추가된 영상은 자동으로 VPH 추적 시작
+4. **메타데이터 일일 업데이트** - 하루 1회 전체 메타데이터 업데이트
+
 ### 자동화 작업 요약 테이블
 
-| 항목 | VPH 데이터 업데이트 | 일일 통계 업데이트 | 트렌딩 비디오 업데이트 |
-|------|-------------------|------------------|---------------------|
-| **Edge Function** | `hourly-vph-updater` | `daily-statistics-updater` | `update-trending-videos` |
-| **실행 주기** | 매 시간 정각 (00:00, 01:00...) | 매일 자정 (00:00) | 수동 실행 |
-| **스케줄링** | `pg_cron` (Pro 플랜 필요) | `pg_cron` (Pro 플랜 필요) | 수동 또는 별도 Cron 설정 |
-| **YouTube API 엔드포인트** | `videos.list` | `videos.list`, `channels.list` | `search` |
-| **API 파라미터** | `part=statistics`, `id={video_ids}` | `part=snippet,statistics`, `part=statistics` | `part=id`, `q=인생사연`, `maxResults=20` |
-| **배치 크기** | 50개씩 | 50개씩 | 1회 호출 |
-| **Throttle** | 200ms (배치 사이) | 200ms (배치 사이) | 없음 |
-| **처리 대상** | `view_tracking_config.video_ids` 전체 | `view_tracking_config.video_ids` 전체 | 키워드 "인생사연" 상위 20개 |
-| **저장 테이블** | `view_history` | `videos` | `view_tracking_config` |
-| **저장 데이터** | `video_id`, `view_count`, `fetched_at` | `like_count`, `subscriber_count` | `video_ids` 배열 업데이트 |
-| **데이터 정리** | 240시간 이상 또는 240개 초과 삭제 | 없음 | 없음 |
-| **1회 실행 API 사용량** | `ceil(비디오 수 / 50)` 회 | `ceil(비디오 수 / 50) + ceil(채널 수 / 50)` 회 | 1회 |
-| **예시 (10,000개 비디오)** | 200회/실행 | 200회/실행 (videos) + 20회/실행 (channels) | 1회/실행 |
+| 항목 | 검색어별 영상 업데이트 ⭐ | VPH 데이터 업데이트 | 일일 메타데이터 업데이트 | 트렌딩 비디오 업데이트 |
+|------|----------------------|-------------------|----------------------|---------------------|
+| **Edge Function** | `search-keyword-updater` | `hourly-vph-updater` | `daily-statistics-updater` | `update-trending-videos` |
+| **실행 주기** | 12시간마다 (00:00, 12:00) | 매 시간 정각 (00:00, 01:00...) | 매일 자정 (00:00) | 수동 실행 |
+| **스케줄링** | `pg_cron` (Pro 플랜 필요) | `pg_cron` (Pro 플랜 필요) | `pg_cron` (Pro 플랜 필요) | 수동 또는 별도 Cron 설정 |
+| **YouTube API 엔드포인트** | `search.list`, `videos.list` | `videos.list` | `videos.list`, `channels.list` | `search` |
+| **API 파라미터** | `part=id,snippet`, `q={keyword}`, `maxResults=50` | `part=statistics`, `id={video_ids}` | `part=id,snippet,contentDetails,statistics` | `part=id`, `q=인생사연`, `maxResults=20` |
+| **배치 크기** | 50개씩 (검색 결과) | 50개씩 | 50개씩 | 1회 호출 |
+| **Throttle** | 200ms (키워드 사이) | 200ms (배치 사이) | 200ms (배치 사이) | 없음 |
+| **처리 대상** | `config.searchKeywords` 리스트 | `view_tracking_config.video_ids` 전체 | `view_tracking_config.video_ids` 전체 | 키워드 "인생사연" 상위 20개 |
+| **저장 테이블** | `videos`, `search_cache`, `view_tracking_config` | `view_history` | `videos` | `view_tracking_config` |
+| **저장 데이터** | 새 영상 upsert, 검색 캐시 업데이트 | `video_id`, `view_count`, `fetched_at` | `title`, `description`, `duration`, `tags`, `view_count`, `like_count`, `subscriber_count` 등 전체 메타데이터 | `video_ids` 배열 업데이트 |
+| **데이터 정리** | 없음 (캐시 기반) | 240시간 이상 또는 240개 초과 삭제 | 없음 | 없음 |
+| **캐시 전략** | 12시간 TTL (캐시 만료 시에만 업데이트) | 없음 | 없음 | 없음 |
+| **1회 실행 API 사용량** | `검색어 수 × 2` (search + videos) | `ceil(비디오 수 / 50)` 회 | `ceil(비디오 수 / 50) + ceil(채널 수 / 50)` 회 | 1회 |
+| **예시 (10개 검색어, 10,000개 비디오)** | 20회/실행 (10 search + 10 videos) | 200회/실행 | 200회/실행 (videos) + 20회/실행 (channels) | 1회/실행 |
+| **중요도** | ⭐⭐⭐ 가장 중요 | ⭐⭐ 중요 | ⭐⭐ 중요 | ⭐ 선택사항 |
 | **일일 API 사용량** | 4,800 units (200 × 24시간) | 220 units (1일 1회) | 수동 실행 시에만 |
 | **월간 API 사용량** | 144,000 units | 6,600 units | 수동 실행 시에만 |
 
