@@ -11,7 +11,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const YOUTUBE_API_KEY = Deno.env.get("YOUTUBE_DATA_API_KEY");
 const MAX_RESULTS_PER_KEYWORD = 50; // YouTube Search API limit per request
 const API_THROTTLE_MS = 200; // Delay between requests: 200ms
-const CACHE_TTL_HOURS = 24; // Cache expires after 24 hours
+const CACHE_TTL_HOURS = 72; // Cache expires after 72 hours (3 days) - Optimized to reduce duplicate API calls
+
+// Smart Keyword Filtering thresholds
+const MIN_EFFICIENCY_SCORE = 0.1; // Minimum efficiency score to process (10% new videos)
+const LOW_EFFICIENCY_SKIP_HOURS = 168; // Skip low-efficiency keywords for 7 days
+const MIN_RUNS_FOR_EVALUATION = 3; // Minimum runs before evaluating efficiency
 
 interface YouTubeSearchItem {
   id: {
@@ -143,7 +148,57 @@ serve(async (_req) => {
       }
 
       try {
-        // 2-1. Check cache expiry (only update if cache is older than CACHE_TTL_HOURS)
+        // 2-1. Smart Keyword Filtering: Check keyword efficiency
+        const { data: perfData, error: perfError } = await supabase
+          .from("keyword_performance")
+          .select("*")
+          .eq("keyword", keyword)
+          .maybeSingle();
+
+        if (!perfError && perfData) {
+          // Check if keyword is temporarily skipped due to low efficiency
+          if (perfData.skip_until && new Date(perfData.skip_until) > new Date()) {
+            const skipUntil = new Date(perfData.skip_until);
+            const hoursUntil = (skipUntil.getTime() - Date.now()) / (1000 * 60 * 60);
+            console.log(
+              `⏭️ Skipping "${keyword}" - low efficiency (skip until ${skipUntil.toISOString()}, ${hoursUntil.toFixed(1)}h remaining)`
+            );
+            results[keyword] = { added: 0, updated: 0, errors: [] };
+            continue;
+          }
+
+          // Check if keyword is inactive
+          if (perfData.is_active === false && perfData.total_runs >= MIN_RUNS_FOR_EVALUATION) {
+            console.log(`⏭️ Skipping "${keyword}" - marked as inactive (efficiency: ${(perfData.efficiency_score * 100).toFixed(1)}%)`);
+            results[keyword] = { added: 0, updated: 0, errors: [] };
+            continue;
+          }
+
+          // Check efficiency score for keywords with enough runs
+          if (
+            perfData.total_runs >= MIN_RUNS_FOR_EVALUATION &&
+            perfData.efficiency_score < MIN_EFFICIENCY_SCORE
+          ) {
+            // Skip for LOW_EFFICIENCY_SKIP_HOURS
+            const skipUntil = new Date(Date.now() + LOW_EFFICIENCY_SKIP_HOURS * 60 * 60 * 1000);
+            await supabase
+              .from("keyword_performance")
+              .update({
+                skip_until: skipUntil.toISOString(),
+                is_active: false,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("keyword", keyword);
+
+            console.log(
+              `⏭️ Skipping "${keyword}" - low efficiency (${(perfData.efficiency_score * 100).toFixed(1)}% < ${(MIN_EFFICIENCY_SCORE * 100).toFixed(1)}%), skipping for ${LOW_EFFICIENCY_SKIP_HOURS}h`
+            );
+            results[keyword] = { added: 0, updated: 0, errors: [] };
+            continue;
+          }
+        }
+
+        // 2-2. Check cache expiry (only update if cache is older than CACHE_TTL_HOURS)
         const { data: cacheData, error: cacheError } = await supabase
           .from("search_cache")
           .select("updated_at")
@@ -341,6 +396,67 @@ serve(async (_req) => {
           }
         }
 
+        // 2-8. Update keyword performance statistics (Smart Filtering)
+        const totalVideosFound = videos.length;
+        const newVideoRatio = totalVideosFound > 0 ? added / totalVideosFound : 0;
+
+        // Get or create performance record
+        const { data: existingPerf } = await supabase
+          .from("keyword_performance")
+          .select("*")
+          .eq("keyword", keyword)
+          .maybeSingle();
+
+        if (existingPerf) {
+          // Update existing performance record
+          const newTotalRuns = existingPerf.total_runs + 1;
+          const newTotalVideosFound = existingPerf.total_videos_found + totalVideosFound;
+          const newTotalVideosAdded = existingPerf.total_videos_added + added;
+          const newTotalVideosUpdated = existingPerf.total_videos_updated + updated;
+
+          // Calculate average new video ratio (weighted average)
+          const currentAvg = existingPerf.average_new_video_ratio || 0;
+          const newAvg = (currentAvg * (newTotalRuns - 1) + newVideoRatio) / newTotalRuns;
+
+          // Efficiency score = average new video ratio
+          const efficiencyScore = newAvg;
+
+          // Reactivate if efficiency improves
+          const shouldReactivate = efficiencyScore >= MIN_EFFICIENCY_SCORE && !existingPerf.is_active;
+
+          await supabase
+            .from("keyword_performance")
+            .update({
+              total_runs: newTotalRuns,
+              total_videos_found: newTotalVideosFound,
+              total_videos_added: newTotalVideosAdded,
+              total_videos_updated: newTotalVideosUpdated,
+              last_run_at: new Date().toISOString(),
+              last_new_video_ratio: newVideoRatio,
+              average_new_video_ratio: newAvg,
+              efficiency_score: efficiencyScore,
+              is_active: shouldReactivate ? true : existingPerf.is_active,
+              skip_until: shouldReactivate ? null : existingPerf.skip_until,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("keyword", keyword);
+        } else {
+          // Create new performance record
+          await supabase.from("keyword_performance").insert({
+            keyword,
+            total_runs: 1,
+            total_videos_found: totalVideosFound,
+            total_videos_added: added,
+            total_videos_updated: updated,
+            last_run_at: new Date().toISOString(),
+            last_new_video_ratio: newVideoRatio,
+            average_new_video_ratio: newVideoRatio,
+            efficiency_score: newVideoRatio,
+            is_active: true,
+            skip_until: null,
+          });
+        }
+
         totalKeywordsProcessed++;
         totalVideosAdded += added;
         totalVideosUpdated += updated;
@@ -352,7 +468,7 @@ serve(async (_req) => {
         };
 
         console.log(
-          `✅ Keyword "${keyword}": ${added} added, ${updated} updated (${videos.length} total)`
+          `✅ Keyword "${keyword}": ${added} added, ${updated} updated (${videos.length} total), efficiency: ${(newVideoRatio * 100).toFixed(1)}%`
         );
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -365,14 +481,31 @@ serve(async (_req) => {
       }
     }
 
+    // Get performance summary
+    const { data: perfSummary } = await supabase
+      .from("keyword_performance")
+      .select("keyword, efficiency_score, is_active, total_runs")
+      .in("keyword", keywords);
+
+    const activeKeywords = perfSummary?.filter((p) => p.is_active).length || keywords.length;
+    const skippedKeywords = keywords.length - totalKeywordsProcessed;
+
     return new Response(
       JSON.stringify({
         success: true,
         processed: totalKeywordsProcessed,
+        skipped: skippedKeywords,
         total: keywords.length,
+        activeKeywords,
         videosAdded: totalVideosAdded,
         videosUpdated: totalVideosUpdated,
         results,
+        performanceSummary: perfSummary?.map((p) => ({
+          keyword: p.keyword,
+          efficiency: (p.efficiency_score * 100).toFixed(1) + "%",
+          runs: p.total_runs,
+          active: p.is_active,
+        })),
         timestamp: new Date().toISOString(),
       }),
       { headers: { "Content-Type": "application/json" } }

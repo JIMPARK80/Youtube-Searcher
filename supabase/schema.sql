@@ -95,7 +95,31 @@ CREATE TABLE IF NOT EXISTS daily_load_tracking (
 CREATE INDEX IF NOT EXISTS idx_daily_load_tracking_keyword_date ON daily_load_tracking(keyword, date);
 
 -- ============================================
--- 6. Config Table (API Keys 등)
+-- 6. Keyword Performance Table (Smart Filtering)
+-- ============================================
+CREATE TABLE IF NOT EXISTS keyword_performance (
+    keyword TEXT PRIMARY KEY,
+    total_runs INTEGER DEFAULT 0,
+    total_videos_found INTEGER DEFAULT 0,
+    total_videos_added INTEGER DEFAULT 0,
+    total_videos_updated INTEGER DEFAULT 0,
+    last_run_at TIMESTAMPTZ,
+    last_new_video_ratio NUMERIC(5, 4) DEFAULT 0, -- 0.0000 to 1.0000
+    average_new_video_ratio NUMERIC(5, 4) DEFAULT 0,
+    efficiency_score NUMERIC(5, 4) DEFAULT 0, -- 0.0000 to 1.0000
+    is_active BOOLEAN DEFAULT true, -- false if efficiency is too low
+    skip_until TIMESTAMPTZ, -- Skip until this time if efficiency is low
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_keyword_performance_efficiency ON keyword_performance(efficiency_score DESC);
+CREATE INDEX IF NOT EXISTS idx_keyword_performance_active ON keyword_performance(is_active, skip_until);
+CREATE INDEX IF NOT EXISTS idx_keyword_performance_last_run ON keyword_performance(last_run_at DESC);
+
+-- ============================================
+-- 7. Config Table (API Keys 등)
 -- ============================================
 CREATE TABLE IF NOT EXISTS config (
     key TEXT PRIMARY KEY,
