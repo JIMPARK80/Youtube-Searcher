@@ -729,7 +729,28 @@ export async function search(shouldReload = false) {
         }
         
         debugLog('⏰ 로컬 캐시 만료 → Supabase 서버 재호출');
-        await performFullGoogleSearch(query, apiKeyValue);
+        try {
+            await performFullGoogleSearch(query, apiKeyValue);
+        } catch (error) {
+            // API 할당량 초과 시 만료된 캐시라도 사용
+            if (error.message === 'quotaExceeded' || error.message?.includes('quota') || 
+                (error.message && error.message.includes('할당량'))) {
+                console.warn('⚠️ API 할당량 초과 → 만료된 캐시 사용');
+                isQuotaExceeded = true;
+                const expiredCache = await loadFromSupabase(query, true); // ignoreExpiry = true
+                if (expiredCache && expiredCache.videos && expiredCache.videos.length > 0) {
+                    restoreFromCache(expiredCache);
+                    const resultsDiv = document.getElementById('results');
+                    if (resultsDiv) {
+                        resultsDiv.innerHTML = `<div class="info">⚠️ API 할당량 초과로 캐시 데이터를 사용합니다 (${allVideos.length}개)</div>`;
+                    }
+                    renderPage(1);
+                    lastUIUpdateTime = Date.now();
+                    return;
+                }
+            }
+            throw error; // 다른 에러는 다시 throw
+        }
         return;
     }
 
@@ -738,6 +759,42 @@ export async function search(shouldReload = false) {
     await performFullGoogleSearch(query, apiKeyValue);
     } catch (error) {
         console.error('❌ 검색 중 오류 발생:', error);
+        
+        // API 할당량 초과 시 만료된 캐시라도 사용 시도
+        if (error.message === 'quotaExceeded' || error.message?.includes('quota') || 
+            (error.message && error.message.includes('할당량'))) {
+            console.warn('⚠️ API 할당량 초과 → 만료된 캐시라도 사용 시도');
+            isQuotaExceeded = true;
+            
+            // 만료된 캐시라도 로드 시도
+            try {
+                const cacheData = await loadFromSupabase(query, true); // ignoreExpiry = true
+                console.log('🔍 캐시 로드 결과:', cacheData ? `${cacheData.videos?.length || 0}개 비디오` : '없음');
+                
+                if (cacheData && cacheData.videos && cacheData.videos.length > 0) {
+                    console.log('✅ 캐시 데이터 복원 중...');
+                    restoreFromCache(cacheData);
+                    const resultsDiv = document.getElementById('results');
+                    if (resultsDiv) {
+                        resultsDiv.innerHTML = `<div class="info">⚠️ API 할당량 초과로 캐시 데이터를 사용합니다 (${allVideos.length}개)</div>`;
+                    }
+                    renderPage(1);
+                    lastUIUpdateTime = Date.now();
+                    return; // 캐시 데이터 사용, 정상 종료
+                } else {
+                    console.warn('⚠️ 캐시 데이터가 없거나 비어있음');
+                }
+            } catch (cacheError) {
+                console.error('❌ 캐시 로드 중 에러:', cacheError);
+            }
+            
+            // 캐시도 없으면 에러 표시
+            const resultsDiv = document.getElementById('results');
+            if (resultsDiv) {
+                resultsDiv.innerHTML = `<div class="error">⚠️ YouTube API 할당량 초과<br>캐시 데이터도 없습니다.<br>내일 다시 시도해주세요.</div>`;
+            }
+            return; // 에러 표시 후 종료 (throw하지 않음)
+        }
         
         // UI 상태 복구
         const resultsDiv = document.getElementById('results');

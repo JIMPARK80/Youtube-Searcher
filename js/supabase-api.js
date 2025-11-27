@@ -16,17 +16,39 @@ const CACHE_TTL_HOURS = 72;
 export async function loadFromSupabase(query, ignoreExpiry = false) {
     try {
         const keyword = query.trim().toLowerCase();
+        console.log(`🔍 loadFromSupabase 호출: keyword="${keyword}", ignoreExpiry=${ignoreExpiry}`);
         
         // Check search_cache first
         const { data: cacheMeta, error: cacheError } = await supabase
             .from('search_cache')
             .select('*')
             .eq('keyword', keyword)
-            .single();
+            .maybeSingle(); // .single() 대신 .maybeSingle() 사용 (없어도 에러 안 남)
 
-        if (cacheError || !cacheMeta) {
-            return null;
+        if (cacheError) {
+            // 할당량 초과 시에는 에러를 무시하고 videos 테이블에서 직접 확인
+            if (ignoreExpiry) {
+                console.warn(`⚠️ search_cache 조회 실패 (${cacheError.message}), videos 테이블에서 직접 확인 시도`);
+                // cacheMeta를 null로 설정하고 계속 진행
+            } else {
+                console.log(`ℹ️ search_cache 없음: ${keyword}`);
+                return null;
+            }
         }
+        
+        if (!cacheMeta) {
+            if (ignoreExpiry) {
+                console.warn(`⚠️ search_cache 메타데이터 없음, videos 테이블에서 직접 확인: ${keyword}`);
+                // cacheMeta 없이도 계속 진행 (videos 테이블에서 직접 확인)
+                // cacheMeta가 없으면 기본값으로 진행
+            } else {
+                console.log(`ℹ️ search_cache 메타데이터 없음: ${keyword}`);
+                return null;
+            }
+        }
+        
+        // ignoreExpiry = true이고 cacheMeta가 없을 때도 videos 테이블에서 직접 조회
+        // cacheMeta가 없으면 기본값 설정
 
         const age = Date.now() - new Date(cacheMeta.updated_at).getTime();
         const ageHours = age / (1000 * 60 * 60);
@@ -54,16 +76,20 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
         let videosError = null; // 루프 밖에서도 접근 가능하도록 선언
         
         while (hasMore) {
-            // keyword가 배열 타입인 경우를 대비
-            // 먼저 .eq() 시도, 배열 에러 발생 시 .cs() (contains) 사용
+            // keyword가 배열 타입(text[])이므로 .cs() (contains) 사용
+            // .contains()는 배열이 특정 값을 포함하는지 확인
             let query = supabase
                 .from('videos')
                 .select('video_id, channel_id, title, view_count, like_count, subscriber_count, duration, channel_title, published_at, thumbnail_url')
                 .order('created_at', { ascending: false })
                 .range(from, from + pageSize - 1);
             
-            // keyword 필터 적용 (배열 타입이므로 contains 사용)
-            // keyword 컬럼이 배열 타입이므로 처음부터 .contains() 사용
+            // keyword 필터 적용 (배열 타입이므로 .contains() 사용)
+            // keyword 컬럼이 TEXT[] 타입이므로 배열에 특정 값이 포함되는지 확인
+            // Supabase PostgREST API에서 배열에 값이 포함되어 있는지 확인:
+            // .contains('keyword', [keyword]) - 배열이 다른 배열을 포함하는지 확인
+            // 예: ['영어회화'] 배열이 ['영어회화', '다른키워드'] 배열에 포함되어 있는지 확인
+            // keyword 컬럼에 ['영어회화']가 저장되어 있으면, [keyword] = ['영어회화']를 포함하므로 작동함
             query = query.contains('keyword', [keyword]);
             
             const { data: videos, error: error } = await query;
@@ -72,7 +98,49 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
             
             if (videosError) {
                 console.error('❌ Supabase 비디오 로드 오류:', videosError);
+                console.error('   키워드:', keyword);
+                console.error('   쿼리 시도: .contains("keyword", ["' + keyword + '"])');
+                console.error('   에러 코드:', videosError.code);
+                console.error('   에러 메시지:', videosError.message);
+                console.error('   에러 상세:', videosError.details || videosError.hint || JSON.stringify(videosError, null, 2));
+                // 에러 발생 시 중단
                 break;
+            }
+            
+            console.log(`📊 쿼리 결과: ${videos?.length || 0}개 비디오 발견 (offset: ${from})`);
+            if (videos && videos.length > 0) {
+                console.log(`   ✅ 첫 번째 비디오: ${videos[0].title || 'N/A'}`);
+                console.log(`   ✅ 첫 번째 비디오 keyword:`, JSON.stringify(videos[0].keyword) || 'N/A');
+            } else if (from === 0) {
+                // 0개 결과일 때 디버깅: 키워드 없이 전체 조회 시도
+                console.warn(`⚠️ 키워드 "${keyword}"로 조회 결과 0개`);
+                console.warn(`   테스트: 키워드 없이 전체 비디오 개수 확인 중...`);
+                const { data: testVideos, error: testError } = await supabase
+                    .from('videos')
+                    .select('video_id, keyword, title')
+                    .limit(5);
+                if (testError) {
+                    console.error(`   ❌ 테스트 쿼리 에러:`, testError);
+                    console.error(`   에러 코드:`, testError.code);
+                    console.error(`   에러 메시지:`, testError.message);
+                    console.error(`   RLS 정책 문제일 수 있습니다.`);
+                } else if (testVideos && testVideos.length > 0) {
+                    console.log(`   ✅ 테스트 결과: 전체 ${testVideos.length}개 비디오 발견`);
+                    console.log(`   첫 번째 비디오:`, {
+                        video_id: testVideos[0].video_id,
+                        title: testVideos[0].title,
+                        keyword: JSON.stringify(testVideos[0].keyword)
+                    });
+                    console.warn(`   ⚠️ 키워드 매칭 문제일 수 있습니다.`);
+                    console.warn(`   검색 키워드: "${keyword}"`);
+                    console.warn(`   저장된 키워드 예시: ${JSON.stringify(testVideos[0].keyword)}`);
+                } else {
+                    console.warn(`   ⚠️ 테스트 결과: 전체 비디오도 0개`);
+                    console.warn(`   가능한 원인:`);
+                    console.warn(`   1. RLS 정책이 데이터 접근을 막고 있음`);
+                    console.warn(`   2. anon key 권한 문제`);
+                    console.warn(`   3. 실제로 데이터가 없음`);
+                }
             }
             
             if (!videos || videos.length === 0) {
@@ -92,11 +160,26 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
         
         const videos = allVideos;
 
-        if (videosError || !videos?.length) {
+        if (videosError) {
+            console.error('❌ Supabase 비디오 로드 오류:', videosError);
+            // 할당량 초과 시에는 에러를 무시하고 빈 배열이라도 반환 시도
+            if (ignoreExpiry && videos.length === 0) {
+                console.warn('⚠️ 비디오 로드 실패, 빈 결과 반환');
+                return null;
+            }
+        }
+        
+        if (!videos?.length) {
+            if (ignoreExpiry) {
+                console.warn(`⚠️ 키워드 "${keyword}"에 대한 비디오가 없습니다`);
+            }
             return null;
         }
 
-        const cacheTimeToronto = formatDateTorontoSimple(new Date(cacheMeta.updated_at));
+        // cacheMeta가 없을 때를 대비한 기본값 설정
+        const cacheTimeToronto = cacheMeta?.updated_at 
+            ? formatDateTorontoSimple(new Date(cacheMeta.updated_at))
+            : formatDateTorontoSimple(new Date());
         
         // 디버그: 구독자 수 데이터 확인 (첫 3개만 - 성능 최적화)
         if (videos.length > 0) {
@@ -148,6 +231,7 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
             // 로컬 캐시 로드 실패 시 무시
         }
         
+        // Convert videos to items with raw field for restoreFromCache compatibility
         const items = videos.map(v => {
             const localItem = localItems?.get(v.video_id);
             const channelId = v.channel_id;
@@ -214,6 +298,11 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
             };
         });
 
+        // cacheMeta가 없을 때를 대비한 기본값 설정
+        const metaTimestamp = cacheMeta?.updated_at ? new Date(cacheMeta.updated_at).getTime() : Date.now();
+        const metaVersion = cacheMeta?.cache_version || '1.32';
+        const metaDataSource = cacheMeta?.data_source || 'google';
+        
         return {
             videos: videos.map(v => ({
                 id: v.video_id,
@@ -227,13 +316,13 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
             })),
             channels,
             items,
-            timestamp: new Date(cacheMeta.updated_at).getTime(),
-            cacheVersion: cacheMeta.cache_version,
-            dataSource: cacheMeta.data_source || 'google',
+            timestamp: metaTimestamp,
+            cacheVersion: metaVersion,
+            dataSource: metaDataSource,
             meta: {
-                total: cacheMeta.total_count,
-                nextPageToken: cacheMeta.next_page_token,
-                source: cacheMeta.data_source
+                total: cacheMeta?.total_count || videos.length,
+                nextPageToken: cacheMeta?.next_page_token || null,
+                source: metaDataSource
             }
         };
     } catch (error) {
