@@ -64,7 +64,6 @@ const translations = {
         'sort.vpd.none': '기본',
         'sort.vpd.asc': '낮은 순',
         'sort.vpd.desc': '높은 순',
-        'sort.loadMore': '데이터 더 확보',
         'sort.velocityMetric': '표시 단위',
         'sort.velocityMetric.recentVph': '최근 VPH',
         'sort.velocityMetric.day': '일간(VPD)',
@@ -116,6 +115,7 @@ const translations = {
         // 결과
         'result.summary': '검색 결과',
         'result.count': '개',
+        'result.topHighlights': 'Top 1 - Top 10 하이라이트',
         'result.page': 'page',
         
         // 페이지네이션
@@ -186,7 +186,6 @@ const translations = {
         'sort.vpd.none': 'Default',
         'sort.vpd.asc': 'Lowest First',
         'sort.vpd.desc': 'Highest First',
-        'sort.loadMore': 'Get More Data',
         'sort.velocityMetric': 'Velocity Unit',
         'sort.velocityMetric.recentVph': 'Recent VPH',
         'sort.velocityMetric.day': 'Per Day (VPD)',
@@ -237,6 +236,7 @@ const translations = {
         // Results
         'result.summary': 'Search Results',
         'result.count': 'items',
+        'result.topHighlights': 'Top 1 - Top 10 Highlights',
         'result.page': 'page',
         
         // Pagination

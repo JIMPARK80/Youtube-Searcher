@@ -197,22 +197,10 @@
                 <div class="sort-control">
                     <label for="velocityMetricSelect" data-i18n="sort.velocityMetric">표시 단위</label>
                     <select id="velocityMetricSelect">
-                        <option value="recent-vph" selected data-i18n="sort.velocityMetric.recentVph">최근 VPH</option>
-                        <option value="day" data-i18n="sort.velocityMetric.day">일간(VPD)</option>
+                        <option value="recent-vph" data-i18n="sort.velocityMetric.recentVph">최근 VPH</option>
+                        <option value="day" selected data-i18n="sort.velocityMetric.day">일간(VPD)</option>
                         <option value="hour" data-i18n="sort.velocityMetric.hour">시간당(VPH)</option>
                     </select>
-                </div>
-                <div class="sort-control">
-                    <label for="maxResultsSelect" data-i18n="sort.maxResults">최대 결과 수</label>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <select id="maxResultsSelect">
-                            <option value="30">30개</option>
-                            <option value="50">50개</option>
-                            <option value="100">100개</option>
-                            <option value="max" selected>max</option>
-                        </select>
-                        <button id="loadMoreBtn" class="load-more-btn" style="display: none;" data-i18n="sort.loadMore" title="키워드당 추가 영상 데이터 가져오기">데이터 더 확보</button>
-                    </div>
                 </div>
             </div>
             <div class="pagination-bar">
@@ -221,6 +209,11 @@
                 <button id="nextPage" class="page-btn" aria-label="Next page">▶</button>
             </div>
         </div>
+
+        <section id="topHighlights">
+            <h3 data-i18n="result.topHighlights">Top 1 - Top 10 Highlights</h3>
+            <div id="topHighlightsGrid" class="card-grid top-highlights-grid"></div>
+        </section>
 
         <div id="results"></div>
     </div>

@@ -29,12 +29,8 @@ export let currentPage = 1;
 export let allChannelMap = {};
 export let currentSearchQuery = '';
 export let currentTotalCount = 0; // 서버의 total_count 추적
-export let isLoadMoreMode = false; // Load More 버튼으로 확장된 경우
 
-// 최대 결과 수 설정 (기본값 10, 최대값 100)
-const MAX_RESULTS_STORAGE_KEY = 'youtube_searcher_max_results';
 const MAX_RESULTS_LIMIT = 1000; // 키워드당 최대 1000개
-const LOAD_MORE_INCREMENT = 50; // 추가 로드 시 50개씩 (API 효율성 고려)
 // VPH 업데이트 할당량 계산:
 // - 10,000개 비디오 기준: 200 units/시간
 // - 하루: 200 × 24 = 4,800 units
@@ -44,19 +40,8 @@ const LOAD_MORE_INCREMENT = 50; // 추가 로드 시 50개씩 (API 효율성 고
 // - 전체 가능: 5,200 / 101 × 50 ≈ 2,574개
 // - 키워드 100개 기준: 2,574 / 100 ≈ 25.74개/키워드
 // - 안전 마진 고려: 키워드당 20개로 설정
-const DAILY_LOAD_MORE_LIMIT = 20; // 키워드당 하루 최대 추가 로드 20개
-const DAILY_LIMIT_STORAGE_PREFIX = 'loadMoreDailyLimit_';
-
 export function getMaxResults() {
-    const stored = localStorage.getItem(MAX_RESULTS_STORAGE_KEY);
-    if (stored) {
-        if (stored === 'max') {
-            return 'max';
-        }
-        const count = parseInt(stored, 10);
-        return isNaN(count) ? 30 : count;
-    }
-    return 'max'; // 기본값 max
+    return 'max';
 }
 
 // 페이지 크기 계산 (항상 pageSize 사용)
@@ -74,33 +59,9 @@ export function setMaxResults(count) {
     }
 }
 
-// 하루 Load More 사용량 가져오기
-function getDailyLoadMoreCount(keyword) {
-    // 토론토 시간 기준 오늘 날짜
-    const today = getNowToronto().toISOString().split('T')[0]; // YYYY-MM-DD
-    const key = `${DAILY_LIMIT_STORAGE_PREFIX}${keyword}_${today}`;
-    const stored = localStorage.getItem(key);
-    return stored ? parseInt(stored, 10) : 0;
-}
-
-// 하루 Load More 사용량 증가
-function incrementDailyLoadMoreCount(keyword, count) {
-    // 토론토 시간 기준 오늘 날짜
-    const today = getNowToronto().toISOString().split('T')[0]; // YYYY-MM-DD
-    const key = `${DAILY_LIMIT_STORAGE_PREFIX}${keyword}_${today}`;
-    const current = getDailyLoadMoreCount(keyword);
-    localStorage.setItem(key, (current + count).toString());
-}
-
-// 하루 Load More 남은 개수 가져오기
-function getRemainingDailyLoadMoreCount(keyword) {
-    const used = getDailyLoadMoreCount(keyword);
-    return Math.max(0, DAILY_LOAD_MORE_LIMIT - used);
-}
-
 // 백그라운드 업데이트 중복 실행 방지
 let isUpdatingMissingData = false;
-let currentVelocityMetric = 'recent-vph'; // 기본값: 최근 VPH
+let currentVelocityMetric = 'day'; // 기본값: 평균 일일 조회수 (VPD)
 
 // 자동 새로고침 관리
 let lastUIUpdateTime = Date.now();
@@ -217,14 +178,6 @@ export function formatDateTorontoSimple(date) {
     });
 }
 
-// 현재 시간을 토론토 시간대 기준으로 반환 (Date 객체)
-// 내부적으로는 UTC를 사용하지만, 표시 시 토론토 시간으로 변환
-export function getNowToronto() {
-    // Date 객체는 항상 UTC 기준이므로, 현재 시간 반환
-    // 표시할 때 formatDateToronto를 사용하여 토론토 시간으로 변환
-    return new Date();
-}
-
 // 토론토 시간 기준으로 경과 시간 계산
 export function getElapsedTimeToronto(startDate, endDate = null) {
     const start = startDate instanceof Date ? startDate : new Date(startDate);
@@ -334,9 +287,6 @@ export async function search(shouldReload = false) {
         debugLog('ℹ️ 검색이 이미 진행 중입니다. 대기 중...');
         return;
     }
-    
-    // 새 검색 시 Load More 모드 초기화
-    isLoadMoreMode = false;
     
     // 새로운 검색 시작 시 VPH 계산 추적 초기화
     vphCalculatedVideos.clear();
@@ -488,13 +438,7 @@ export async function search(shouldReload = false) {
             if (totalCount >= targetCount) {
                 debugLog(`✅ 로컬 캐시에 충분한 데이터 있음 (${totalCount}개 >= ${targetCount}개) → API 호출 생략`);
                 restoreFromCache(cacheData);
-                // Load More 모드가 아니고 maxResults가 숫자일 때만 제한
-                if (!isLoadMoreMode && targetCount !== Infinity && allVideos.length > targetCount) {
-                    allVideos = allVideos.slice(0, targetCount);
-                    allItems = allItems.slice(0, targetCount);
-                }
                 renderPage(1);
-                updateLoadMoreButton(); // 버튼 상태 업데이트
                 lastUIUpdateTime = Date.now();
                 const nextToken = cacheData.meta?.nextPageToken || null;
                 saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'local-cache', nextToken)
@@ -530,14 +474,7 @@ export async function search(shouldReload = false) {
                     const metaTotal = supabaseData.meta?.total || 0;
                     currentTotalCount = Math.max(actualCount, metaTotal);
                     
-                    // Load More 모드가 아니면 선택한 개수로 제한
-                    if (!isLoadMoreMode && targetCount !== Infinity && allVideos.length > targetCount) {
-                        allVideos = allVideos.slice(0, targetCount);
-                        allItems = allItems.slice(0, targetCount);
-                    }
-                    
                     renderPage(1);
-                    updateLoadMoreButton(); // 버튼 상태 업데이트
                     lastUIUpdateTime = Date.now();
                     return;
                 }
@@ -1504,29 +1441,17 @@ function getFilteredDedupedItems() {
 }
 
 export function renderPage(page, skipSort = false) {
-    currentPage = page;
+    currentPage = 1;
     
     // 할당량 초과 시에는 제한을 적용하지 않음
     if (!isQuotaExceeded) {
-        // Load More 모드가 아니면 선택한 최대 결과 수로 제한
-        if (!isLoadMoreMode) {
-            const maxResults = getMaxResults();
-            if (maxResults !== 'max') {
-                if (allVideos.length > maxResults) {
-                    allVideos = allVideos.slice(0, maxResults);
-                    allItems = allItems.slice(0, maxResults);
-                }
-            }
-        } else {
-            // Load More 모드면 total_count 또는 최대 제한까지 표시
-            let limit = MAX_RESULTS_LIMIT;
-            if (currentTotalCount > 0) {
-                limit = Math.min(currentTotalCount, MAX_RESULTS_LIMIT);
-            }
-            if (allVideos.length > limit) {
-                allVideos = allVideos.slice(0, limit);
-                allItems = allItems.slice(0, limit);
-            }
+        let limit = MAX_RESULTS_LIMIT;
+        if (currentTotalCount > 0) {
+            limit = Math.min(limit, currentTotalCount);
+        }
+        if (allVideos.length > limit) {
+            allVideos = allVideos.slice(0, limit);
+            allItems = allItems.slice(0, limit);
         }
     }
     
@@ -1538,7 +1463,7 @@ export function renderPage(page, skipSort = false) {
     
     // 표시 단위와 정렬 옵션 가져오기
     const velocityMetricSelect = document.getElementById('velocityMetricSelect');
-    currentVelocityMetric = velocityMetricSelect?.value || 'recent-vph';
+    currentVelocityMetric = velocityMetricSelect?.value || 'day';
     const sortSelect = document.getElementById('sortVpdSelect');
     const sortValue = sortSelect?.value || 'desc'; // 기본값: 높은 순
     
@@ -1563,20 +1488,30 @@ export function renderPage(page, skipSort = false) {
     // 정렬된 allItems를 필터링하고 중복 제거
     const dedupedItems = getFilteredDedupedItems();
     
-    // Pagination - maxResults에 따라 동적으로 페이지 크기 조정
-    const effectivePageSize = getEffectivePageSize();
-    const startIdx = (page - 1) * effectivePageSize;
-    const endIdx = startIdx + effectivePageSize;
-    const pageItems = dedupedItems.slice(startIdx, endIdx);
+    // 안전망: 필터/중복 제거 후에도 다시 한 번 정렬하여 페이지마다 일관된 순서를 보장
+    const comparator = sortValue === 'asc'
+        ? (a, b) => {
+            const valA = getVelocityValue(a, currentVelocityMetric);
+            const valB = getVelocityValue(b, currentVelocityMetric);
+            return valA - valB;
+        }
+        : (a, b) => {
+            const valA = getVelocityValue(a, currentVelocityMetric);
+            const valB = getVelocityValue(b, currentVelocityMetric);
+            return valB - valA;
+        };
+    dedupedItems.sort(comparator);
+    
+    const pageItems = dedupedItems;
     
     const resultsDiv = document.getElementById('results');
     resultsDiv.innerHTML = '';
-    
+
     if (pageItems.length === 0) {
         resultsDiv.innerHTML = `<div class="error">${t('search.noResults')}</div>`;
         return;
     }
-    
+
     // Create grid container
     const gridContainer = document.createElement('div');
     gridContainer.className = 'card-grid';
@@ -1589,7 +1524,7 @@ export function renderPage(page, skipSort = false) {
     for (let i = 0; i < pageItems.length; i++) {
         const item = pageItems[i];
         const video = item.raw;
-        const card = createVideoCard(video, item);
+        const card = createVideoCard(video, item, i + 1);
         if (card) {
             fragment.appendChild(card);
             cardsCreated++;
@@ -1620,7 +1555,7 @@ export function renderPage(page, skipSort = false) {
     resultsDiv.appendChild(gridContainer);
     
     // Update pagination
-    updatePaginationControls(dedupedItems.length);
+    updatePaginationControls(dedupedItems.length, dedupedItems.length || 1);
     
     // 모든 항목에 대해 VPH 계산 시작 (페이지와 관계없이)
     // 첫 페이지 렌더링 시에만 실행 (중복 계산 방지)
@@ -1633,7 +1568,7 @@ export function renderPage(page, skipSort = false) {
     resetAutoRefreshTimer();
 }
 
-function createVideoCard(video, item) {
+function createVideoCard(video, item, rank = null) {
     // Safety check: If video is undefined, return null
     if (!video || !video.snippet) {
         console.error('⚠️ Invalid video data:', video);
@@ -1681,8 +1616,13 @@ function createVideoCard(video, item) {
             : (item.subs || 0);
     }
     
+    const rankBadge = rank && rank <= 10
+        ? `<div class="rank-badge rank-${rank <= 3 ? rank : 'default'}">TOP ${rank}</div>`
+        : '';
+
     card.innerHTML = `
         <div class="thumbnail-container">
+            ${rankBadge}
             <img src="${thumbnail}" alt="${video.snippet.title}" loading="lazy" data-fallback-index="0" data-fallbacks="${JSON.stringify(fallbackThumbnails)}">
             ${video.contentDetails?.duration ? `<div class="duration">${formatDuration(video.contentDetails.duration)}</div>` : ''}
             <div class="vpd-badge">${formatVelocityBadge(velocityValue)}</div>
@@ -1874,7 +1814,7 @@ function checkAndResortWhenAllCalculated() {
         const sortSelect = document.getElementById('sortVpdSelect');
         const sortValue = sortSelect?.value || 'desc';
         const velocityMetricSelect = document.getElementById('velocityMetricSelect');
-        const currentMetric = velocityMetricSelect?.value || 'recent-vph';
+        const currentMetric = velocityMetricSelect?.value || 'day';
         
         // allItems를 직접 정렬 (현재 표시 단위와 정렬 옵션에 따라)
         allItems.sort((a, b) => {
@@ -2338,8 +2278,8 @@ export function applyFilters(items) {
 // 페이지네이션
 // ============================================
 
-export function updatePaginationControls(totalItems) {
-    const effectivePageSize = getEffectivePageSize();
+export function updatePaginationControls(totalItems, pageSizeOverride = null) {
+    const effectivePageSize = pageSizeOverride || getEffectivePageSize();
     const totalPages = Math.ceil(totalItems / effectivePageSize);
     const pageInfo = document.getElementById('pageInfo');
     const totalCount = document.getElementById('totalCount');
@@ -2364,7 +2304,7 @@ export function setupPaginationHandlers() {
     
     document.getElementById('nextPage')?.addEventListener('click', () => {
         const dedupedItems = getFilteredDedupedItems();
-        const effectivePageSize = getEffectivePageSize();
+        const effectivePageSize = dedupedItems.length || 1;
         const totalPages = Math.ceil(dedupedItems.length / effectivePageSize);
         if (currentPage < totalPages) {
             renderPage(currentPage + 1);
