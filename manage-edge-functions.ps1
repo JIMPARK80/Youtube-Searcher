@@ -18,8 +18,14 @@ param(
 $ErrorActionPreference = "Stop"
 
 # Supabase 프로젝트 정보
-$SUPABASE_URL = "https://hteazdwvhjaexjxwiwwl.supabase.co"
-$SERVICE_ROLE_KEY = "sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ"
+# ⚠️ SECURITY: 환경 변수에서 읽어옵니다. .env 파일을 생성하거나 환경 변수를 설정하세요.
+$SUPABASE_URL = if ($env:SUPABASE_URL) { $env:SUPABASE_URL } else { "https://hteazdwvhjaexjxwiwwl.supabase.co" }
+$SERVICE_ROLE_KEY = if ($env:SUPABASE_SERVICE_ROLE_KEY) { $env:SUPABASE_SERVICE_ROLE_KEY } else { 
+    Write-Warning "⚠️ SUPABASE_SERVICE_ROLE_KEY 환경 변수가 설정되지 않았습니다."
+    Write-Warning "   .env 파일을 생성하거나 환경 변수를 설정하세요."
+    Write-Warning "   예: `$env:SUPABASE_SERVICE_ROLE_KEY = 'your_key_here'`"
+    exit 1
+}
 
 # 사용 가능한 함수 목록
 $AVAILABLE_FUNCTIONS = @(

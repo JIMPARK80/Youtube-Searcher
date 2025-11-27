@@ -15,6 +15,12 @@ desktop.ini
 API.TXT
 *.key
 *.pem
+.env
+.env.local
+.env.*.local
+*.env
+setup-service-role-key.sql
+setup-service-role-key.ps1
 
 # Logs
 *.log

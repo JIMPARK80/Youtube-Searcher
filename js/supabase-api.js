@@ -1161,20 +1161,31 @@ export { CACHE_TTL_MS, CACHE_TTL_HOURS };
 
 /**
  * Edge Function을 수동으로 호출하는 함수
+ * ⚠️ SECURITY: 클라이언트 사이드에서는 Service Role Key를 사용하지 않습니다.
+ * Supabase의 anon key를 사용하거나, RLS 정책을 통해 보호된 함수만 호출합니다.
+ * 
  * @param {string} functionName - 호출할 Edge Function 이름
  * @returns {Promise<Object>} - Edge Function 응답
  */
 export async function invokeEdgeFunction(functionName) {
     try {
-        const supabaseUrl = 'https://hteazdwvhjaexjxwiwwl.supabase.co';
-        const serviceRoleKey = 'sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ'; // Service Role Key
+        // Supabase config에서 URL 가져오기
+        const supabaseUrl = window.supabase?.supabaseUrl || 'https://hteazdwvhjaexjxwiwwl.supabase.co';
         
+        // ⚠️ SECURITY: 클라이언트에서는 anon key만 사용합니다.
+        // Service Role Key는 서버 사이드에서만 사용해야 합니다.
+        // Edge Function이 RLS로 보호되어 있다면 anon key로도 호출 가능합니다.
+        const anonKey = window.supabase?.supabaseKey || '';
+        
+        if (!anonKey) {
+            throw new Error('Supabase anon key가 설정되지 않았습니다. supabase-config.js를 확인하세요.');
+        }
         
         const response = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${serviceRoleKey}`
+                'Authorization': `Bearer ${anonKey}`
             }
         });
         
