@@ -120,65 +120,85 @@
 
             <!-- View Count Filter -->
             <div class="filter-section">
-                <div class="filter-group view-filter">
-                    <label data-i18n="filter.viewCount">조회수 필터:</label>
-                    <label><input type="radio" name="viewCountFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
-                    <label><input type="radio" name="viewCountFilter" value="0-1000"> <span data-i18n="filter.viewCount.grade5">5등급</span> (&lt;1K)</label>
-                    <label><input type="radio" name="viewCountFilter" value="1000-10000"> <span data-i18n="filter.viewCount.grade4">4등급</span> (1K-10K)</label>
-                    <label><input type="radio" name="viewCountFilter" value="10000-100000"> <span data-i18n="filter.viewCount.grade3">3등급</span> (10K-100K)</label>
-                    <label><input type="radio" name="viewCountFilter" value="100000-1000000"> <span data-i18n="filter.viewCount.grade2">2등급</span> (100K-1M)</label>
-                    <label><input type="radio" name="viewCountFilter" value="1000000"> <span data-i18n="filter.viewCount.grade1">1등급</span> (1M+)</label>
-                    <label><input type="radio" name="viewCountFilter" value="custom"> <span data-i18n="filter.custom">사용자정의</span></label>
-                    <div class="custom-range" id="viewCountCustom" style="display: none; margin-left: 20px; margin-top: 5px;">
-                        <input type="number" id="viewCountMin" data-i18n-placeholder="filter.viewCount.minPlaceholder" placeholder="최소" style="width: 80px;" min="0"> ~ 
-                        <input type="number" id="viewCountMax" data-i18n-placeholder="filter.viewCount.maxPlaceholder" placeholder="최대" style="width: 80px;" min="0">
+                <details class="filter-group view-filter" open>
+                    <summary>
+                        <span data-i18n="filter.viewCount">조회수 필터</span>
+                        <span class="summary-indicator" aria-hidden="true">›</span>
+                    </summary>
+                    <div class="filter-options">
+                        <label><input type="radio" name="viewCountFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
+                        <label><input type="radio" name="viewCountFilter" value="0-1000"> <span data-i18n="filter.viewCount.grade5">5등급</span> (&lt;1K)</label>
+                        <label><input type="radio" name="viewCountFilter" value="1000-10000"> <span data-i18n="filter.viewCount.grade4">4등급</span> (1K-10K)</label>
+                        <label><input type="radio" name="viewCountFilter" value="10000-100000"> <span data-i18n="filter.viewCount.grade3">3등급</span> (10K-100K)</label>
+                        <label><input type="radio" name="viewCountFilter" value="100000-1000000"> <span data-i18n="filter.viewCount.grade2">2등급</span> (100K-1M)</label>
+                        <label><input type="radio" name="viewCountFilter" value="1000000"> <span data-i18n="filter.viewCount.grade1">1등급</span> (1M+)</label>
+                        <label><input type="radio" name="viewCountFilter" value="custom"> <span data-i18n="filter.custom">사용자정의</span></label>
                     </div>
-                </div>
+                    <div class="custom-range" id="viewCountCustom">
+                        <input type="number" id="viewCountMin" data-i18n-placeholder="filter.viewCount.minPlaceholder" placeholder="최소" min="0"> ~ 
+                        <input type="number" id="viewCountMax" data-i18n-placeholder="filter.viewCount.maxPlaceholder" placeholder="최대" min="0">
+                    </div>
+                </details>
                 
                 <!-- Subscriber Count Filter -->
-                <div class="filter-group sub-filter">
-                    <label data-i18n="filter.subCount">구독자 필터:</label>
-                    <label><input type="radio" name="subCountFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
-                    <label><input type="radio" name="subCountFilter" value="0-1000"> 🐣 <span data-i18n="filter.subCount.rookie">신입</span> (1-1K)</label>
-                    <label><input type="radio" name="subCountFilter" value="1000-10000"> 🎬 <span data-i18n="filter.subCount.beginner">초보</span> (1K-10K)</label>
-                    <label><input type="radio" name="subCountFilter" value="100000-1000000"> 🥈 <span data-i18n="filter.subCount.silver">실버버튼</span> (100K-1M)</label>
-                    <label><input type="radio" name="subCountFilter" value="1000000-10000000"> 🥇 <span data-i18n="filter.subCount.gold">골드버튼</span> (1M-10M)</label>
-                    <label><input type="radio" name="subCountFilter" value="10000000"> 💎 <span data-i18n="filter.subCount.diamond">다이아버튼</span> (10M+)</label>
-                    <label><input type="radio" name="subCountFilter" value="custom"> <span data-i18n="filter.custom">사용자정의</span></label>
-                    <div class="custom-range" id="subCountCustom" style="display: none; margin-left: 20px; margin-top: 5px;">
-                        <input type="number" id="subCountMin" data-i18n-placeholder="filter.subCount.minPlaceholder" placeholder="최소" style="width: 80px;" min="0"> ~ 
-                        <input type="number" id="subCountMax" data-i18n-placeholder="filter.subCount.maxPlaceholder" placeholder="최대" style="width: 80px;" min="0">
+                <details class="filter-group sub-filter">
+                    <summary>
+                        <span data-i18n="filter.subCount">구독자 필터</span>
+                        <span class="summary-indicator" aria-hidden="true">›</span>
+                    </summary>
+                    <div class="filter-options">
+                        <label><input type="radio" name="subCountFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
+                        <label><input type="radio" name="subCountFilter" value="0-1000"> 🐣 <span data-i18n="filter.subCount.rookie">신입</span> (1-1K)</label>
+                        <label><input type="radio" name="subCountFilter" value="1000-10000"> 🎬 <span data-i18n="filter.subCount.beginner">초보</span> (1K-10K)</label>
+                        <label><input type="radio" name="subCountFilter" value="100000-1000000"> 🥈 <span data-i18n="filter.subCount.silver">실버버튼</span> (100K-1M)</label>
+                        <label><input type="radio" name="subCountFilter" value="1000000-10000000"> 🥇 <span data-i18n="filter.subCount.gold">골드버튼</span> (1M-10M)</label>
+                        <label><input type="radio" name="subCountFilter" value="10000000"> 💎 <span data-i18n="filter.subCount.diamond">다이아버튼</span> (10M+)</label>
+                        <label><input type="radio" name="subCountFilter" value="custom"> <span data-i18n="filter.custom">사용자정의</span></label>
                     </div>
-                </div>
+                    <div class="custom-range" id="subCountCustom">
+                        <input type="number" id="subCountMin" data-i18n-placeholder="filter.subCount.minPlaceholder" placeholder="최소" min="0"> ~ 
+                        <input type="number" id="subCountMax" data-i18n-placeholder="filter.subCount.maxPlaceholder" placeholder="최대" min="0">
+                    </div>
+                </details>
                  
                  <!-- Upload Date Filter -->
-                 <div class="filter-group date-filter">
-                     <label data-i18n="filter.uploadDate">업로드일자 필터:</label>
-                     <label><input type="radio" name="uploadDateFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
-                     <label><input type="radio" name="uploadDateFilter" value="1"> <span data-i18n="filter.date.day1">최근 1일</span></label>
-                     <label><input type="radio" name="uploadDateFilter" value="3"> <span data-i18n="filter.date.day3">최근 3일</span></label>
-                     <label><input type="radio" name="uploadDateFilter" value="7"> <span data-i18n="filter.date.day7">최근 7일</span></label>
-                     <label><input type="radio" name="uploadDateFilter" value="30"> <span data-i18n="filter.date.month1">1개월 이내</span></label>
-                     <label><input type="radio" name="uploadDateFilter" value="90"> <span data-i18n="filter.date.month3">3개월 이내</span></label>
-                     <label><input type="radio" name="uploadDateFilter" value="180"> <span data-i18n="filter.date.month6">6개월 이내</span></label>
-                    <label><input type="radio" name="uploadDateFilter" value="365"> <span data-i18n="filter.date.year1">1년 이내</span></label>
-                </div>
+                 <details class="filter-group date-filter">
+                     <summary>
+                        <span data-i18n="filter.uploadDate">업로드일자 필터</span>
+                        <span class="summary-indicator" aria-hidden="true">›</span>
+                    </summary>
+                     <div class="filter-options">
+                         <label><input type="radio" name="uploadDateFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
+                         <label><input type="radio" name="uploadDateFilter" value="1"> <span data-i18n="filter.date.day1">최근 1일</span></label>
+                         <label><input type="radio" name="uploadDateFilter" value="3"> <span data-i18n="filter.date.day3">최근 3일</span></label>
+                         <label><input type="radio" name="uploadDateFilter" value="7"> <span data-i18n="filter.date.day7">최근 7일</span></label>
+                         <label><input type="radio" name="uploadDateFilter" value="30"> <span data-i18n="filter.date.month1">1개월 이내</span></label>
+                         <label><input type="radio" name="uploadDateFilter" value="90"> <span data-i18n="filter.date.month3">3개월 이내</span></label>
+                         <label><input type="radio" name="uploadDateFilter" value="180"> <span data-i18n="filter.date.month6">6개월 이내</span></label>
+                        <label><input type="radio" name="uploadDateFilter" value="365"> <span data-i18n="filter.date.year1">1년 이내</span></label>
+                    </div>
+                </details>
                 
                 <!-- Video Duration Filter -->
-                <div class="filter-group duration-filter">
-                    <label data-i18n="filter.duration">영상길이 필터:</label>
-                    <label><input type="radio" name="durationFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
-                    <label><input type="radio" name="durationFilter" value="0-60"> <span data-i18n="filter.duration.shorts">쇼츠구간</span> (&lt;1min)</label>
-                    <label><input type="radio" name="durationFilter" value="60-600"> <span data-i18n="filter.duration.short">짧은영상</span> (1-10min)</label>
-                    <label><input type="radio" name="durationFilter" value="600-1800"> <span data-i18n="filter.duration.medium">중간영상</span> (10-30min)</label>
-                    <label><input type="radio" name="durationFilter" value="1800-3600"> <span data-i18n="filter.duration.long">긴영상</span> (30min-1hr)</label>
-                    <label><input type="radio" name="durationFilter" value="3600"> <span data-i18n="filter.duration.verylong">아주긴영상</span> (1hr+)</label>
-                    <label><input type="radio" name="durationFilter" value="custom"> <span data-i18n="filter.custom">사용자선택</span></label>
-                    <div class="custom-range" id="durationCustom" style="display: none; margin-left: 20px; margin-top: 5px;">
-                        <input type="number" id="durationMin" data-i18n-placeholder="filter.duration.minPlaceholder" placeholder="최소 (분)" style="width: 80px;" min="0"> ~ 
-                        <input type="number" id="durationMax" data-i18n-placeholder="filter.duration.maxPlaceholder" placeholder="최대 (분)" style="width: 80px;" min="0"> <small data-i18n="filter.duration.unit">(분 단위)</small>
+                <details class="filter-group duration-filter">
+                    <summary>
+                        <span data-i18n="filter.duration">영상길이 필터</span>
+                        <span class="summary-indicator" aria-hidden="true">›</span>
+                    </summary>
+                    <div class="filter-options">
+                        <label><input type="radio" name="durationFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
+                        <label><input type="radio" name="durationFilter" value="0-60"> <span data-i18n="filter.duration.shorts">쇼츠구간</span> (&lt;1min)</label>
+                        <label><input type="radio" name="durationFilter" value="60-600"> <span data-i18n="filter.duration.short">짧은영상</span> (1-10min)</label>
+                        <label><input type="radio" name="durationFilter" value="600-1800"> <span data-i18n="filter.duration.medium">중간영상</span> (10-30min)</label>
+                        <label><input type="radio" name="durationFilter" value="1800-3600"> <span data-i18n="filter.duration.long">긴영상</span> (30min-1hr)</label>
+                        <label><input type="radio" name="durationFilter" value="3600"> <span data-i18n="filter.duration.verylong">아주긴영상</span> (1hr+)</label>
+                        <label><input type="radio" name="durationFilter" value="custom"> <span data-i18n="filter.custom">사용자선택</span></label>
                     </div>
-                </div>
+                    <div class="custom-range" id="durationCustom">
+                        <input type="number" id="durationMin" data-i18n-placeholder="filter.duration.minPlaceholder" placeholder="최소 (분)" min="0"> ~ 
+                        <input type="number" id="durationMax" data-i18n-placeholder="filter.duration.maxPlaceholder" placeholder="최대 (분)" min="0"> <small data-i18n="filter.duration.unit">(분 단위)</small>
+                    </div>
+                </details>
             </div>
 
         <div class="pagination-section">
@@ -209,11 +229,6 @@
                 <button id="nextPage" class="page-btn" aria-label="Next page">▶</button>
             </div>
         </div>
-
-        <section id="topHighlights">
-            <h3 data-i18n="result.topHighlights">Top 1 - Top 10 Highlights</h3>
-            <div id="topHighlightsGrid" class="card-grid top-highlights-grid"></div>
-        </section>
 
         <div id="results"></div>
     </div>

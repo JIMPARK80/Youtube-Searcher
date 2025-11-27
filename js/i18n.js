@@ -115,7 +115,6 @@ const translations = {
         // 결과
         'result.summary': '검색 결과',
         'result.count': '개',
-        'result.topHighlights': 'Top 1 - Top 10 하이라이트',
         'result.page': 'page',
         
         // 페이지네이션
@@ -236,7 +235,6 @@ const translations = {
         // Results
         'result.summary': 'Search Results',
         'result.count': 'items',
-        'result.topHighlights': 'Top 1 - Top 10 Highlights',
         'result.page': 'page',
         
         // Pagination

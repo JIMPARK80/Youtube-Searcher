@@ -1,16 +1,3 @@
-#topHighlights {
-    margin-bottom: 24px;
-}
-
-#topHighlights h3 {
-    margin-bottom: 12px;
-    font-size: 1.2rem;
-    color: #fff;
-}
-
-.top-highlights-grid {
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-}
 * {
     margin: 0;
     padding: 0;
@@ -193,18 +180,98 @@ body {
     background: linear-gradient(135deg, rgba(224, 176, 137, 0.5), rgba(168, 106, 61, 0.5));
 }
 
-#topHighlights {
-    margin-bottom: 24px;
+.rank-default {
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255,255,255,0.4);
 }
 
-#topHighlights h3 {
-    margin-bottom: 12px;
-    font-size: 1.2rem;
-    color: #fff;
+@media (max-width: 1200px) {
+    .card-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
 }
 
-.top-highlights-grid {
-    grid-template-columns: repeat(5, 1fr);
+@media (max-width: 900px) {
+    body {
+        padding: 15px;
+    }
+
+    .container {
+        max-width: 100%;
+    }
+
+    details.filter-group {
+        padding: 4px 10px;
+    }
+
+    .filter-options {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+    }
+
+    .filter-options label {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .result-summary {
+        text-align: center;
+    }
+
+    .sort-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .sort-control {
+        width: 100%;
+    }
+
+    .sort-control select {
+        width: 100%;
+    }
+
+    .pagination-bar {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .card-grid {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .stats {
+        font-size: 0.75em;
+        gap: 6px;
+    }
+}
+
+@media (max-width: 540px) {
+    body {
+        padding: 10px;
+    }
+
+    .card-grid {
+        grid-template-columns: 1fr;
+    }
+
+    details.filter-group summary {
+        font-size: 0.9em;
+    }
+
+    .pagination-section {
+        gap: 6px;
+    }
+
+    .page-btn {
+        width: 100%;
+    }
+
+    .sort-controls {
+        gap: 8px;
+    }
 }
 
 .video-card {
@@ -745,25 +812,58 @@ body {
     backdrop-filter: blur(10px);
 }
 
-.filter-group {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
+details.filter-group {
+    margin: 12px 0;
+    padding: 6px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    transition: background 0.2s, border 0.2s;
 }
 
-.filter-group > label:first-child {
+details.filter-group[open] {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+details.filter-group summary {
+    list-style: none;
+    cursor: pointer;
     font-weight: 600;
     color: white;
-    font-size: 13px;
-    white-space: nowrap;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.95em;
 }
 
-.filter-group > label {
+details.filter-group summary::-webkit-details-marker {
+    display: none;
+}
+
+.summary-indicator {
+    transition: transform 0.2s ease;
+    font-size: 1rem;
+}
+
+details.filter-group[open] .summary-indicator {
+    transform: rotate(90deg);
+}
+
+.filter-options {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.filter-options label {
+    position: relative;
     color: rgba(255, 255, 255, 0.9);
     font-size: 12px;
     cursor: pointer;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 4px;
     padding: 6px 10px;
@@ -771,26 +871,39 @@ body {
     transition: all 0.3s;
     background: rgba(255, 255, 255, 0.1);
     white-space: nowrap;
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.filter-group > label:hover {
+.filter-options label:hover {
     background: rgba(255, 255, 255, 0.2);
     transform: translateY(-2px);
 }
 
-.filter-group input[type="radio"] {
-    cursor: pointer;
-    accent-color: #ff8c42;
-    margin: 0;
+.filter-options label.chip-active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+}
+
+.filter-options input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
 }
 
 /* Custom Range Input */
 .custom-range {
     width: 100%;
-    display: flex;
+    display: none;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.custom-range.custom-range--active {
+    display: flex;
 }
 
 .custom-range input[type="number"] {
@@ -800,6 +913,7 @@ body {
     background: rgba(255, 255, 255, 0.1);
     color: white;
     font-size: 12px;
+    width: 90px;
 }
 
 .custom-range small {
@@ -807,91 +921,7 @@ body {
     font-size: 11px;
 }
 
-/* View Filter Optimization */
-.filter-group.view-filter {
-    display: flex;
-    flex-direction: row !important;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.filter-group.view-filter > label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    margin: 0;
-}
-
-/* Subscriber Filter Optimization */
-.filter-group.sub-filter {
-    display: flex;
-    flex-direction: row !important;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-top: 10px;
-}
-
-.filter-group.sub-filter > label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 5px;
-    cursor: pointer;
-    transition: all 0.3s;
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 12px;
-}
-
-.filter-group.sub-filter > label:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: translateY(-2px);
-}
-
-.filter-group.sub-filter input[type="radio"] {
-    accent-color: #42a5f5;
-    margin: 0;
-}
-
-/* Upload Date Filter Optimization */
-.filter-group.date-filter {
-    display: flex;
-    flex-direction: row !important;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-top: 10px;
-}
-
-.filter-group.date-filter > label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 5px;
-    cursor: pointer;
-    transition: all 0.3s;
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 12px;
-}
-
-.filter-group.date-filter > label:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: translateY(-2px);
-}
-
-.filter-group.date-filter input[type="radio"] {
-    accent-color: #00c853;
-    margin: 0;
-}
-
-/* Desktop: 4 columns (default above 1200px) */
-
+/* Responsive Grid Tweaks */
 @media (max-width: 1200px) {
     .card-grid {
         grid-template-columns: repeat(3, 1fr);
@@ -900,7 +930,7 @@ body {
 
 @media (max-width: 900px) {
     .card-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(220px, 1fr));
     }
 }
 
@@ -913,19 +943,13 @@ body {
         width: 100%;
     }
 
-    .filters-grid {
-        grid-template-columns: 1fr;
-    }
-
     .filter-options {
         flex-direction: column;
         align-items: stretch;
     }
 
-    .filter-radio-label,
-    .filter-checkbox-label {
-        width: 100%;
-        text-align: center;
+    .summary-indicator {
+        font-size: 1.1rem;
     }
 
     .page-btn {

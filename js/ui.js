@@ -1742,6 +1742,22 @@ function detectUserActivity() {
     lastUIUpdateTime = Date.now();
 }
 
+function setCustomRangeVisibility(rangeId, shouldShow) {
+    const element = document.getElementById(rangeId);
+    if (element) {
+        element.classList.toggle('custom-range--active', shouldShow);
+    }
+}
+
+function refreshFilterChips(filterName) {
+    document.querySelectorAll(`input[name="${filterName}"]`).forEach((radio) => {
+        const label = radio.closest('label');
+        if (label) {
+            label.classList.toggle('chip-active', radio.checked);
+        }
+    });
+}
+
 // 페이지 로드 시 마지막 검색어 복원 및 자동 검색
 function restoreLastSearchOnRefresh() {
     try {
@@ -2607,29 +2623,40 @@ export function setupEventListeners() {
     // Filter changes (radio and checkbox)
     document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(input => {
         input.addEventListener('change', () => {
-            // Show/hide custom view count range
+            if (input.type === 'radio') {
+                refreshFilterChips(input.name);
+            }
+
             if (input.name === 'viewCountFilter') {
-                const customRange = document.getElementById('viewCountCustom');
-                if (customRange) {
-                    customRange.style.display = input.value === 'custom' ? 'block' : 'none';
-                }
+                setCustomRangeVisibility('viewCountCustom', input.value === 'custom');
             }
-            // Show/hide custom subscriber count range
+
             if (input.name === 'subCountFilter') {
-                const customRange = document.getElementById('subCountCustom');
-                if (customRange) {
-                    customRange.style.display = input.value === 'custom' ? 'block' : 'none';
-                }
+                setCustomRangeVisibility('subCountCustom', input.value === 'custom');
             }
-            // Show/hide custom duration range
+
             if (input.name === 'durationFilter') {
-                const customRange = document.getElementById('durationCustom');
-                if (customRange) {
-                    customRange.style.display = input.value === 'custom' ? 'block' : 'none';
-                }
+                setCustomRangeVisibility('durationCustom', input.value === 'custom');
             }
+
             renderPage(1);
         });
+    });
+
+    ['viewCountFilter', 'subCountFilter', 'durationFilter'].forEach(name => {
+        const selected = document.querySelector(`input[name="${name}"]:checked`);
+        if (selected) {
+            refreshFilterChips(name);
+            if (name === 'viewCountFilter') {
+                setCustomRangeVisibility('viewCountCustom', selected.value === 'custom');
+            }
+            if (name === 'subCountFilter') {
+                setCustomRangeVisibility('subCountCustom', selected.value === 'custom');
+            }
+            if (name === 'durationFilter') {
+                setCustomRangeVisibility('durationCustom', selected.value === 'custom');
+            }
+        }
     });
     
     // Custom view count range input changes
