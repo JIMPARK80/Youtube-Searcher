@@ -200,7 +200,11 @@ body {
         max-width: 100%;
     }
 
-    details.filter-group {
+    .filter-section {
+        grid-template-columns: 1fr;
+    }
+
+    .filter-group {
         padding: 4px 10px;
     }
 
@@ -253,7 +257,7 @@ body {
         grid-template-columns: 1fr;
     }
 
-    details.filter-group summary {
+    .filter-title {
         font-size: 0.9em;
     }
 
@@ -710,45 +714,33 @@ body {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 10px;
     backdrop-filter: blur(10px);
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    align-items: stretch;
 }
 
-details.filter-group {
-    margin: 12px 0;
-    padding: 6px 12px;
+.filter-group {
+    margin: 0;
+    padding: 8px 8px;
     border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.15);
     background: rgba(255, 255, 255, 0.08);
     transition: background 0.2s, border 0.2s;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 
-details.filter-group[open] {
-    background: rgba(255, 255, 255, 0.16);
-    border-color: rgba(255, 255, 255, 0.3);
-}
-
-details.filter-group summary {
-    list-style: none;
-    cursor: pointer;
+.filter-title {
     font-weight: 600;
     color: white;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 10px;
     font-size: 0.95em;
-}
-
-details.filter-group summary::-webkit-details-marker {
-    display: none;
-}
-
-.summary-indicator {
-    transition: transform 0.2s ease;
-    font-size: 1rem;
-}
-
-details.filter-group[open] .summary-indicator {
-    transform: rotate(90deg);
+    margin: 0 0 8px 0;
+    padding: 0 0 4px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+    text-align: center;
 }
 
 .filter-options {
@@ -1098,36 +1090,5 @@ details.filter-group[open] .summary-indicator {
     color: #333;
 }
 
-/* Duration Filter Optimization */
-.filter-group.duration-filter {
-    display: flex;
-    flex-direction: row !important;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-top: 10px;
-}
-
-.filter-group.duration-filter > label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 5px;
-    cursor: pointer;
-    transition: all 0.3s;
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 12px;
-}
-
-.filter-group.duration-filter > label:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: translateY(-2px);
-}
-
-.filter-group.duration-filter input[type="radio"] {
-    accent-color: #ff6b35;
-    margin: 0;
-}
+/* Duration Filter - 다른 필터들과 동일하게 동작하도록 특별 스타일 제거 */
 
