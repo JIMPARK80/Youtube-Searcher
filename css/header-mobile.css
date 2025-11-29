@@ -1,0 +1,36 @@
+/* ============================================
+   HEADER-MOBILE.CSS - 상단 모바일 스타일
+   Mobile responsive styles for header section
+   ============================================ */
+
+@media (max-width: 600px) {
+    .container {
+        padding: 10px;
+    }
+    
+    .header h1 {
+        font-size: 1.5em;
+    }
+    
+    .header-controls {
+        margin: 15px auto 20px;
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+        justify-content: space-between;
+    }
+    
+    .header-controls .language-toggle-btn {
+        flex: 1;
+        min-width: 0;
+        text-align: center;
+    }
+    
+    .header-controls .auth-section {
+        flex: 1;
+        min-width: 0;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+    }
+}
+

@@ -1,0 +1,37 @@
+/* ============================================
+   FOOTER-MOBILE.CSS - 하단 모바일 스타일
+   Mobile responsive styles for footer section
+   ============================================ */
+
+@media (max-width: 1200px) {
+    .card-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    .card-grid {
+        grid-template-columns: repeat(2, minmax(220px, 1fr));
+    }
+
+    .stats {
+        font-size: 0.75em;
+        gap: 6px;
+    }
+}
+
+@media (max-width: 600px) {
+    .results-box {
+        padding: 15px 12px;
+        margin-bottom: 20px;
+    }
+    
+    .summary-indicator {
+        font-size: 1.1rem;
+    }
+
+    .card-grid {
+        grid-template-columns: 1fr;
+    }
+}
+

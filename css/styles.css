@@ -988,19 +988,22 @@ body {
     
     .header-controls {
         margin: 15px auto 20px;
-        flex-direction: column;
-        align-items: stretch;
+        flex-direction: row;
+        align-items: center;
         gap: 10px;
+        justify-content: space-between;
     }
     
     .header-controls .language-toggle-btn {
-        width: 100%;
+        flex: 1;
+        min-width: 0;
         text-align: center;
     }
     
     .header-controls .auth-section {
-        width: 100%;
-        justify-content: center;
+        flex: 1;
+        min-width: 0;
+        justify-content: flex-end;
         flex-wrap: wrap;
     }
     
@@ -1068,39 +1071,59 @@ body {
     
     .filter-section {
         display: none;
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(5, minmax(120px, auto));
         gap: 8px;
         padding: 10px 6px;
         margin-top: 10px;
         max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
     }
     
     .filter-section.mobile-filter-open {
         display: grid;
     }
     
+    .filter-section::-webkit-scrollbar {
+        height: 4px;
+    }
+    
+    .filter-section::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    
+    .filter-section::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
+    }
+    
     .filter-group {
         margin: 0;
-        padding: 6px 4px;
+        padding: 8px 6px;
+        min-width: 120px;
+        flex-shrink: 0;
     }
     
     .filter-title {
         font-size: 0.8em;
-        margin: 0 0 6px 0;
-        padding: 0 0 3px 0;
+        margin: 0 0 8px 0;
+        padding: 0 0 4px 0;
     }
 
     .filter-options {
-        flex-direction: row;
-        flex-wrap: wrap;
-        gap: 3px;
-        margin-top: 6px;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 5px;
+        margin-top: 8px;
     }
     
     .filter-options label {
         font-size: 10px;
-        padding: 3px 5px;
+        padding: 4px 6px;
         border-radius: 4px;
+        width: 100%;
+        justify-content: center;
     }
     
     .custom-range {

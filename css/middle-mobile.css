@@ -1,0 +1,163 @@
+/* ============================================
+   MIDDLE-MOBILE.CSS - 중간 모바일 스타일
+   Mobile responsive styles for middle section
+   ============================================ */
+
+@media (max-width: 900px) {
+    .filter-section {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .search-box {
+        padding: 15px 12px;
+        margin-bottom: 20px;
+    }
+    
+    .search-input-group {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    #searchInput {
+        padding: 12px 15px;
+        font-size: 14px;
+    }
+
+    #searchBtn {
+        width: 100%;
+        padding: 12px 20px;
+        font-size: 14px;
+    }
+    
+    .keyword-suggestions {
+        margin-bottom: 12px;
+        padding-bottom: 12px;
+    }
+    
+    .keyword-tags {
+        gap: 5px;
+    }
+    
+    .keyword-tag {
+        padding: 5px 10px;
+        font-size: 11px;
+    }
+    
+    .keyword-suggestions-label {
+        font-size: 11px;
+        margin-bottom: 6px;
+    }
+    
+    .mobile-filter-toggle {
+        display: flex;
+    }
+    
+    .filter-box-container {
+        margin-bottom: 10px;
+    }
+    
+    .mobile-filter-toggle {
+        padding: 8px 12px;
+        font-size: 12px;
+        margin-bottom: 10px;
+    }
+    
+    .hamburger-icon {
+        font-size: 16px;
+    }
+    
+    .filter-text {
+        font-size: 12px;
+    }
+    
+    .filter-section {
+        display: none;
+        grid-template-columns: repeat(5, minmax(150px, auto));
+        gap: 10px;
+        padding: 10px 6px;
+        margin-top: 10px;
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+    
+    .filter-section.mobile-filter-open {
+        display: grid;
+    }
+    
+    .filter-section::-webkit-scrollbar {
+        height: 4px;
+    }
+    
+    .filter-section::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    
+    .filter-section::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
+    }
+    
+    .filter-group {
+        margin: 10;
+        padding: 10px 10px;
+        min-width: 150px;
+        flex-shrink: 0;
+    }
+    
+    .filter-title {
+        font-size: 0.8em;
+        margin: 0 0 8px 0;
+        padding: 0 0 4px 0;
+    }
+
+    .filter-options {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 5px;
+        margin-top: 8px;
+    }
+    
+    .filter-options label {
+        font-size: 10px;
+        padding: 4px 6px;
+        border-radius: 4px;
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .custom-range {
+        margin-top: 6px;
+        gap: 4px;
+    }
+    
+    .custom-range input[type="number"],
+    .custom-range input[type="date"] {
+        padding: 4px 6px;
+        font-size: 11px;
+        width: 80px;
+    }
+    
+    .sort-control-row {
+        gap: 4px;
+        margin-bottom: 6px;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .sort-control-row label {
+        font-size: 10px;
+        min-width: auto;
+    }
+    
+    .sort-control-row select {
+        padding: 4px 6px;
+        font-size: 10px;
+        width: 100%;
+        min-width: auto;
+    }
+}
+

@@ -5,7 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jim's YouTube 채널 v.03 supa-cache</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="css/styles.css">
+    <!-- PC Styles -->
+    <link rel="stylesheet" href="css/header.css">
+    <link rel="stylesheet" href="css/middle.css">
+    <link rel="stylesheet" href="css/footer.css">
+    <!-- Mobile Styles -->
+    <link rel="stylesheet" href="css/header-mobile.css" media="(max-width: 600px)">
+    <link rel="stylesheet" href="css/middle-mobile.css" media="(max-width: 900px)">
+    <link rel="stylesheet" href="css/footer-mobile.css" media="(max-width: 1200px)">
 </head>
 <body>
 
@@ -205,11 +212,11 @@
                 <!-- Sort and Display Controls -->
                 <div class="filter-group sort-filter">
                     <div class="filter-title">
-                        <span data-i18n="filter.sort">정렬 및 표시</span>
+                        <span data-i18n="filter.sort">정렬표시</span>
                     </div>
                     <div class="filter-options">
                         <div class="sort-control-row">
-                            <label for="sortVpdSelect" data-i18n="sort.vpd">조회수정렬</label>
+                            <label for="sortVpdSelect" data-i18n="sort.vpd">조회수</label>
                             <select id="sortVpdSelect">
                                 <option value="none" data-i18n="sort.vpd.none">기본</option>
                                 <option value="desc" selected data-i18n="sort.vpd.desc">높은 순</option>
@@ -253,11 +260,13 @@
             <!-- API 키는 JavaScript에서 동적으로 생성됨 (보안 향상) -->
         </div>
 
-        <div class="result-summary" id="resultSummary">
-            <span data-i18n="result.summary">검색 결과</span>: <span id="totalCount">0</span><span data-i18n="result.count">개</span>
-        </div>
+        <div class="results-box">
+            <div class="result-summary" id="resultSummary">
+                <span data-i18n="result.summary">검색 결과</span>: <span id="totalCount">0</span><span data-i18n="result.count">개</span>
+            </div>
 
-        <div id="results"></div>
+            <div id="results"></div>
+        </div>
     </div>
 
 
