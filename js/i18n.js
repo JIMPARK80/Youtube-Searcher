@@ -7,7 +7,7 @@
 const translations = {
     ko: {
         // 헤더
-        'app.title': 'Jim\'s YouTube 채널 v.02 supa-cache',
+        'app.title': 'Jim\'s YouTube 채널 v.03 supa-cache',
         'app.subtitle': '검색어를 입력하고 다양한 정보를 확인하세요!',
         
         // 인증
@@ -129,7 +129,7 @@ const translations = {
     },
     en: {
         // Header
-        'app.title': 'Jim\'s YouTube Channel v.02 supa-cache',
+        'app.title': 'Jim\'s YouTube Channel v.03 supa-cache',
         'app.subtitle': 'Enter a search term and explore various information!',
         
         // Auth

@@ -3,24 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jim's YouTube 채널 v.02 supa-cache</title>
+    <title>Jim's YouTube 채널 v.03 supa-cache</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <!-- Language Toggle Button -->
-    <button id="languageToggle" class="language-toggle-btn">🇰🇷 한국어</button>
-    
-    <!-- Auth Section -->
-    <div class="auth-section" id="authSection">
-        <button class="auth-btn login-btn" id="loginBtn" data-i18n="auth.login">로그인</button>
-        <button class="auth-btn signup-btn" id="signupBtn" data-i18n="auth.signup">가입하기</button>
-        <div class="user-info" id="userInfo" style="display: none;">
-            <img id="userAvatar" class="user-avatar" src="" alt="User Avatar">
-            <span class="user-name" id="userName" style="cursor: pointer;" title="클릭하여 프로필 수정" data-i18n-title="auth.profileClickToEdit"></span>
-            <button class="logout-btn" id="logoutBtn" data-i18n="auth.logout">로그아웃</button>
-        </div>
-    </div>
 
     <!-- Login Modal -->
     <div class="signup-modal" id="loginModal">
@@ -107,30 +94,45 @@
 
     <div class="container">
         <div class="header">
-            <h1 data-i18n="app.title">🎬 Jim's YouTube 채널 v.02 supa-cache</h1>
+            <h1 data-i18n="app.title">🎬 Jim's YouTube 채널 v.03 supa-cache</h1>
             <p data-i18n="app.subtitle">검색어를 입력하고 다양한 정보를 확인하세요!</p>
         </div>
-
-        <div class="search-box">
-            <div class="search-input-group">
-                <input type="text" id="searchInput" placeholder="검색어를 입력하세요..." data-i18n="search.placeholder" value="인생사연" />
-                <button id="searchBtn" data-i18n="search.button">검색</button>
+        
+        <!-- Language Toggle Button and Auth Section -->
+        <div class="header-controls">
+            <button id="languageToggle" class="language-toggle-btn">🇰🇷 한국어</button>
+            <div class="auth-section" id="authSection">
+                <button class="auth-btn login-btn" id="loginBtn" data-i18n="auth.login">로그인</button>
+                <button class="auth-btn signup-btn" id="signupBtn" data-i18n="auth.signup">가입하기</button>
+                <div class="user-info" id="userInfo" style="display: none;">
+                    <img id="userAvatar" class="user-avatar" src="" alt="User Avatar">
+                    <span class="user-name" id="userName" style="cursor: pointer;" title="클릭하여 프로필 수정" data-i18n-title="auth.profileClickToEdit"></span>
+                    <button class="logout-btn" id="logoutBtn" data-i18n="auth.logout">로그아웃</button>
+                </div>
             </div>
-            <!-- API 키는 JavaScript에서 동적으로 생성됨 (보안 향상) -->
+        </div>
 
-            <!-- View Count Filter -->
-            <div class="filter-section">
+        <!-- Filter Box (상단 왼쪽) -->
+        <div class="filter-box-container">
+            <!-- Mobile Filter Toggle Button -->
+            <button id="mobileFilterToggle" class="mobile-filter-toggle" aria-label="필터 메뉴">
+                <span class="hamburger-icon">☰</span>
+                <span class="filter-text">필터</span>
+            </button>
+
+            <!-- Filter Section -->
+            <div class="filter-section" id="filterSection">
                 <div class="filter-group view-filter">
                     <div class="filter-title">
                         <span data-i18n="filter.viewCount">조회수 필터</span>
                     </div>
                     <div class="filter-options">
                         <label><input type="radio" name="viewCountFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
-                        <label><input type="radio" name="viewCountFilter" value="0-1000"> <span data-i18n="filter.viewCount.grade5">5등급</span> (&lt;1K)</label>
-                        <label><input type="radio" name="viewCountFilter" value="1000-10000"> <span data-i18n="filter.viewCount.grade4">4등급</span> (1K-10K)</label>
-                        <label><input type="radio" name="viewCountFilter" value="10000-100000"> <span data-i18n="filter.viewCount.grade3">3등급</span> (10K-100K)</label>
-                        <label><input type="radio" name="viewCountFilter" value="100000-1000000"> <span data-i18n="filter.viewCount.grade2">2등급</span> (100K-1M)</label>
-                        <label><input type="radio" name="viewCountFilter" value="1000000"> <span data-i18n="filter.viewCount.grade1">1등급</span> (1M+)</label>
+                        <label><input type="radio" name="viewCountFilter" value="0-1000"> &lt;1K</label>
+                        <label><input type="radio" name="viewCountFilter" value="1000-10000"> 1K-10K</label>
+                        <label><input type="radio" name="viewCountFilter" value="10000-100000"> 10K-100K</label>
+                        <label><input type="radio" name="viewCountFilter" value="100000-1000000"> 100K-1M</label>
+                        <label><input type="radio" name="viewCountFilter" value="1000000"> 1M+</label>
                         <label><input type="radio" name="viewCountFilter" value="custom"> <span data-i18n="filter.custom">사용자정의</span></label>
                     </div>
                     <div class="custom-range" id="viewCountCustom">
@@ -146,11 +148,11 @@
                     </div>
                     <div class="filter-options">
                         <label><input type="radio" name="subCountFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
-                        <label><input type="radio" name="subCountFilter" value="0-1000"> 🐣 <span data-i18n="filter.subCount.rookie">신입</span> (1-1K)</label>
-                        <label><input type="radio" name="subCountFilter" value="1000-10000"> 🎬 <span data-i18n="filter.subCount.beginner">초보</span> (1K-10K)</label>
-                        <label><input type="radio" name="subCountFilter" value="100000-1000000"> 🥈 <span data-i18n="filter.subCount.silver">실버버튼</span> (100K-1M)</label>
-                        <label><input type="radio" name="subCountFilter" value="1000000-10000000"> 🥇 <span data-i18n="filter.subCount.gold">골드버튼</span> (1M-10M)</label>
-                        <label><input type="radio" name="subCountFilter" value="10000000"> 💎 <span data-i18n="filter.subCount.diamond">다이아버튼</span> (10M+)</label>
+                        <label><input type="radio" name="subCountFilter" value="0-1000"> 🐣 신입</label>
+                        <label><input type="radio" name="subCountFilter" value="1000-10000"> 🎬 초보</label>
+                        <label><input type="radio" name="subCountFilter" value="100000-1000000"> 🥈 실버</label>
+                        <label><input type="radio" name="subCountFilter" value="1000000-10000000"> 🥇 골드</label>
+                        <label><input type="radio" name="subCountFilter" value="10000000"> 💎 다이아</label>
                         <label><input type="radio" name="subCountFilter" value="custom"> <span data-i18n="filter.custom">사용자정의</span></label>
                     </div>
                     <div class="custom-range" id="subCountCustom">
@@ -166,13 +168,16 @@
                     </div>
                      <div class="filter-options">
                          <label><input type="radio" name="uploadDateFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
-                         <label><input type="radio" name="uploadDateFilter" value="1"> <span data-i18n="filter.date.day1">최근 1일</span></label>
-                         <label><input type="radio" name="uploadDateFilter" value="3"> <span data-i18n="filter.date.day3">최근 3일</span></label>
-                         <label><input type="radio" name="uploadDateFilter" value="7"> <span data-i18n="filter.date.day7">최근 7일</span></label>
-                         <label><input type="radio" name="uploadDateFilter" value="30"> <span data-i18n="filter.date.month1">1개월 이내</span></label>
-                         <label><input type="radio" name="uploadDateFilter" value="90"> <span data-i18n="filter.date.month3">3개월 이내</span></label>
-                         <label><input type="radio" name="uploadDateFilter" value="180"> <span data-i18n="filter.date.month6">6개월 이내</span></label>
-                         <label><input type="radio" name="uploadDateFilter" value="365"> <span data-i18n="filter.date.year1">1년 이내</span></label>
+                         <label><input type="radio" name="uploadDateFilter" value="1"> 최근 1일</label>
+                         <label><input type="radio" name="uploadDateFilter" value="7"> 최근 7일</label>
+                         <label><input type="radio" name="uploadDateFilter" value="30"> 1개월 내</label>
+                         <label><input type="radio" name="uploadDateFilter" value="180"> 6개월 내</label>
+                         <label><input type="radio" name="uploadDateFilter" value="365"> 1년 내</label>
+                         <label><input type="radio" name="uploadDateFilter" value="custom"> <span data-i18n="filter.custom">사용자정의</span></label>
+                    </div>
+                    <div class="custom-range" id="uploadDateCustom">
+                        <input type="date" id="uploadDateMin" placeholder="시작일"> ~ 
+                        <input type="date" id="uploadDateMax" placeholder="종료일">
                     </div>
                 </div>
                 
@@ -183,12 +188,13 @@
                     </div>
                     <div class="filter-options">
                         <label><input type="radio" name="durationFilter" value="all" checked> <span data-i18n="filter.all">전체</span></label>
-                        <label><input type="radio" name="durationFilter" value="0-60"> <span data-i18n="filter.duration.shorts">쇼츠구간</span> (&lt;1min)</label>
-                        <label><input type="radio" name="durationFilter" value="60-600"> <span data-i18n="filter.duration.short">짧은영상</span> (1-10min)</label>
-                        <label><input type="radio" name="durationFilter" value="600-1800"> <span data-i18n="filter.duration.medium">중간영상</span> (10-30min)</label>
-                        <label><input type="radio" name="durationFilter" value="1800-3600"> <span data-i18n="filter.duration.long">긴영상</span> (30min-1hr)</label>
-                        <label><input type="radio" name="durationFilter" value="3600"> <span data-i18n="filter.duration.verylong">아주긴영상</span> (1hr+)</label>
-                        <label><input type="radio" name="durationFilter" value="custom"> <span data-i18n="filter.custom">사용자선택</span></label>
+                        <label><input type="radio" name="durationFilter" value="0-180"> 쇼츠</label>
+                        <label><input type="radio" name="durationFilter" value="exclude-shorts"> 쇼츠제외</label>
+                        <label><input type="radio" name="durationFilter" value="60-600"> 짧은</label>
+                        <label><input type="radio" name="durationFilter" value="600-1800"> 중간</label>
+                        <label><input type="radio" name="durationFilter" value="1800-3600"> 긴</label>
+                        <label><input type="radio" name="durationFilter" value="3600"> 아주긴</label>
+                        <label><input type="radio" name="durationFilter" value="custom"> <span data-i18n="filter.custom">사용자정의</span></label>
                     </div>
                     <div class="custom-range" id="durationCustom">
                         <input type="number" id="durationMin" data-i18n-placeholder="filter.duration.minPlaceholder" placeholder="최소 (분)" min="0"> ~ 
@@ -202,16 +208,16 @@
                         <span data-i18n="filter.sort">정렬 및 표시</span>
                     </div>
                     <div class="filter-options">
-                        <div class="sort-control">
-                            <label for="sortVpdSelect" data-i18n="sort.vpd">조회수 정렬</label>
+                        <div class="sort-control-row">
+                            <label for="sortVpdSelect" data-i18n="sort.vpd">조회수정렬</label>
                             <select id="sortVpdSelect">
                                 <option value="none" data-i18n="sort.vpd.none">기본</option>
                                 <option value="desc" selected data-i18n="sort.vpd.desc">높은 순</option>
                                 <option value="asc" data-i18n="sort.vpd.asc">낮은 순</option>
                             </select>
                         </div>
-                        <div class="sort-control">
-                            <label for="velocityMetricSelect" data-i18n="sort.velocityMetric">표시 단위</label>
+                        <div class="sort-control-row">
+                            <label for="velocityMetricSelect" data-i18n="sort.velocityMetric">표시단위</label>
                             <select id="velocityMetricSelect">
                                 <option value="day" selected data-i18n="sort.velocityMetric.day">일간(VPD)</option>
                                 <option value="hour" data-i18n="sort.velocityMetric.hour">시간당(VPH)</option>
@@ -220,6 +226,32 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <div class="search-box">
+            <!-- 주요 키워드 추천 -->
+            <div class="keyword-suggestions">
+                <div class="keyword-suggestions-label">검색어 추천</div>
+                <div class="keyword-tags" id="keywordTags">
+                    <button class="keyword-tag" data-keyword="인생사연">인생사연</button>
+                    <button class="keyword-tag" data-keyword="감동사연">감동사연</button>
+                    <button class="keyword-tag" data-keyword="노후사연">노후사연</button>
+                    <button class="keyword-tag" data-keyword="시니어사연">시니어사연</button>
+                    <button class="keyword-tag" data-keyword="해외감동">해외감동</button>
+                    <button class="keyword-tag" data-keyword="영어회화">영어회화</button>
+                    <button class="keyword-tag" data-keyword="영어채널">영어채널</button>
+                    <button class="keyword-tag" data-keyword="시니어채널">시니어채널</button>
+                    <button class="keyword-tag" data-keyword="人生のお便り">人生のお便り</button>
+                    <button class="keyword-tag" data-keyword="英会話">英会話</button>
+                </div>
+            </div>
+            
+            <div class="search-input-group">
+                <input type="text" id="searchInput" placeholder="검색어를 입력하세요..." data-i18n="search.placeholder" value="인생사연" />
+                <button id="searchBtn" data-i18n="search.button">검색</button>
+            </div>
+            <!-- API 키는 JavaScript에서 동적으로 생성됨 (보안 향상) -->
+        </div>
 
         <div class="result-summary" id="resultSummary">
             <span data-i18n="result.summary">검색 결과</span>: <span id="totalCount">0</span><span data-i18n="result.count">개</span>

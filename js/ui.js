@@ -1843,22 +1843,46 @@ export function applyFilters(items) {
         
         // Upload date filter
         if (dateFilter !== 'all') {
-            const days = parseInt(dateFilter);
             if (!video.snippet.publishedAt) {
                 return false; // Skip items without published date when date filter is active
             }
             const publishedDate = new Date(video.snippet.publishedAt);
-            const cutoffDate = new Date();
-            cutoffDate.setDate(cutoffDate.getDate() - days);
-            if (publishedDate < cutoffDate) return false;
+            
+            // Handle custom date range filter
+            if (dateFilter === 'custom') {
+                const minDateStr = document.getElementById('uploadDateMin')?.value;
+                const maxDateStr = document.getElementById('uploadDateMax')?.value;
+                
+                if (minDateStr) {
+                    const minDate = new Date(minDateStr);
+                    minDate.setHours(0, 0, 0, 0);
+                    if (publishedDate < minDate) return false;
+                }
+                
+                if (maxDateStr) {
+                    const maxDate = new Date(maxDateStr);
+                    maxDate.setHours(23, 59, 59, 999);
+                    if (publishedDate > maxDate) return false;
+                }
+            } else {
+                // Handle preset day filters
+                const days = parseInt(dateFilter);
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - days);
+                if (publishedDate < cutoffDate) return false;
+            }
         }
         
         // Duration filter
         if (durationFilter !== 'all') {
             const seconds = parseDurationToSeconds(video.contentDetails?.duration);
             
+            // Handle exclude-shorts filter (3 minutes or longer)
+            if (durationFilter === 'exclude-shorts') {
+                if (seconds < 180) return false; // 3 minutes = 180 seconds
+            }
             // Handle custom range filter (in minutes)
-            if (durationFilter === 'custom') {
+            else if (durationFilter === 'custom') {
                 const minMinutes = parseInt(document.getElementById('durationMin')?.value || 0);
                 const maxMinutes = parseInt(document.getElementById('durationMax')?.value || Infinity);
                 const minSeconds = minMinutes * 60;
@@ -1869,7 +1893,7 @@ export function applyFilters(items) {
                 // Handle preset range filters
                 const [min, max] = durationFilter.split('-').map(Number);
                 if (max) {
-                    // Range filter (e.g., "60-600" for 1-10min)
+                    // Range filter (e.g., "60-600" for 1-10min, "0-180" for shorts)
                     if (seconds < min || seconds > max) return false;
                 } else {
                     // Minimum filter (e.g., "3600" for 1hr+)
@@ -2215,6 +2239,34 @@ export function setupEventListeners() {
         if (e.key === 'Enter') search();
     });
     
+    // Keyword tag clicks
+    document.querySelectorAll('.keyword-tag').forEach(tag => {
+        tag.addEventListener('click', () => {
+            const keyword = tag.getAttribute('data-keyword');
+            if (keyword) {
+                const searchInput = document.getElementById('searchInput');
+                if (searchInput) {
+                    searchInput.value = keyword;
+                    search();
+                }
+            }
+        });
+    });
+    
+    // Mobile filter toggle
+    const mobileFilterToggle = document.getElementById('mobileFilterToggle');
+    const filterSection = document.getElementById('filterSection');
+    if (mobileFilterToggle && filterSection) {
+        mobileFilterToggle.addEventListener('click', () => {
+            filterSection.classList.toggle('mobile-filter-open');
+            const isOpen = filterSection.classList.contains('mobile-filter-open');
+            const filterText = mobileFilterToggle.querySelector('.filter-text');
+            if (filterText) {
+                filterText.textContent = isOpen ? '필터 닫기' : '필터';
+            }
+        });
+    }
+    
     // Filter changes (radio and checkbox)
     document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(input => {
         input.addEventListener('change', () => {
@@ -2232,6 +2284,10 @@ export function setupEventListeners() {
 
             if (input.name === 'durationFilter') {
                 setCustomRangeVisibility('durationCustom', input.value === 'custom');
+            }
+
+            if (input.name === 'uploadDateFilter') {
+                setCustomRangeVisibility('uploadDateCustom', input.value === 'custom');
             }
 
             renderPage();
@@ -2253,6 +2309,12 @@ export function setupEventListeners() {
             }
         }
     });
+    
+    // Initialize upload date filter custom range visibility
+    const uploadDateFilterSelected = document.querySelector('input[name="uploadDateFilter"]:checked');
+    if (uploadDateFilterSelected) {
+        setCustomRangeVisibility('uploadDateCustom', uploadDateFilterSelected.value === 'custom');
+    }
     
     // Custom view count range input changes
     ['viewCountMin', 'viewCountMax'].forEach(id => {

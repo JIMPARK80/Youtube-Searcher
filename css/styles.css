@@ -27,12 +27,122 @@ body {
     margin-bottom: 10px;
 }
 
+/* Filter Box Container (상단 왼쪽) */
+.filter-box-container {
+    position: relative;
+    margin-bottom: 20px;
+}
+
 .search-box {
     background: #1a1a1a;
     padding: 30px;
     border-radius: 15px;
     box-shadow: 0 10px 40px rgba(0,0,0,0.2);
     margin-bottom: 30px;
+}
+
+/* 키워드 추천 섹션 */
+.keyword-suggestions {
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.keyword-suggestions-label {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 12px;
+}
+
+.keyword-tags {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.keyword-tags::-webkit-scrollbar {
+    height: 6px;
+}
+
+.keyword-tags::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.keyword-tags::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
+
+.keyword-tags::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.keyword-tag {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+    white-space: nowrap;
+}
+
+.keyword-tag:hover {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-color: transparent;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+}
+
+.keyword-tag:active {
+    transform: translateY(0);
+}
+
+/* 모바일 필터 토글 버튼 */
+.mobile-filter-toggle {
+    display: none;
+    width: 100%;
+    padding: 12px 20px;
+    margin-bottom: 15px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.mobile-filter-toggle:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+}
+
+.mobile-filter-toggle:active {
+    transform: translateY(0);
+}
+
+.hamburger-icon {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.filter-text {
+    font-size: 14px;
 }
 
 .search-input-group {
@@ -657,6 +767,41 @@ body {
     gap: 6px;
 }
 
+.sort-control-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.sort-control-row label {
+    font-size: 0.9em;
+    color: rgba(255,255,255,0.9);
+    text-align: left;
+    font-weight: 500;
+    white-space: nowrap;
+    min-width: 80px;
+}
+
+.sort-control-row select {
+    background: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 8px;
+    color: #1a1a1a;
+    padding: 8px 12px;
+    font-weight: 500;
+    font-size: 0.95em;
+    flex: 1;
+    min-width: 120px;
+}
+
+.sort-control-row select:focus {
+    outline: none;
+    border-color: #6a82fb;
+    box-shadow: 0 0 0 2px rgba(106, 130, 251, 0.25);
+}
+
 .sort-control label {
     font-size: 0.9em;
     color: rgba(255,255,255,0.9);
@@ -709,15 +854,17 @@ body {
 
 /* Filter Section Styles */
 .filter-section {
-    margin: 15px 0;
-    padding: 10px 15px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
-    backdrop-filter: blur(10px);
+    margin: 0;
+    padding: 20px;
+    background: #1a1a1a;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 12px;
+    gap: 15px;
     align-items: stretch;
+    max-width: fit-content;
 }
 
 .filter-group {
@@ -824,20 +971,163 @@ body {
     .card-grid {
         grid-template-columns: repeat(2, minmax(220px, 1fr));
     }
+    
+    .filter-section {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 @media (max-width: 600px) {
+    .container {
+        padding: 10px;
+    }
+    
+    .header h1 {
+        font-size: 1.5em;
+    }
+    
+    .header-controls {
+        margin: 15px auto 20px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    
+    .header-controls .language-toggle-btn {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .header-controls .auth-section {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .search-box {
+        padding: 15px 12px;
+        margin-bottom: 20px;
+    }
+    
     .search-input-group {
         flex-direction: column;
+        gap: 8px;
+    }
+    
+    #searchInput {
+        padding: 12px 15px;
+        font-size: 14px;
     }
 
     #searchBtn {
         width: 100%;
+        padding: 12px 20px;
+        font-size: 14px;
+    }
+    
+    .keyword-suggestions {
+        margin-bottom: 12px;
+        padding-bottom: 12px;
+    }
+    
+    .keyword-tags {
+        gap: 5px;
+    }
+    
+    .keyword-tag {
+        padding: 5px 10px;
+        font-size: 11px;
+    }
+    
+    .keyword-suggestions-label {
+        font-size: 11px;
+        margin-bottom: 6px;
+    }
+    
+    .mobile-filter-toggle {
+        display: flex;
+    }
+    
+    .filter-box-container {
+        margin-bottom: 10px;
+    }
+    
+    .mobile-filter-toggle {
+        padding: 8px 12px;
+        font-size: 12px;
+        margin-bottom: 10px;
+    }
+    
+    .hamburger-icon {
+        font-size: 16px;
+    }
+    
+    .filter-text {
+        font-size: 12px;
+    }
+    
+    .filter-section {
+        display: none;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 10px 6px;
+        margin-top: 10px;
+        max-width: 100%;
+    }
+    
+    .filter-section.mobile-filter-open {
+        display: grid;
+    }
+    
+    .filter-group {
+        margin: 0;
+        padding: 6px 4px;
+    }
+    
+    .filter-title {
+        font-size: 0.8em;
+        margin: 0 0 6px 0;
+        padding: 0 0 3px 0;
     }
 
     .filter-options {
-        flex-direction: column;
-        align-items: stretch;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 3px;
+        margin-top: 6px;
+    }
+    
+    .filter-options label {
+        font-size: 10px;
+        padding: 3px 5px;
+        border-radius: 4px;
+    }
+    
+    .custom-range {
+        margin-top: 6px;
+        gap: 4px;
+    }
+    
+    .custom-range input[type="number"],
+    .custom-range input[type="date"] {
+        padding: 4px 6px;
+        font-size: 11px;
+        width: 80px;
+    }
+    
+    .sort-control-row {
+        gap: 4px;
+        margin-bottom: 6px;
+    }
+    
+    .sort-control-row label {
+        font-size: 0.75em;
+        min-width: 60px;
+    }
+    
+    .sort-control-row select {
+        padding: 6px 8px;
+        font-size: 0.85em;
     }
 
     .summary-indicator {
@@ -847,16 +1137,39 @@ body {
     .card-grid {
         grid-template-columns: 1fr;
     }
+    
+    .sort-control-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+    
+    .sort-control-row label {
+        min-width: auto;
+        font-size: 0.85em;
+    }
+    
+    .sort-control-row select {
+        width: 100%;
+        min-width: auto;
+    }
 }
 
 /* Auth Section Styles */
+.header-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 20px auto 30px;
+    max-width: 1200px;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
 .auth-section {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
     display: flex;
     gap: 10px;
+    align-items: center;
 }
 
 .auth-btn {
@@ -930,10 +1243,6 @@ body {
 
 /* Language Toggle Button */
 .language-toggle-btn {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    z-index: 1000;
     padding: 8px 16px;
     border: 2px solid white;
     border-radius: 8px;
