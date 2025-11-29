@@ -110,30 +110,32 @@ export function parseDurationToSeconds(duration) {
 const thumbnailCache = new Map();
 
 /**
- * Auto-check YouTube thumbnail availability
+ * Get the best available YouTube thumbnail URL
  * Tests each thumbnail size and returns the first working one
- * @param {string} id - YouTube video ID
+ * This is the safest auto-fallback mechanism to fix all 404 thumbnail errors
+ * @param {string} videoId - YouTube video ID
  * @returns {Promise<string|null>} - First available thumbnail URL or null
  */
-async function fetchThumbnail(id) {
-    if (!id) return null;
+async function getBestThumbnail(videoId) {
+    if (!videoId) return null;
     
     // Check cache first
-    if (thumbnailCache.has(id)) {
-        return thumbnailCache.get(id);
+    if (thumbnailCache.has(videoId)) {
+        return thumbnailCache.get(videoId);
     }
     
     const urls = [
-        `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`,
-        `https://i.ytimg.com/vi/${id}/sddefault.jpg`,
-        `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+        `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+        `https://i.ytimg.com/vi/${videoId}/sddefault.jpg`,
+        `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
     ];
     
     for (const url of urls) {
         try {
             const res = await fetch(url);
             if (res.ok) {
-                thumbnailCache.set(id, url);
+                thumbnailCache.set(videoId, url);
                 return url;
             }
         } catch (error) {
@@ -143,7 +145,7 @@ async function fetchThumbnail(id) {
     }
     
     // If all fail, cache null to avoid repeated attempts
-    thumbnailCache.set(id, null);
+    thumbnailCache.set(videoId, null);
     return null;
 }
 
@@ -1560,14 +1562,15 @@ function createVideoCard(video, item, rank = null) {
                      video.snippet.thumbnails?.default?.url;
     
     // Fallback thumbnail URLs (sequential fallback on load failure)
-    // If maxresdefault.jpg fails, try: hqdefault.jpg -> mqdefault.jpg -> sddefault.jpg
+    // If maxresdefault.jpg fails, try: sddefault.jpg -> hqdefault.jpg -> mqdefault.jpg
+    // Final fallback: getBestThumbnail() will test all sizes automatically
     const fallbackThumbnails = [
         thumbnail, // First: original thumbnail
         video.snippet.thumbnails?.high?.url,
         video.snippet.thumbnails?.default?.url,
+        `https://i.ytimg.com/vi/${videoIdForThumbnail}/sddefault.jpg`, // Standard definition fallback
         `https://i.ytimg.com/vi/${videoIdForThumbnail}/hqdefault.jpg`, // High quality fallback
         `https://i.ytimg.com/vi/${videoIdForThumbnail}/mqdefault.jpg`, // Medium quality fallback
-        `https://i.ytimg.com/vi/${videoIdForThumbnail}/sddefault.jpg`, // Standard definition fallback
         `https://img.youtube.com/vi/${videoIdForThumbnail}/hqdefault.jpg`, // Alternative domain
         `https://img.youtube.com/vi/${videoIdForThumbnail}/mqdefault.jpg`,
         `https://img.youtube.com/vi/${videoIdForThumbnail}/default.jpg`
@@ -1633,10 +1636,10 @@ function createVideoCard(video, item, rank = null) {
                 this.dataset.fallbackIndex = nextIndex.toString();
                 this.src = fallbacks[nextIndex];
             } else {
-                // All fallback URLs failed, try auto-check fetchThumbnail
+                // All fallback URLs failed, try auto-check getBestThumbnail
                 const videoId = video.id || video?.raw?.id || item?.raw?.id;
                 if (videoId) {
-                    const workingThumbnail = await fetchThumbnail(videoId);
+                    const workingThumbnail = await getBestThumbnail(videoId);
                     if (workingThumbnail) {
                         this.src = workingThumbnail;
                         return; // Success, exit handler
