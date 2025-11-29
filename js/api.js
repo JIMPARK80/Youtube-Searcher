@@ -205,6 +205,11 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
     try {
         const excludeSet = new Set(excludeVideoIds);
         
+        // 초기 수집 모드 판단: 서버에 저장된 비디오가 적을 때 (100개 미만)는 초기 캐시 구축 모드
+        // 초기 수집 모드에서는 중복 여부와 상관없이 200개까지 모두 수집
+        const INITIAL_FETCH_THRESHOLD = 100; // 100개 미만이면 초기 수집 모드
+        const isInitialFetch = excludeVideoIds.length < INITIAL_FETCH_THRESHOLD;
+        
         // ① Step 1: Search for videos (동적 최대 개수, 기존 ID 제외)
         let searchItems = [];
         let nextPageToken = null;
@@ -234,24 +239,35 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
                 throw new Error("quotaExceeded");
             }
             
-            // Early-stop: 현재 페이지 전체를 확인한 후, 중복이 발견되면 다음 페이지 요청 중단
-            // YouTube search results are sorted by recency, so once we hit a duplicate in current page,
-            // everything in next pages is guaranteed to be older (unnecessary)
-            let foundDuplicate = false;
+            // Early-stop: 초기 수집 모드가 아닐 때만 첫 번째 비디오 기준으로 판단
+            // 초기 수집 모드: 중복 여부와 상관없이 200개까지 모두 수집 (초기 캐시 구축)
+            // 이후 검색: 첫 번째 비디오가 중복이면 즉시 중단 (API 호출 최소화)
+            if (!isInitialFetch) {
+                const firstItem = searchData.items?.[0];
+                const firstVideoId = firstItem?.id?.videoId;
+                
+                // 첫 번째 비디오가 중복이면 즉시 중단 (검색 결과가 이미 저장된 비디오와 겹침)
+                if (firstVideoId && excludeSet.has(firstVideoId)) {
+                    console.log(`⏹️ Early-stop: 첫 번째 비디오가 중복 (${firstVideoId}) → 검색 결과가 이미 저장된 비디오와 겹침, 즉시 중단`);
+                    break;
+                }
+            } else {
+                // 초기 수집 모드: 중복 여부와 상관없이 계속 수집
+                if (attempts === 1) {
+                    console.log(`🔵 초기 수집 모드: 서버에 ${excludeVideoIds.length}개 저장됨 → 중복 여부와 상관없이 ${MAX_RESULTS}개까지 모두 수집`);
+                }
+            }
+            
+            // 첫 번째 비디오가 새 비디오면 현재 페이지 전체를 확인하여 모든 새 비디오 수집
+            // 중간에 중복이 있어도 다음 페이지 계속 검색 (더 많은 새 비디오를 찾기 위해)
             const newItems = [];
             
-            // 현재 페이지 전체를 확인하여 모든 새 비디오 수집
             for (const item of (searchData.items || [])) {
                 const videoId = item.id?.videoId;
                 if (!videoId) continue;
                 
-                // 중복 발견 시 플래그만 설정 (현재 페이지는 계속 처리)
+                // 중복은 건너뛰고 새 비디오만 수집
                 if (excludeSet.has(videoId)) {
-                    if (!foundDuplicate) {
-                        foundDuplicate = true;
-                        console.log(`⏹️ Early-stop: 중복 videoId 발견 (${videoId}) → 현재 페이지는 계속 처리, 다음 페이지 요청 중단`);
-                    }
-                    // 중복이어도 현재 페이지는 계속 처리 (첫 페이지의 나머지 새 비디오 수집)
                     continue;
                 }
                 
@@ -261,11 +277,8 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
             searchItems.push(...newItems);
             nextPageToken = searchData.nextPageToken;
             
-            // Early-stop: 중복 발견 시 다음 페이지 요청 중단 (현재 페이지는 이미 처리됨)
-            if (foundDuplicate) {
-                console.log(`✅ Early-stop 적용: ${newItems.length}개 새 비디오 추가 후 다음 페이지 요청 중단 (불필요한 페이지 요청 방지)`);
-                break;
-            }
+            // 첫 번째 비디오가 새 비디오면 중간에 중복이 있어도 다음 페이지 계속 검색
+            // 필요한 수만큼 모았거나 더 이상 결과가 없으면 종료
             
             // 필요한 수만큼 모았거나 더 이상 결과가 없으면 종료
             if (!nextPageToken || searchItems.length >= MAX_RESULTS) {
