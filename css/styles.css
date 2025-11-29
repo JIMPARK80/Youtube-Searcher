@@ -428,46 +428,6 @@ body {
     font-size: 0.95em;
 }
 
-.vph-graph-container {
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid rgba(102, 126, 234, 0.2);
-    position: relative;
-}
-
-.vph-graph-label {
-    position: absolute;
-    top: 8px;
-    left: 0;
-    font-size: 0.7em;
-    font-weight: 600;
-    color: #667eea;
-    z-index: 1;
-    background: rgba(255, 255, 255, 0.9);
-    padding: 2px 4px;
-    border-radius: 3px;
-}
-
-.vph-graph {
-    width: 100%;
-    height: 60px;
-    display: block;
-}
-
-.vph-line {
-    stroke: #667eea;
-    stroke-width: 2;
-    fill: none;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.vph-current-point {
-    fill: #ff4444;
-    stroke: #fff;
-    stroke-width: 1.5;
-    transition: opacity 0.3s ease;
-}
 
 .stat-item {
     display: flex;

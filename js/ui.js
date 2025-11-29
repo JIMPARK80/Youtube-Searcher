@@ -14,8 +14,6 @@ import {
 import {
     loadFromSupabase,
     saveToSupabase,
-    getRecentVelocityForVideo,
-    trackVideoIdsForViewHistory,
     updateMissingData,
     CACHE_TTL_MS
 } from './supabase-api.js';
@@ -30,7 +28,7 @@ export let allChannelMap = {};
 export let currentSearchQuery = '';
 export let currentTotalCount = 0; // 서버의 total_count 추적
 
-const MAX_RESULTS_LIMIT = 1000; // 키워드당 최대 1000개
+const MAX_RESULTS_LIMIT = 200; // 키워드당 최대 200개
 // VPH 업데이트 할당량 계산:
 // - 10,000개 비디오 기준: 200 units/시간
 // - 하루: 200 × 24 = 4,800 units
@@ -218,21 +216,11 @@ export function viewVelocityPerDay(video) {
 }
 
 function getVelocityValue(item, metric = currentVelocityMetric) {
-    // 최근 VPH: 서버에서 가져온 실제 VPH 데이터 사용
-    if (metric === 'recent-vph') {
-        // item.vph가 명시적으로 설정되어 있으면 (null/undefined가 아니면) 그 값을 사용
-        // 0도 유효한 값이므로 0을 반환해야 함
-        if (item?.vph !== null && item?.vph !== undefined) {
-            return Number(item.vph);
-        }
-        // VPH 데이터가 없으면 (null/undefined) 일간 속도를 시간당으로 변환하여 폴백
-        if (item?.vpd) {
-            return Number(item.vpd) / 24;
-        }
-        return 0;
+    // vpd가 없으면 계산
+    let base = Number(item?.vpd || 0);
+    if (base === 0 && item?.raw) {
+        base = viewVelocityPerDay(item.raw);
     }
-    
-    const base = Number(item?.vpd || 0);
     if (metric === 'hour') {
         return base / 24;
     }
@@ -241,7 +229,7 @@ function getVelocityValue(item, metric = currentVelocityMetric) {
 
 function formatVelocityBadge(value, metric = currentVelocityMetric) {
     let unit = '/day';
-    if (metric === 'hour' || metric === 'recent-vph') {
+    if (metric === 'hour') {
         unit = '/hr';
     }
     return `+${formatNumber(value)}${unit}`;
@@ -288,10 +276,6 @@ export async function search(shouldReload = false) {
         return;
     }
     
-    // 새로운 검색 시작 시 VPH 계산 추적 초기화
-    vphCalculatedVideos.clear();
-    vphRetryCount.clear(); // 재시도 횟수도 초기화
-    window.vphCalculationsStarted = false; // 새로운 검색 시 VPH 계산 시작 플래그 초기화
     isQuotaExceeded = false; // 할당량 초과 플래그 초기화
     
     const searchBtn = document.getElementById('searchBtn');
@@ -441,6 +425,7 @@ export async function search(shouldReload = false) {
                 renderPage(1);
                 lastUIUpdateTime = Date.now();
                 const nextToken = cacheData.meta?.nextPageToken || null;
+                // Save to Supabase (중복 체크 후 저장)
                 saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'local-cache', nextToken)
                     .catch(err => console.warn('⚠️ 로컬 캐시 기반 Supabase 저장 실패:', err));
                 
@@ -537,6 +522,7 @@ export async function search(shouldReload = false) {
             renderPage(1);
             lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
         const nextToken = cacheData.meta?.nextPageToken || null;
+        // Save to Supabase (중복 체크 후 저장)
         saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'local-cache', nextToken)
             .catch(err => console.warn('⚠️ 로컬 캐시 기반 Supabase 저장 실패:', err));
         
@@ -630,6 +616,7 @@ export async function search(shouldReload = false) {
                 renderPage(1);
                 lastUIUpdateTime = Date.now();
                 const nextToken = meta.nextPageToken || null;
+                // Save to Supabase (중복 체크 후 저장)
                 saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'supa-cache', nextToken)
                     .catch(err => console.warn('⚠️ Supabase 캐시 기반 저장 실패:', err));
                 
@@ -669,6 +656,7 @@ export async function search(shouldReload = false) {
             renderPage(1);
             lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
             const nextToken = meta.nextPageToken || null;
+            // Save to Supabase (중복 체크 후 저장)
             saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'supa-cache', nextToken)
                 .catch(err => console.warn('⚠️ Supabase 캐시 기반 저장 실패:', err));
             
@@ -921,8 +909,9 @@ async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVid
             }
         }
         
-        // Supabase에 저장 (전체 개수 저장)
-        await saveToSupabase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken);
+        // Save to Supabase (중복 체크 후 저장)
+        await saveToSupabase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken)
+            .catch(err => console.warn('⚠️ Supabase 저장 실패:', err));
         
         // total_count 업데이트
         if (result.videos.length > 0) {
@@ -939,23 +928,23 @@ async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVid
             }
         }
         
-        // Track video IDs for view history
-        trackVideoIdsForViewHistory(result.videos)
-            .catch(err => console.warn('⚠️ Video ID 추적 실패:', err));
         
         renderPage(1);
-        updateLoadMoreButton(); // 버튼 상태 업데이트
-        
     } catch (error) {
         console.error('❌ 추가 비디오 검색 오류:', error);
         // 에러 발생 시 기존 캐시만 사용
         renderPage(1);
-        updateLoadMoreButton(); // 버튼 상태 업데이트
     }
 }
 
-// Load More 버튼 클릭 시 추가 비디오 로드
-async function loadMoreVideos(query) {
+// Load More 버튼 클릭 시 추가 비디오 가져오기
+async function loadMore() {
+    const query = currentSearchQuery || document.getElementById('searchInput')?.value?.trim();
+    if (!query) {
+        console.warn('⚠️ 검색어가 없습니다');
+        return;
+    }
+    
     const apiKeyValue = await getApiKeys();
     if (!apiKeyValue) {
         console.error('❌ API 키가 없습니다');
@@ -1028,11 +1017,11 @@ async function loadMoreVideos(query) {
     updateLoadMoreButton();
 }
 
-// Load More 버튼 상태 업데이트
+// Load More 버튼 상태 업데이트 (현재는 사용 안 함)
 function updateLoadMoreButton() {
     const loadMoreBtn = document.getElementById('loadMoreBtn');
     if (!loadMoreBtn) {
-        console.warn('⚠️ loadMoreBtn 요소를 찾을 수 없습니다');
+        // loadMoreBtn 요소가 없으면 조용히 반환 (경고 제거)
         return;
     }
     
@@ -1113,13 +1102,13 @@ async function performFullGoogleSearch(query, apiKeyValue) {
     });
     
     try {
-        const maxResults = getMaxResults();
-        const apiMaxResults = maxResults === 'max' ? MAX_RESULTS_LIMIT : maxResults;
-        debugLog(`🌐 Google API 전체 검색 (최대 ${apiMaxResults}개)`);
+        // 최대 200개로 제한
+        const targetCount = 200;
+        debugLog(`🌐 Google API 전체 검색 (최대 ${targetCount}개)`);
         
-        // 타임아웃과 함께 실행 (동적 MAX_RESULTS 사용)
+        // 타임아웃과 함께 실행
         const result = await Promise.race([
-            searchYouTubeAPI(query, apiKeyValue, apiMaxResults),
+            searchYouTubeAPI(query, apiKeyValue, targetCount),
             timeoutPromise
         ]).catch(async error => {
             // API 할당량 초과 시 캐시에서 최대 데이터 가져오기
@@ -1158,10 +1147,10 @@ async function performFullGoogleSearch(query, apiKeyValue) {
         allVideos = result.videos;
         allChannelMap = result.channels;
         
-        // 선택한 최대 결과 수로 제한 (API가 더 많이 반환할 수 있으므로)
-        if (allVideos.length > maxResults) {
-            debugLog(`✂️ 결과 ${allVideos.length}개 → ${maxResults}개로 제한`);
-            allVideos = allVideos.slice(0, maxResults);
+        // 최대 200개로 제한 (API가 더 많이 반환할 수 있으므로)
+        if (allVideos.length > targetCount) {
+            debugLog(`✂️ 결과 ${allVideos.length}개 → ${targetCount}개로 제한`);
+            allVideos = allVideos.slice(0, targetCount);
         }
         
         // Enrich with velocity data
@@ -1181,12 +1170,46 @@ async function performFullGoogleSearch(query, apiKeyValue) {
             };
         });
 
-        // Save to Supabase with nextPageToken
-        await saveToSupabase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken);
+        // 검색 후 자동 정렬 (기본값: 높은 순)
+        const sortSelect = document.getElementById('sortVpdSelect');
+        const velocityMetricSelect = document.getElementById('velocityMetricSelect');
+        let sortValue = sortSelect?.value || 'desc';
+        if (sortValue === 'none') {
+            sortValue = 'desc'; // 'none'이면 기본값인 'desc'로 설정
+        }
+        currentVelocityMetric = velocityMetricSelect?.value || 'day';
         
-        // Track video IDs for view history (VPH 추적 시작)
-        trackVideoIdsForViewHistory(allVideos)
-            .catch(err => console.warn('⚠️ Video ID 추적 실패:', err));
+        // allItems 정렬 (일일 조회수 기준)
+        console.log(`🔀 정렬 시작: ${allItems.length}개 항목, 정렬 옵션: ${sortValue}, 표시 단위: ${currentVelocityMetric}`);
+        if (sortValue === 'asc') {
+            allItems.sort((a, b) => {
+                const valA = getVelocityValue(a, currentVelocityMetric);
+                const valB = getVelocityValue(b, currentVelocityMetric);
+                return valA - valB;
+            });
+        } else {
+            // 'desc' 또는 기본값: 높은 순
+            allItems.sort((a, b) => {
+                const valA = getVelocityValue(a, currentVelocityMetric);
+                const valB = getVelocityValue(b, currentVelocityMetric);
+                const result = valB - valA; // 높은 순
+                return result;
+            });
+        }
+        
+        // 정렬 결과 확인 (첫 5개만 로그)
+        if (allItems.length > 0) {
+            console.log('🔀 정렬 결과 (상위 5개):');
+            allItems.slice(0, 5).forEach((item, idx) => {
+                const vpd = getVelocityValue(item, currentVelocityMetric);
+                console.log(`  ${idx + 1}. VPD: ${vpd.toFixed(1)}/day - ${item.raw?.snippet?.title?.substring(0, 30)}...`);
+            });
+        }
+
+        // Save to Supabase with nextPageToken (중복 체크 후 저장)
+        await saveToSupabase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken)
+            .catch(err => console.warn('⚠️ Supabase 저장 실패:', err));
+        
         
         // 백그라운드에서 NULL 데이터 자동 업데이트 (검색 성능에 영향 없음, 현재 검색어 우선)
         updateMissingDataInBackground(apiKeyValue, 50, query).catch(err => {
@@ -1222,7 +1245,8 @@ async function performFullGoogleSearch(query, apiKeyValue) {
         };
         saveToLocalCache(query, cacheData);
         
-        renderPage(1);
+        // 이미 정렬했으므로 skipSort=true로 전달
+        renderPage(1, true);
         lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
 
     } catch (googleError) {
@@ -1366,7 +1390,8 @@ async function performIncrementalFetch(query, apiKeyValue, firebaseData, neededC
         });
         
         // Supabase 저장
-        await saveToSupabase(query, restoredVideos, allChannelMap, allItems, 'google', nextPageToken);
+        // DISABLED: Only cron updates videos to Supabase
+        // await saveToSupabase(query, restoredVideos, allChannelMap, allItems, 'google', nextPageToken);
         renderPage(1);
         
         debugLog(`✅ 증분 검색 완료: 총 ${allVideos.length}개 (추가 ${newVideos.length}개)`);
@@ -1512,20 +1537,20 @@ export function renderPage(page, skipSort = false) {
         }
     }
     
-    // VPH 계산 큐 초기화 (이전 페이지의 큐 정리)
-    // 주의: 계산된 비디오 추적은 유지 (같은 검색 결과에서 페이지 이동 시 재계산 방지)
-    // 새로운 검색 시에는 search 함수에서 초기화됨
-    vphCalculationQueue = [];
-    vphCalculationRunning = 0;
     
     // 표시 단위와 정렬 옵션 가져오기
     const velocityMetricSelect = document.getElementById('velocityMetricSelect');
     currentVelocityMetric = velocityMetricSelect?.value || 'day';
     const sortSelect = document.getElementById('sortVpdSelect');
-    const sortValue = sortSelect?.value || 'desc'; // 기본값: 높은 순
+    // 기본값: 높은 순 (desc), 'none'이면 'desc'로 처리
+    let sortValue = sortSelect?.value || 'desc';
+    if (sortValue === 'none') {
+        sortValue = 'desc'; // 'none'이면 기본값인 'desc'로 설정
+    }
     
     // skipSort가 true이면 정렬 건너뛰기 (이미 정렬된 경우)
-    if (!skipSort) {
+    if (!skipSort && allItems.length > 0) {
+        console.log(`🔀 renderPage에서 정렬: ${allItems.length}개 항목, 정렬 옵션: ${sortValue}`);
         // 전체 allItems를 먼저 정렬 (모든 페이지의 데이터가 올바르게 정렬되도록)
         if (sortValue === 'asc') {
             allItems.sort((a, b) => {
@@ -1533,7 +1558,8 @@ export function renderPage(page, skipSort = false) {
                 const valB = getVelocityValue(b, currentVelocityMetric);
                 return valA - valB;
             });
-        } else if (sortValue === 'desc') {
+        } else {
+            // 'desc' 또는 기본값: 높은 순
             allItems.sort((a, b) => {
                 const valA = getVelocityValue(a, currentVelocityMetric);
                 const valB = getVelocityValue(b, currentVelocityMetric);
@@ -1545,19 +1571,22 @@ export function renderPage(page, skipSort = false) {
     // 정렬된 allItems를 필터링하고 중복 제거
     const dedupedItems = getFilteredDedupedItems();
     
-    // 안전망: 필터/중복 제거 후에도 다시 한 번 정렬하여 페이지마다 일관된 순서를 보장
-    const comparator = sortValue === 'asc'
-        ? (a, b) => {
-            const valA = getVelocityValue(a, currentVelocityMetric);
-            const valB = getVelocityValue(b, currentVelocityMetric);
-            return valA - valB;
-        }
-        : (a, b) => {
-            const valA = getVelocityValue(a, currentVelocityMetric);
-            const valB = getVelocityValue(b, currentVelocityMetric);
-            return valB - valA;
-        };
-    dedupedItems.sort(comparator);
+    // skipSort가 false일 때만 필터/중복 제거 후 다시 한 번 정렬
+    if (!skipSort) {
+        // 안전망: 필터/중복 제거 후에도 다시 한 번 정렬하여 페이지마다 일관된 순서를 보장
+        const comparator = sortValue === 'asc'
+            ? (a, b) => {
+                const valA = getVelocityValue(a, currentVelocityMetric);
+                const valB = getVelocityValue(b, currentVelocityMetric);
+                return valA - valB;
+            }
+            : (a, b) => {
+                const valA = getVelocityValue(a, currentVelocityMetric);
+                const valB = getVelocityValue(b, currentVelocityMetric);
+                return valB - valA; // 높은 순
+            };
+        dedupedItems.sort(comparator);
+    }
     
     const pageItems = dedupedItems;
     
@@ -1586,25 +1615,6 @@ export function renderPage(page, skipSort = false) {
             fragment.appendChild(card);
             cardsCreated++;
             
-            // 표시 단위가 "최근 VPH"이고 VPH 데이터가 이미 있는 경우 배지 업데이트
-            if (currentVelocityMetric === 'recent-vph' && item.vph) {
-                const badgeEl = card.querySelector('.vpd-badge');
-                if (badgeEl) {
-                    const velocityValue = getVelocityValue(item);
-                    badgeEl.textContent = formatVelocityBadge(velocityValue);
-                }
-            }
-            
-            // 이미 계산된 graphData가 있으면 그래프 복원 (재렌더링 시 그래프 유지)
-            if (item.graphData) {
-                const panelEl = card.querySelector('.velocity-panel');
-                if (panelEl) {
-                    // 약간의 딜레이를 두어 DOM이 완전히 렌더링된 후 그래프 그리기
-                    setTimeout(() => {
-                        drawVphGraph(panelEl, item.graphData);
-                    }, 10);
-                }
-            }
         }
     }
     
@@ -1614,11 +1624,6 @@ export function renderPage(page, skipSort = false) {
     // Update result count
     updateResultCount(dedupedItems.length);
     
-    // 모든 항목에 대해 VPH 계산 시작 (페이지와 관계없이)
-    // 첫 페이지 렌더링 시에만 실행 (중복 계산 방지)
-    if (page === 1 && allItems.length > 0) {
-        startVphCalculationsForAllItems();
-    }
     
     // 마지막 UI 업데이트 시간 갱신
     lastUIUpdateTime = Date.now();
@@ -1695,36 +1700,9 @@ function createVideoCard(video, item, rank = null) {
                 <span class="stat-item">👥 ${formatNumber(subscriberCount || 0)}</span>
                 <span class="stat-item">📅 ${daysText}</span>
             </div>
-            <div class="velocity-panel">
-                <div class="velocity-row-horizontal">
-                    <div class="velocity-item">
-                        <span class="label" data-i18n="velocity.recent">${t('velocity.recent')}</span>
-                        <span class="value recent-vph">${t('velocity.loading')}</span>
-                    </div>
-                    <div class="velocity-separator">|</div>
-                    <div class="velocity-item">
-                        <span class="label" data-i18n="velocity.daily">${t('velocity.daily')}</span>
-                        <span class="value daily-vpd">${formatNumber(computedVpd || 0)}/day</span>
-                    </div>
-                </div>
-                <div class="vph-graph-container" style="display: none;">
-                    <div class="vph-graph-label">최근 VPH</div>
-                    <svg class="vph-graph" viewBox="0 0 200 60" preserveAspectRatio="none">
-                        <polyline class="vph-line" fill="none" stroke="#667eea" stroke-width="2"/>
-                        <circle class="vph-current-point" r="3" fill="#ff4444" opacity="0"/>
-                    </svg>
-                </div>
-            </div>
         </div>
     `;
 
-    hydrateVelocityPanel(
-        videoId,
-        card.querySelector('.velocity-panel'),
-        computedVpd,
-        video.snippet.title,
-        item
-    );
     
     // 이미지 로드 실패 시 fallback 처리
     const imgEl = card.querySelector('img');
@@ -1750,13 +1728,6 @@ function createVideoCard(video, item, rank = null) {
     return card;
 }
 
-// VPH 계산 큐 관리 (동시 실행 제한)
-let vphCalculationQueue = [];
-let vphCalculationRunning = 0;
-const MAX_CONCURRENT_VPH_CALCULATIONS = 10; // 동시 최대 10개 실행 (성능 최적화)
-const vphCalculatedVideos = new Set(); // 이미 계산된 비디오 ID 추적
-const vphRetryCount = new Map(); // 데이터 부족 시 재시도 횟수 추적 (최대 3번)
-const MAX_VPH_RETRY_COUNT = 3; // 최대 재시도 횟수
 
 // 자동 새로고침 함수
 function resetAutoRefreshTimer() {
@@ -1839,368 +1810,6 @@ function restoreLastSearchOnRefresh() {
     }
 }
 
-function processVphQueue() {
-    if (vphCalculationRunning >= MAX_CONCURRENT_VPH_CALCULATIONS || vphCalculationQueue.length === 0) {
-        return;
-    }
-    
-    const { videoId, panelEl, baseVpd, label, item } = vphCalculationQueue.shift();
-    vphCalculationRunning++;
-    
-    executeVphCalculation(videoId, panelEl, baseVpd, label, item)
-        .finally(() => {
-            vphCalculationRunning--;
-            // 다음 항목 즉시 처리 (딜레이 제거로 성능 향상)
-            processVphQueue();
-            
-            // 계산 완료 후 모든 계산이 끝났는지 확인
-            if (vphCalculationQueue.length === 0 && vphCalculationRunning === 0) {
-                // 모든 계산이 완료되었으므로 재정렬 확인
-                setTimeout(() => checkAndResortWhenAllCalculated(), 300);
-            }
-        });
-}
-
-// VPH 재정렬 중 플래그 (페이지 리셋 방지)
-let isVphResorting = false;
-
-// 모든 VPH 계산이 완료되었는지 확인하고 재정렬
-function checkAndResortWhenAllCalculated() {
-    // 모든 데이터의 VPH 계산이 완료되었는지 확인
-    const totalItemsNeedingVph = allItems.filter(item => {
-        const videoId = item.raw?.id || item.id;
-        return videoId && !vphCalculatedVideos.has(videoId);
-    }).length;
-    
-    // 모든 계산이 완료되었거나, 계산 중인 항목이 없으면 재정렬
-    const allCalculated = totalItemsNeedingVph === 0 || 
-                         (vphCalculationQueue.length === 0 && vphCalculationRunning === 0);
-    
-    if (allCalculated && vphCalculatedVideos.size > 0) {
-        // 재정렬 플래그 설정 (페이지 리셋 방지)
-        isVphResorting = true;
-        
-        // 현재 페이지 저장 (재정렬 후 복원)
-        const savedPage = currentPage;
-        
-        // 현재 정렬 옵션과 표시 단위 가져오기
-        const sortSelect = document.getElementById('sortVpdSelect');
-        const sortValue = sortSelect?.value || 'desc';
-        const velocityMetricSelect = document.getElementById('velocityMetricSelect');
-        const currentMetric = velocityMetricSelect?.value || 'day';
-        
-        // allItems를 직접 정렬 (현재 표시 단위와 정렬 옵션에 따라)
-        allItems.sort((a, b) => {
-            const valA = getVelocityValue(a, currentMetric);
-            const valB = getVelocityValue(b, currentMetric);
-            if (sortValue === 'asc') {
-                return valA - valB; // 낮은 순
-            } else {
-                return valB - valA; // 높은 순
-            }
-        });
-        
-        // 저장된 페이지로 재렌더링 (페이지 리셋 방지, 정렬은 이미 완료했으므로 skipSort=true)
-        renderPage(savedPage, true);
-        
-        // 재정렬 플래그 해제
-        setTimeout(() => {
-            isVphResorting = false;
-        }, 100);
-    } else if (vphCalculationQueue.length > 0 || vphCalculationRunning > 0) {
-        // 아직 계산 중이면 1초 후 다시 확인
-        if (window.vphResortTimer) {
-            clearTimeout(window.vphResortTimer);
-        }
-        window.vphResortTimer = setTimeout(() => {
-            checkAndResortWhenAllCalculated();
-        }, 1000); // 1초 후 다시 확인
-    }
-}
-
-// VPH 그래프 그리기 함수
-function drawVphGraph(panelEl, graphData) {
-    if (!panelEl || !graphData || !graphData.segments || graphData.segments.length < 1) {
-        return;
-    }
-    
-    const graphContainer = panelEl.querySelector('.vph-graph-container');
-    const graphSvg = panelEl.querySelector('.vph-graph');
-    const lineEl = panelEl.querySelector('.vph-line');
-    const currentPointEl = panelEl.querySelector('.vph-current-point');
-    
-    if (!graphContainer || !graphSvg || !lineEl || !currentPointEl) {
-        return;
-    }
-    
-    // 그래프 표시
-    graphContainer.style.display = 'block';
-    
-    const segments = graphData.segments;
-    const vphValues = segments.map(s => s.vph);
-    const maxVph = Math.max(...vphValues, 1); // 최소값 1로 설정 (0으로 나누기 방지)
-    const minVph = Math.min(...vphValues, 0);
-    const range = maxVph - minVph || 1; // 범위가 0이면 1로 설정
-    
-    const width = 200;
-    const height = 60;
-    const padding = 5;
-    const graphWidth = width - padding * 2;
-    const graphHeight = height - padding * 2;
-    
-    // 좌표 계산 함수 (구간이 1개일 때도 처리)
-    const getX = (index) => {
-        if (segments.length === 1) {
-            return padding + graphWidth / 2; // 중앙에 배치
-        }
-        return padding + (index / (segments.length - 1)) * graphWidth;
-    };
-    const getY = (vph) => padding + graphHeight - ((vph - minVph) / range) * graphHeight;
-    
-    // 선 그리기 (구간이 1개일 때는 점만 표시)
-    if (segments.length === 1) {
-        // 점 하나만 표시 (수평선으로 표시)
-        const x = getX(0);
-        const y = getY(segments[0].vph);
-        lineEl.setAttribute('points', `${x},${y} ${x + graphWidth * 0.3},${y}`);
-    } else {
-    const points = segments.map((seg, idx) => `${getX(idx)},${getY(seg.vph)}`).join(' ');
-    lineEl.setAttribute('points', points);
-    }
-    
-    // 현재 위치 표시
-    const currentIndex = graphData.currentIndex;
-    if (currentIndex >= 0 && currentIndex < segments.length) {
-        const currentVph = segments[currentIndex].vph;
-        currentPointEl.setAttribute('cx', getX(currentIndex));
-        currentPointEl.setAttribute('cy', getY(currentVph));
-        currentPointEl.setAttribute('opacity', '1');
-    } else {
-        currentPointEl.setAttribute('opacity', '0');
-    }
-}
-
-async function executeVphCalculation(videoId, panelEl, baseVpd = 0, label = '', item = null) {
-    // panelEl이 없어도 VPH 계산은 수행 (나중에 DOM이 생성될 때 업데이트됨)
-    const recentEl = panelEl?.querySelector('.recent-vph');
-    const dailyEl = panelEl?.querySelector('.daily-vpd');
-    const badgeEl = panelEl?.closest('.video-card')?.querySelector('.vpd-badge');
-    
-    if (dailyEl) {
-        dailyEl.textContent = `${formatNumber(baseVpd || 0)}/day`;
-    }
-    if (!videoId) {
-        if (recentEl) recentEl.textContent = t('velocity.unavailable');
-        console.warn('⚠️ VPH 계산: videoId가 없습니다', { label });
-        return;
-    }
-    
-    // 타임아웃 설정 (3초)
-    const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('VPH 계산 타임아웃')), 3000);
-    });
-    
-    try {
-        const stats = await Promise.race([
-            getRecentVelocityForVideo(videoId),
-            timeoutPromise
-        ]);
-        
-        if (!stats) {
-            if (recentEl) recentEl.textContent = t('velocity.unavailable');
-            return;
-        }
-        
-        // 스냅샷이 부족한 경우 (2개 미만)
-        if (stats.insufficient) {
-            // 그래프 숨기기
-            const graphContainer = panelEl?.querySelector('.vph-graph-container');
-            if (graphContainer) {
-                graphContainer.style.display = 'none';
-            }
-            
-            // 재시도 횟수 확인
-            const retryCount = vphRetryCount.get(videoId) || 0;
-            
-            if (recentEl) {
-                recentEl.textContent = stats.message || t('velocity.unavailable');
-                recentEl.style.opacity = '0.6'; // 반투명으로 표시
-            }
-            
-            // 3번 미만 시도했으면 재시도 허용 (vphCalculatedVideos에 추가하지 않음)
-            if (retryCount < MAX_VPH_RETRY_COUNT) {
-                vphRetryCount.set(videoId, retryCount + 1);
-                // 재시도를 위해 vphCalculatedVideos에서 제거 (다음에 다시 계산 시도)
-                vphCalculatedVideos.delete(videoId);
-                // 일정 시간 후 재시도 (2초 후로 단축 - 성능 최적화)
-                setTimeout(() => {
-                    if (panelEl && !vphCalculatedVideos.has(videoId)) {
-                        hydrateVelocityPanel(videoId, panelEl, baseVpd, label, item);
-                    }
-                }, 2000);
-            } else {
-                // 3번 이상 시도했으면 더 이상 재시도하지 않음
-                // 최종 VPH를 0으로 설정하고 표시
-                const finalVphValue = 0;
-                
-                if (recentEl) {
-                    recentEl.textContent = `${formatNumber(finalVphValue)}/hr`;
-                    recentEl.style.opacity = '1'; // 정상 표시
-                }
-                
-                // item 객체에 VPH 데이터 저장 (0으로 저장)
-                if (item) {
-                    item.vph = finalVphValue;
-                    
-                    // 배지 업데이트 (표시 단위가 "최근 VPH"인 경우)
-                    if (badgeEl && currentVelocityMetric === 'recent-vph') {
-                        const velocityValue = getVelocityValue(item);
-                        badgeEl.textContent = formatVelocityBadge(velocityValue);
-                    }
-                }
-                
-                vphCalculatedVideos.add(videoId);
-            }
-            return;
-        }
-        
-        // 성공적으로 계산되면 재시도 횟수 초기화
-        vphRetryCount.delete(videoId);
-        
-        // stats.vph가 명시적으로 설정되어 있으면 그 값을 사용 (0도 유효한 값)
-        const vphValue = (stats.vph !== null && stats.vph !== undefined) ? stats.vph : 0;
-        
-        // recentEl이 있으면 업데이트
-        if (recentEl) {
-            recentEl.textContent = `${formatNumber(vphValue)}/hr`;
-        }
-        
-        // item 객체에 VPH 데이터 저장 (panelEl이 없어도 저장)
-        // 0도 유효한 값이므로 명시적으로 저장 (null/undefined와 구분)
-        if (item) {
-            item.vph = vphValue;
-            
-            // 배지 업데이트 (표시 단위가 "최근 VPH"인 경우, panelEl이 있을 때만)
-            if (badgeEl && currentVelocityMetric === 'recent-vph') {
-                const velocityValue = getVelocityValue(item);
-                badgeEl.textContent = formatVelocityBadge(velocityValue);
-            }
-        }
-        
-        // item 객체에 graphData 저장 (재렌더링 시 복원용)
-        if (item && stats.graphData) {
-            item.graphData = stats.graphData;
-        }
-        
-        // VPH 그래프 그리기
-        if (panelEl && stats.graphData) {
-            drawVphGraph(panelEl, stats.graphData);
-        }
-        
-        // 계산 완료 표시 (재계산 방지)
-        vphCalculatedVideos.add(videoId);
-        
-        // VPH 계산 완료 후 항상 재정렬 (표시 단위와 정렬 옵션에 따라)
-        // 재정렬 디바운싱: 마지막 재정렬 요청 후 1초 후에 실행
-        if (window.vphResortTimer) {
-            clearTimeout(window.vphResortTimer);
-        }
-        
-        window.vphResortTimer = setTimeout(() => {
-            checkAndResortWhenAllCalculated();
-        }, 500); // 0.5초 딜레이로 여러 계산 완료를 기다림
-        
-    } catch (error) {
-        // 타임아웃 또는 기타 에러 처리 (3초 타임아웃 시 0으로 처리)
-        if (error.message === 'VPH 계산 타임아웃') {
-            console.warn(`⚠️ VPH 계산 타임아웃 (${videoId}): 3초 초과, 0으로 처리`);
-            // 타임아웃 시 0으로 표시
-            if (recentEl) {
-                recentEl.textContent = '0/hr';
-                recentEl.style.opacity = '1.0';
-            }
-            if (item) item.vph = 0; // 0으로 저장
-            // 배지 업데이트
-            const badgeEl = panelEl?.closest('.video-card')?.querySelector('.vpd-badge');
-            if (badgeEl && item && currentVelocityMetric === 'recent-vph') {
-                const velocityValue = getVelocityValue(item);
-                badgeEl.textContent = formatVelocityBadge(velocityValue);
-            }
-        } else {
-            console.warn('⚠️ 최근 VPH 로드 실패:', error);
-            // 일반 에러도 0으로 처리
-            if (recentEl) {
-                recentEl.textContent = '0/hr';
-                recentEl.style.opacity = '1.0';
-            }
-            if (item) item.vph = 0;
-        }
-        // 재계산 방지 (에러 발생 시에도 무한 재시도 방지)
-        vphCalculatedVideos.add(videoId);
-        // 앱이 멈추지 않도록 에러를 무시
-    }
-}
-
-function hydrateVelocityPanel(videoId, panelEl, baseVpd = 0, label = '', item = null) {
-    // 표시 단위와 관계없이 항상 VPH 데이터를 계산하고 표시
-    // 이미 계산된 비디오는 재계산하지 않음
-    if (!videoId || vphCalculatedVideos.has(videoId)) {
-        // 이미 계산된 경우 저장된 값 사용
-        if (item && item.vph !== undefined && item.vph !== null) {
-            const recentEl = panelEl?.querySelector('.recent-vph');
-            if (recentEl) {
-                recentEl.textContent = `${formatNumber(item.vph)}/hr`;
-            }
-            
-            // 저장된 graphData가 있으면 그래프도 복원
-            if (item.graphData && panelEl) {
-                drawVphGraph(panelEl, item.graphData);
-            }
-        } else {
-            // 계산된 값이 없으면 "데이터 없음" 표시하지 않고 계산 시작
-            // (아래에서 큐에 추가됨)
-        }
-        return;
-    }
-    
-    // 큐에 추가 (동시 실행 제한)
-    vphCalculationQueue.push({ videoId, panelEl, baseVpd, label, item });
-    
-    // 큐 처리 시작
-    processVphQueue();
-}
-
-// 모든 항목에 대해 VPH 계산 시작 (페이지와 관계없이)
-function startVphCalculationsForAllItems() {
-    // 이미 시작된 경우 중복 실행 방지
-    if (window.vphCalculationsStarted) {
-        return;
-    }
-    window.vphCalculationsStarted = true;
-    
-    // 모든 allItems에 대해 VPH 계산 시작
-    allItems.forEach(item => {
-        const videoId = item.raw?.id || item.id;
-        if (!videoId || vphCalculatedVideos.has(videoId)) {
-            return; // 이미 계산되었거나 ID가 없으면 건너뛰기
-        }
-        
-        // baseVpd 계산
-        const baseVpd = item.vpd || viewVelocityPerDay(item.raw || item);
-        
-        // panelEl은 null로 전달 (나중에 DOM이 생성될 때 업데이트됨)
-        vphCalculationQueue.push({ 
-            videoId, 
-            panelEl: null, 
-            baseVpd, 
-            label: item.raw?.snippet?.title || '', 
-            item 
-        });
-    });
-    
-    // 큐 처리 시작
-    processVphQueue();
-}
 
 // ============================================
 // NULL 데이터 자동 업데이트 (백그라운드)
@@ -2556,6 +2165,29 @@ function restoreFromCache(firebaseData) {
                 subs: subs // 구독자 수는 items에서 가져옴
             };
         }).filter(Boolean);
+        
+        // 캐시 복원 후 정렬 적용 (기본값: 높은 순)
+        const sortSelect = document.getElementById('sortVpdSelect');
+        const velocityMetricSelect = document.getElementById('velocityMetricSelect');
+        let sortValue = sortSelect?.value || 'desc';
+        if (sortValue === 'none') {
+            sortValue = 'desc';
+        }
+        currentVelocityMetric = velocityMetricSelect?.value || 'day';
+        
+        if (sortValue === 'asc') {
+            allItems.sort((a, b) => {
+                const valA = getVelocityValue(a, currentVelocityMetric);
+                const valB = getVelocityValue(b, currentVelocityMetric);
+                return valA - valB;
+            });
+        } else {
+            allItems.sort((a, b) => {
+                const valA = getVelocityValue(a, currentVelocityMetric);
+                const valB = getVelocityValue(b, currentVelocityMetric);
+                return valB - valA; // 높은 순
+            });
+        }
     } else {
         // 기존 로컬 캐시 형식 (videos 배열 사용)
         const restoredVideos = firebaseData.videos.map(v => ({
@@ -2616,9 +2248,31 @@ function restoreFromCache(firebaseData) {
                 };
             });
         }
+        
+        // 캐시 복원 후 정렬 적용 (기본값: 높은 순)
+        const sortSelect = document.getElementById('sortVpdSelect');
+        const velocityMetricSelect = document.getElementById('velocityMetricSelect');
+        let sortValue = sortSelect?.value || 'desc';
+        if (sortValue === 'none') {
+            sortValue = 'desc';
+        }
+        currentVelocityMetric = velocityMetricSelect?.value || 'day';
+        
+        if (sortValue === 'asc') {
+            allItems.sort((a, b) => {
+                const valA = getVelocityValue(a, currentVelocityMetric);
+                const valB = getVelocityValue(b, currentVelocityMetric);
+                return valA - valB;
+            });
+        } else {
+            allItems.sort((a, b) => {
+                const valA = getVelocityValue(a, currentVelocityMetric);
+                const valB = getVelocityValue(b, currentVelocityMetric);
+                return valB - valA; // 높은 순
+            });
+        }
     }
     
-    trackVideoIdsForViewHistory(allVideos);
 }
 
 // ============================================
@@ -2728,20 +2382,10 @@ export function setupEventListeners() {
     
     // Sort controls
     document.getElementById('sortVpdSelect')?.addEventListener('change', () => {
-        // VPH 재정렬 중이면 페이지 유지, 아니면 1페이지로
-        if (isVphResorting) {
-            renderPage(currentPage);
-        } else {
-            renderPage(1);
-        }
+        renderPage(1);
     });
     document.getElementById('velocityMetricSelect')?.addEventListener('change', () => {
-        // VPH 재정렬 중이면 페이지 유지, 아니면 1페이지로
-        if (isVphResorting) {
-            renderPage(currentPage);
-        } else {
-            renderPage(1);
-        }
+        renderPage(1);
     });
     
     // 최대 결과 수 선택 드롭다운 이벤트 리스너
@@ -2767,33 +2411,6 @@ export function setupEventListeners() {
             const currentQuery = document.getElementById('searchInput')?.value?.trim();
             if (currentQuery) {
                 search(true); // 강제 재검색
-            }
-            // 버튼 상태 업데이트
-            setTimeout(() => updateLoadMoreButton(), 100);
-        });
-    }
-    
-    // Load More 버튼 이벤트 리스너
-    const loadMoreBtn = document.getElementById('loadMoreBtn');
-    if (loadMoreBtn) {
-        loadMoreBtn.addEventListener('click', async () => {
-            const currentQuery = document.getElementById('searchInput')?.value?.trim();
-            if (!currentQuery) {
-                console.warn('⚠️ 검색어가 없습니다');
-                return;
-            }
-            
-            // 버튼 비활성화 (중복 클릭 방지)
-            loadMoreBtn.disabled = true;
-            loadMoreBtn.textContent = '로딩 중...';
-            
-            try {
-                await loadMoreVideos(currentQuery);
-            } catch (error) {
-                console.error('❌ 추가 로드 실패:', error);
-            } finally {
-                // 버튼 상태 복원
-                updateLoadMoreButton();
             }
         });
     }

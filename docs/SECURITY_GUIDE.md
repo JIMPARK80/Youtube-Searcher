@@ -209,3 +209,74 @@ $env:SUPABASE_SERVICE_ROLE_KEY
 
 **다음 단계**: Service Role Key를 config 테이블에 저장하면 모든 설정이 완료됩니다!
 
+---
+
+## 📋 Security Changes Summary
+
+### ✅ Completed Tasks
+
+#### 1. Removed Hardcoded Service Role Key
+
+The following files have been updated to remove hardcoded keys and use environment variables/config table:
+
+**`supabase/cron.sql`**:
+- **Before**: `'Bearer sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ'` hardcoded
+- **After**: Dynamically reads from `config` table
+- **Method**: `COALESCE((SELECT value::text FROM config WHERE key = 'serviceRoleKey'), 'YOUR_SERVICE_ROLE_KEY_HERE')`
+
+**`manage-edge-functions.ps1`**:
+- **Before**: `$SERVICE_ROLE_KEY = "sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ"` hardcoded
+- **After**: Reads from environment variable `$env:SUPABASE_SERVICE_ROLE_KEY`
+- **Method**: Shows error message and exits if environment variable is not set
+
+**`js/supabase-api.js`**:
+- **Before**: `const serviceRoleKey = 'sb_secret_VmXybwYRcz3g_2J71eGQDw_t82PMoOZ'` hardcoded
+- **After**: Uses Supabase anon key (client-side, so Service Role Key cannot be used)
+- **Method**: Gets anon key from `window.supabase`
+
+#### 2. Updated .gitignore
+
+- Added `.env` file
+- Added `.env.local`, `.env.*.local`
+- Added `*.env` pattern
+
+#### 3. Security Documentation
+
+- `SECURITY_GUIDE.md`: Detailed security guide
+- `SECURITY_CHANGES_SUMMARY.md`: This section (changes summary)
+
+### ⚠️ Manual Setup Required
+
+#### 1. Store Service Role Key in config Table (Required)
+
+**In Supabase Dashboard → SQL Editor**, execute:
+
+```sql
+INSERT INTO config (key, value)
+VALUES ('serviceRoleKey', '"YOUR_SERVICE_ROLE_KEY_HERE"'::jsonb)
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+```
+
+**How to find Service Role Key**:
+1. Supabase Dashboard → **Settings** → **API**
+2. Click **Legacy anon, service_role API keys** tab
+3. Copy **service_role** key
+
+### 📝 Changed Files List
+
+1. ✅ `supabase/cron.sql` - Reads key from config table
+2. ✅ `manage-edge-functions.ps1` - Reads key from environment variable
+3. ✅ `js/supabase-api.js` - Uses anon key
+4. ✅ `.gitignore` - Added .env files
+5. ✅ `SECURITY_GUIDE.md` - Security guide written
+
+### ✅ Security Checklist
+
+- [x] Removed hardcoded Service Role Key
+- [x] Added `.env` to `.gitignore`
+- [x] Cron jobs read key from config table
+- [x] PowerShell scripts read key from environment variable
+- [x] Removed Service Role Key from client-side code
+- [ ] Store Service Role Key in config table (manual work required)
+- [ ] Check for hardcoded keys in Git history (clean if necessary)
+

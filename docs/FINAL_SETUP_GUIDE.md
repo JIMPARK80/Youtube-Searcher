@@ -312,3 +312,54 @@ SELECT * FROM perf_table_check;
 
 **확인 후**: 모든 것이 설정되어 있으면 **추가 작업 없음!** 🎉
 
+---
+
+## 📋 Additional Setup Steps
+
+### RLS (Row Level Security) Policy Setup
+
+If you encounter issues accessing data from the client, you may need to fix RLS policies.
+
+**Method**: Supabase Dashboard → SQL Editor
+
+1. Open `docs/sql/fix-rls-policies.sql` file
+2. Copy the entire content
+3. Paste into SQL Editor
+4. Execute
+
+**Verification**:
+```sql
+SELECT * FROM videos LIMIT 1;
+```
+
+### Data Accumulation Analysis
+
+For detailed information about daily data accumulation, see:
+- Expected daily video additions: 100-500 videos (normal operation)
+- Weekly accumulation: ~14,000 videos (with 100 keywords)
+- Maximum limit: 1,000 videos per keyword
+
+For more details, refer to `DATA_ACCUMULATION_ANALYSIS.md`.
+
+---
+
+## 🔄 Quick Setup Checklist
+
+### Automatic (Already Done) ✅
+- [x] Edge Functions deployed
+- [x] Code optimized
+- [x] Database tables created
+
+### Manual Verification ⚠️
+- [ ] Cron jobs configured (3 jobs active)
+- [ ] Search keywords list configured (~50 keywords)
+- [ ] Edge Functions secrets configured (3 secrets)
+- [ ] Service Role Key stored in config table
+- [ ] RLS policies configured (if needed)
+
+### After Setup ✅
+- [ ] System automatically runs
+- [ ] All keywords processed (1-2 runs)
+- [ ] Efficiency evaluation starts (after 3 runs)
+- [ ] Low-efficiency keywords auto-skipped
+

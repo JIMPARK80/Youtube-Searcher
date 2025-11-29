@@ -275,8 +275,9 @@ See [GIT_WORKFLOW.md](GIT_WORKFLOW.md) for detailed Git workflow guide.
 
 ## 📚 Documentation
 
-- [Edge Functions & Supabase Setup Guide](README-EDGE-FUNCTIONS.md) - Edge Functions management and Supabase configuration
-- [API Documentation](API_DOCUMENTATION.md) - YouTube API usage, quota management, and optimization
+- [Edge Functions & Supabase Setup Guide](docs/README-EDGE-FUNCTIONS.md) - Edge Functions management and Supabase configuration
+- [API Documentation](docs/API_DOCUMENTATION.md) - YouTube API usage, quota management, and optimization
+- [Error Report](docs/ERROR_REPORT.md) - Common errors and troubleshooting guide
 - [Git Workflow Guide](GIT_WORKFLOW.md) - Branch strategy and commit conventions
 - [Translation Guide](TRANSLATION_GUIDE.md) - How to add new languages
 - [JS File Mapping](JS_FILE_MAPPING.md) - Code structure and architecture
@@ -529,10 +530,11 @@ Youtube-Searcher/
 
 ## 📚 문서
 
-- [Git 워크플로우 가이드](GIT_WORKFLOW.md) - 브랜치 전략 및 커밋 규칙
-- [번역 가이드](TRANSLATION_GUIDE.md) - 새 언어 추가 방법
-- [JS 파일 매핑](JS_FILE_MAPPING.md) - 코드 구조 및 아키텍처
-- [Firebase 설정](FIREBASE_SETUP_INSTRUCTIONS.md) - 상세 Firebase 설정
+- [Git 워크플로우 가이드](docs/GIT_WORKFLOW.md) - 브랜치 전략 및 커밋 규칙
+- [번역 가이드](docs/TRANSLATION_GUIDE.md) - 새 언어 추가 방법
+- [JS 파일 매핑](docs/JS_FILE_MAPPING.md) - 코드 구조 및 아키텍처
+- [Firebase 설정](docs/FIREBASE_SETUP_INSTRUCTIONS.md) - 상세 Firebase 설정
+- [에러 리포트](docs/ERROR_REPORT.md) - 자주 발생하는 에러 및 해결 방법
 
 ## 📄 라이선스
 

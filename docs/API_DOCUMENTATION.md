@@ -9,6 +9,8 @@ Complete guide for YouTube API usage, quota management, and optimization strateg
 3. [Keyword Data Limit Calculation](#keyword-data-limit-calculation)
 4. [Weekly Data Accumulation](#weekly-data-accumulation)
 5. [API Cost for Subscriber & Like Data](#api-cost-for-subscriber--like-data)
+6. [Detailed API Cost Calculation](#detailed-api-cost-calculation)
+7. [Quota Optimization: Preventing Duplicate Calls](#quota-optimization-preventing-duplicate-calls)
 
 ---
 
@@ -284,82 +286,27 @@ Current setting with 20 per keyword limit applied, operating safely within total
 
 ## Weekly Data Accumulation
 
-### Current Settings
+### Quick Summary
 
-- **Daily max additional per keyword**: 20 videos
-- **Max stored per keyword**: 1,000 videos (`MAX_RESULTS_LIMIT`)
+**With 100 Keywords**:
+- **Daily addition**: 2,000 videos/day (20 per keyword)
+- **Weekly accumulation**: 14,000 videos (140 per keyword)
+- **Max limit**: 1,000 videos per keyword (reached in ~50 days with no initial data)
 
-### Calculation
+**API Usage (Weekly)**:
+- **VPH Update**: 33,600 units
+- **Data Acquisition**: 28,280 units
+- **Total**: 61,880 units (88.4% of weekly quota)
 
-**With 100 Keywords**
+### Detailed Analysis
 
-**Daily addition**:
-- **Per keyword**: 20 videos/day
-- **Total**: 20 × 100 = **2,000 videos/day**
+For comprehensive data accumulation analysis including:
+- Daily video build scenarios (initial vs normal operation)
+- VPH tracking data generation
+- Analysis data types and collection cycles
+- Rotation strategies for tracking all videos
 
-**Weekly (7 days) accumulation**:
-- **Per keyword**: 20 × 7 days = **140 videos/keyword**
-- **Total**: 2,000 × 7 days = **14,000 videos**
-
-### Initial Data Consideration
-
-**Scenario 1: No initial data**:
-- **After 1 week per keyword**: 0 + 140 = **140 videos/keyword**
-- **Total**: **14,000 videos**
-
-**Scenario 2: Initial data 100/keyword**:
-- **After 1 week per keyword**: 100 + 140 = **240 videos/keyword**
-- **Total**: 24,000 videos
-
-**Scenario 3: Initial data 860/keyword**:
-- **After 1 week per keyword**: 860 + 140 = **1,000 videos/keyword** (max limit reached)
-- **Total**: 100,000 videos (max limit)
-
-### Max Limit Reach Time
-
-**Max stored per keyword**: 1,000 videos
-
-**With 0 initial videos**:
-- **Until max reached**: 1,000 / 20 = **50 days**
-
-**With 100 initial videos**:
-- **Until max reached**: (1,000 - 100) / 20 = **45 days**
-
-**With 860 initial videos**:
-- **Until max reached**: (1,000 - 860) / 20 = **7 days** (1 week)
-
-### Expected Results After 1 Week
-
-**With 100 Keywords**
-
-| Initial Data | After 1 Week (Per Keyword) | After 1 Week (Total) |
-|--------------|----------------------------|---------------------|
-| **0 videos** | 140 videos | 14,000 videos |
-| **100 videos** | 240 videos | 24,000 videos |
-| **500 videos** | 640 videos | 64,000 videos |
-| **860 videos** | 1,000 videos (max) | 100,000 videos (max) |
-
-### API Usage (1 Week)
-
-**VPH Update**:
-- **Daily**: 4,800 units
-- **Weekly**: 4,800 × 7 = **33,600 units**
-
-**Data Acquisition**:
-- **Daily**: 2,000 × 101/50 = **4,040 units**
-- **Weekly**: 4,040 × 7 = **28,280 units**
-
-**Total Usage**:
-- **Weekly**: 33,600 + 28,280 = **61,880 units**
-- **YouTube API base quota**: 10,000 units/day × 7 = **70,000 units**
-- **Usage rate**: 88.4% ✅
-
-### Conclusion
-
-**With 100 keywords, no initial data**:
-- **After 1 week per keyword**: **140 videos**
-- **After 1 week total**: **14,000 videos**
-- **Until max limit reached**: About **50 days** later
+**See**: [`DATA_ACCUMULATION_ANALYSIS.md`](./DATA_ACCUMULATION_ANALYSIS.md) for detailed information.
 
 ---
 
@@ -575,4 +522,251 @@ CREATE TABLE IF NOT EXISTS daily_statistics_history (
 - **View Count**: Every hour (VPH calculation essential)
 - **Likes + Subscribers**: Daily (slow changes, sufficient)
 - **API Efficiency**: Optimized
+
+---
+
+## Detailed API Cost Calculation
+
+### Final Recommended Settings Summary
+
+- **Number of keywords**: ~50 (life stories + English learning)
+- **VPH tracking videos**: **Limited to 5,000** (API quota management)
+- **YouTube API base quota**: 10,000 units/day
+- **Target usage**: 7,750 units/day (77.5%) - Safety margin 22.5%
+
+### API Cost Breakdown
+
+#### 1. Search Keyword Updater (Daily at 3 AM)
+
+**Execution cycle**: Daily at 3 AM (once per day: 03:00)
+
+**API calls**:
+- `search.list`: 1 call per keyword (100 units)
+- `videos.list`: 1 call per keyword (1 unit, 50 videos)
+- **Total cost per keyword**: 101 units
+
+**Cache strategy**: 72-hour TTL (update only when cache expires) - Prevents duplicate API calls
+
+**Daily API usage calculation**:
+```
+Keywords: 50
+Cache TTL: 72 hours (3 days)
+Single execution cost: 50 × 101 = 5,050 units
+Actual execution: Only when cache expires (every 72 hours, average once per 3 days)
+Daily average cost: 5,050 / 3 = 1,683 units
+```
+
+**Monthly usage**: 1,683 × 30 = **50,490 units** (67% reduction)
+
+#### 2. Hourly VPH Updater (Every Hour)
+
+**Execution cycle**: Every hour on the hour (24 times per day)
+
+**API calls**:
+- `videos.list` (part=statistics): Batch processing 50 at a time
+- **Cost**: 1 unit per 50 videos
+
+**Daily API usage calculation**:
+```
+Tracked videos: 5,000 (limited)
+Single execution cost: 5,000 / 50 = 100 units
+Daily executions: 24 times
+Daily total cost: 100 × 24 = 2,400 units
+```
+
+**Monthly usage**: 2,400 × 30 = **72,000 units**
+
+#### 3. Daily Statistics Updater (Daily at Midnight)
+
+**Execution cycle**: Daily at midnight (once per day)
+
+**API calls**:
+- `videos.list` (part=id,snippet,contentDetails,statistics): Batch processing 50 at a time
+- `channels.list` (part=statistics): Batch processing 50 at a time
+- **Cost**: 
+  - videos.list: 1 unit per 50 videos
+  - channels.list: 1 unit per 50 channels (average 1 channel per 10 videos)
+
+**Daily API usage calculation**:
+```
+Tracked videos: 5,000 (limited)
+Channels: 500 (average 1 channel per 10 videos)
+
+videos.list cost: 5,000 / 50 = 100 units
+channels.list cost: 500 / 50 = 10 units
+Daily total cost: 100 + 10 = 110 units
+```
+
+**Note**: Actually updates more metadata, so calculated as approximately **300 units/day**
+**Monthly usage**: 300 × 30 = **9,000 units**
+
+### Total API Usage Summary
+
+#### Daily Usage
+
+| Item | Daily API Usage | Ratio |
+|------|----------------|------|
+| **Search Keyword Updater** | 1,683 units (average) | 21.7% |
+| **Hourly VPH Updater** | 2,400 units | 31.0% |
+| **Daily Statistics Updater** | 300 units | 3.9% |
+| **Total** | **4,383 units** | **43.8%** |
+
+✅ **Safe**: Can operate very safely within base quota (10,000 units/day)
+✅ **Safety margin**: 5,617 units (56.2%) - Significantly increased!
+✅ **Quota reduction**: 67% reduction (prevents duplicate API calls)
+
+#### Monthly Usage
+
+| Item | Monthly API Usage |
+|------|----------------|
+| **Search Keyword Updater** | 50,490 units (67% reduction) |
+| **Hourly VPH Updater** | 72,000 units |
+| **Daily Statistics Updater** | 9,000 units |
+| **Total** | **131,490 units** (43% reduction) |
+
+### Recommended Settings (Applied) ✅
+
+| Item | Daily Usage | Ratio |
+|------|------------|------|
+| Search Keyword Updater | 1,683 units (average) | 21.7% |
+| Hourly VPH Updater | 2,400 units | 31.0% |
+| Daily Statistics Updater | 300 units | 3.9% |
+| **Total** | **4,383 units** | **43.8%** ✅ |
+
+### Applied Settings
+
+1. ✅ **Search Keyword Updater cache TTL changed to 72 hours**
+2. ✅ **Search Keyword Updater execution cycle changed to daily at 3 AM**
+3. ✅ **VPH tracking videos limited to 5,000**
+4. ✅ **Daily usage**: **4,383 units (43.8%)** - Safety margin 56.2%
+
+---
+
+## Quota Optimization: Preventing Duplicate Calls
+
+### ⚠️ Important Fact
+
+**YouTube API Quota is consumed every time an API call is made.**
+
+- ✅ Quota can only be saved by **skipping API calls**
+- ❌ Once an API call is made, quota is consumed regardless (whether results are duplicate or not)
+- ❌ If all results are duplicates → **No data accumulation, only API consumption**
+
+### Current System Issues
+
+#### Search Keyword Updater Behavior
+
+**Current settings**:
+- Cache TTL: 72 hours
+- Execution cycle: Daily at 3 AM
+- Keywords: 50
+
+**Problem scenario**:
+```
+1. Executes daily at 3 AM
+2. If cache is older than 72 hours, makes API call
+3. 50 keywords × (search.list + videos.list) = 5,050 units consumed
+4. Result: All videos already exist in database (duplicates)
+5. Result: No data accumulation, only API quota consumed
+```
+
+**Actual cost**:
+- Daily: 5,050 units consumed
+- Actually, new videos may be rare
+- **Waste**: Quota consumed for duplicate results
+
+### Solutions
+
+#### Solution 1: Extend Cache TTL (Most Effective) ⭐
+
+**Current**: 72-hour TTL
+**Recommended**: 72-hour TTL (already applied)
+
+**Effect**:
+- Reduced API call frequency
+- Quota savings
+- Search results don't change much daily, so safe
+
+**Implementation**:
+```typescript
+// supabase/functions/search-keyword-updater/index.ts
+const CACHE_TTL_HOURS = 72; // Already set to 72 hours
+```
+
+**Cost savings**:
+- Without cache: Daily 5,050 units
+- With 72-hour TTL: Once per 3 days = Daily average 1,683 units
+- **Savings**: 67% reduction
+
+#### Solution 2: Keyword-Specific Cache Management
+
+**Concept**: Track last update time for each keyword
+
+**Advantages**:
+- Active keywords updated frequently
+- Inactive keywords updated less frequently
+- Efficient quota usage
+
+#### Solution 3: New Video Ratio-Based Skipping
+
+**Concept**: Skip next execution if previous execution had few new videos
+
+**Implementation example**:
+```typescript
+// Check previous execution results
+const lastRunResult = await getLastRunResult(keyword);
+if (lastRunResult && lastRunResult.newVideosRatio < 0.1) {
+  // Skip if new videos less than 10%
+  console.log(`⏭️ Skipping "${keyword}" - low new video ratio`);
+  continue;
+}
+```
+
+### Optimization Scenario Comparison
+
+#### Current Setting (72-hour TTL)
+
+| Item | Value |
+|------|-----|
+| Execution cycle | Once per 3 days (average) |
+| Daily API usage | 1,683 units (average) |
+| Monthly API usage | 50,490 units |
+| Duplicate call possibility | Low (once per 3 days) |
+
+#### Before Optimization (24-hour TTL)
+
+| Item | Value |
+|------|-----|
+| Execution cycle | Daily at 3 AM |
+| Daily API usage | 5,050 units |
+| Monthly API usage | 151,500 units |
+| Duplicate call possibility | High (daily execution) |
+
+**Reduction rate**: **67%**
+
+### Recommended Optimization Strategy
+
+#### Step 1: Extend Cache TTL (Already Applied) ⭐
+
+**Changes**:
+```typescript
+const CACHE_TTL_HOURS = 72; // Already set
+```
+
+**Effect**:
+- Immediate 67% quota savings
+- Simple implementation
+- Low risk
+
+### Conclusion
+
+**Core Principle**:
+- ❌ Making an API call always consumes quota
+- ✅ Quota can only be saved by skipping API calls
+- ✅ Extending cache TTL is the most effective method
+
+**Applied Optimization**:
+- Cache TTL: 24 hours → **72 hours** ✅
+- Daily quota reduction: **67%**
+- Monthly quota reduction: **101,010 units**
 

@@ -371,18 +371,24 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
             console.error('❌ search_cache 저장 실패:', cacheError);
         }
 
-        // 기존 비디오의 구독자 수를 먼저 조회 (서버 데이터 우선 사용)
+        // 기존 비디오의 구독자 수와 키워드를 먼저 조회 (서버 데이터 우선 사용)
         const existingVideoIds = videos.map(v => v.id);
         const { data: existingVideos } = await supabase
             .from('videos')
-            .select('video_id, subscriber_count')
+            .select('video_id, subscriber_count, keyword')
             .in('video_id', existingVideoIds);
         
         const existingSubscriberMap = new Map();
+        const existingKeywordMap = new Map(); // video_id -> keyword 배열
+        
         if (existingVideos) {
             existingVideos.forEach(v => {
                 if (v.subscriber_count !== null && v.subscriber_count !== undefined && v.subscriber_count !== -1) {
                     existingSubscriberMap.set(v.video_id, Number(v.subscriber_count));
+                }
+                // 기존 키워드 저장 (배열로 저장되어 있음)
+                if (v.keyword && Array.isArray(v.keyword)) {
+                    existingKeywordMap.set(v.video_id, v.keyword);
                 }
             });
         }
@@ -424,10 +430,15 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
             
             // Map에 추가 (중복이면 마지막 값으로 덮어쓰기)
             // keyword는 배열 타입이므로 배열로 변환
-            const keywordArray = Array.isArray(keyword) ? keyword : [keyword];
+            const newKeywordArray = Array.isArray(keyword) ? keyword : [keyword];
+            
+            // 기존 키워드와 병합 (서버에 저장된 키워드 + 새로운 키워드)
+            const existingKeywords = existingKeywordMap.get(v.id) || [];
+            const mergedKeywords = Array.from(new Set([...existingKeywords, ...newKeywordArray]));
+            
             videoRecordsMap.set(v.id, {
                 video_id: v.id,
-                keyword: keywordArray, // 배열로 저장
+                keyword: mergedKeywords, // 기존 키워드와 새로운 키워드 병합 (중복 제거)
                 title: v.snippet?.title,
                 channel_id: channelId,
                 channel_title: v.snippet?.channelTitle,
