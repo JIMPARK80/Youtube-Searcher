@@ -383,7 +383,7 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
         const existingTotalCount = existingCache?.total_count || 0;
         
         // 기존 total_count와 비교해서 더 큰 값 사용 (total_count가 줄어들지 않도록)
-        const totalCount = Math.max(currentCount, existingTotalCount);
+        let totalCount = Math.max(currentCount, existingTotalCount);
         
         console.log(`💾 Supabase 저장 시작: ${currentCount}개 비디오 (기존 total_count: ${existingTotalCount}, 새 total_count: ${totalCount})`);
         
