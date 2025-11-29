@@ -530,8 +530,9 @@ export async function search(shouldReload = false) {
         
         // 서버 데이터가 충분하면 서버 데이터 사용, API 호출 안 함
         if (supabaseCount >= targetCount || supabaseTotal >= targetCount) {
-            console.log(`✅ 서버에 충분한 데이터 있음 (${supabaseCount}개 >= ${targetCount}개) → API 호출 생략`);
-            debugLog(`✅ Supabase 캐시 충분 (${supabaseCount}개 >= ${targetCount}개) → API 호출 생략`);
+            const reason = supabaseCount >= targetCount ? `실제 비디오(${supabaseCount}개)` : `total_count(${supabaseTotal}개)`;
+            console.log(`✅ 서버에 충분한 데이터 있음 (${reason} >= ${targetCount}개) → API 호출 생략`);
+            debugLog(`✅ Supabase 캐시 충분 (${reason} >= ${targetCount}개) → API 호출 생략`);
             
             restoreFromCache(supabaseData);
             
