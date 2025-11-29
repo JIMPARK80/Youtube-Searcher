@@ -1,6 +1,6 @@
 // ============================================
-// UI.JS - UI 관련 함수 모음
-// 검색, 필터링, 페이지네이션, 렌더링
+// UI.JS - UI related functions
+// Search, filtering, rendering
 // ============================================
 
 import {
@@ -14,39 +14,26 @@ import {
 import {
     loadFromSupabase,
     saveToSupabase,
-    updateMissingData,
-    CACHE_TTL_MS
+    updateMissingData
 } from './supabase-api.js';
+import { supabase } from './supabase-config.js';
 import { t } from './i18n.js';
 
-// Global variables for pagination
+// Global variables
 export let allVideos = [];
 export let allItems = [];
-export const pageSize = 12; // 페이지당 표시할 영상 개수 (8 → 12로 변경)
-export let currentPage = 1;
 export let allChannelMap = {};
 export let currentSearchQuery = '';
-export let currentTotalCount = 0; // 서버의 total_count 추적
+// Track server's total_count
+export let currentTotalCount = 0;
 
-const MAX_RESULTS_LIMIT = 200; // 키워드당 최대 200개
-// VPH 업데이트 할당량 계산:
-// - 10,000개 비디오 기준: 200 units/시간
-// - 하루: 200 × 24 = 4,800 units
-// - YouTube API 기본 할당량: 10,000 units/일
-// - 신규 영상 데이터 확보 가능: 10,000 - 4,800 = 5,200 units
-// - 신규 영상 데이터 확보 비용: search.list(100) + videos.list(1) = 101 units per 50개
-// - 전체 가능: 5,200 / 101 × 50 ≈ 2,574개
-// - 키워드 100개 기준: 2,574 / 100 ≈ 25.74개/키워드
-// - 안전 마진 고려: 키워드당 20개로 설정
+// Maximum number of videos per keyword
+const MAX_RESULTS_LIMIT = 200;
+
 export function getMaxResults() {
     return 'max';
 }
 
-// 페이지 크기 계산 (항상 pageSize 사용)
-export function getEffectivePageSize() {
-    // 의도적으로 8개씩 표시하도록 설정
-    return pageSize; // pageSize = 8
-}
 
 export function setMaxResults(count) {
     if (count === 'max') {
@@ -57,16 +44,18 @@ export function setMaxResults(count) {
     }
 }
 
-// 백그라운드 업데이트 중복 실행 방지
+// Prevent duplicate background updates
 let isUpdatingMissingData = false;
-let currentVelocityMetric = 'day'; // 기본값: 평균 일일 조회수 (VPD)
+// Default: average daily views (VPD)
+let currentVelocityMetric = 'day';
 
-// 자동 새로고침 관리
+// Auto-refresh management
 let lastUIUpdateTime = Date.now();
 let autoRefreshTimer = null;
-const AUTO_REFRESH_INACTIVE_MS = 5 * 60 * 1000; // 5분 동안 UI 업데이트 없으면 새로고침
+// Auto-refresh if no UI updates for 5 minutes
+const AUTO_REFRESH_INACTIVE_MS = 5 * 60 * 1000;
 
-// 디버그 모드 (개발 시에만 로그 출력)
+// Debug mode (log output only during development)
 // Debug logging removed for production
 const debugLog = () => {}; // No-op function
 
@@ -75,7 +64,7 @@ const PUBLIC_DEFAULT_QUERY = '인생사연';
 const PUBLIC_DEFAULT_QUERY_NORMALIZED = PUBLIC_DEFAULT_QUERY.toLowerCase();
 
 // ============================================
-// 유틸리티 함수
+// Utility functions
 // ============================================
 
 export function formatNumber(num) {
@@ -84,7 +73,7 @@ export function formatNumber(num) {
     } else if (num >= 1000) {
         return (num / 1000).toFixed(1) + 'K';
     }
-    // 1000 미만의 숫자도 소수점 1자리로 반올림
+    // Round numbers less than 1000 to 1 decimal place
     return Number(num).toFixed(1);
 }
 
@@ -138,12 +127,13 @@ function isPublicDefaultQuery(value) {
 }
 
 // ============================================
-// 시간대 유틸리티 함수 (캐나다 토론토 동부 시간대)
+// Timezone utility functions (Canada Toronto Eastern Time)
 // ============================================
 
-const TORONTO_TIMEZONE = 'America/Toronto'; // 캐나다 토론토(동부) 시간대 (EST/EDT 자동 처리)
+// Canada Toronto (Eastern) timezone (automatically handles EST/EDT)
+const TORONTO_TIMEZONE = 'America/Toronto';
 
-// 날짜를 토론토 시간으로 변환하여 포맷팅
+// Format date in Toronto timezone
 export function formatDateToronto(date, options = {}) {
     if (!date) return '';
     
@@ -165,7 +155,7 @@ export function formatDateToronto(date, options = {}) {
     return new Intl.DateTimeFormat('ko-KR', defaultOptions).format(dateObj);
 }
 
-// 날짜를 토론토 시간으로 변환하여 간단한 문자열로 반환
+// Convert date to Toronto timezone and return as simple string
 export function formatDateTorontoSimple(date) {
     return formatDateToronto(date, {
         year: 'numeric',
@@ -176,21 +166,21 @@ export function formatDateTorontoSimple(date) {
     });
 }
 
-// 토론토 시간 기준으로 경과 시간 계산
+// Calculate elapsed time based on Toronto timezone
 export function getElapsedTimeToronto(startDate, endDate = null) {
     const start = startDate instanceof Date ? startDate : new Date(startDate);
     const end = endDate ? (endDate instanceof Date ? endDate : new Date(endDate)) : new Date();
     
-    // 밀리초 차이 계산 (시간대와 무관하게 정확함)
+    // Calculate millisecond difference (accurate regardless of timezone)
     return end.getTime() - start.getTime();
 }
 
 // ============================================
-// 속도 계산 함수
+// Velocity calculation functions
 // ============================================
 
 function ageDays(publishedAt) {
-    // 시간 계산은 UTC 기준으로 하고, 표시만 토론토 시간으로
+    // Calculate time in UTC, display in Toronto timezone
     const now = Date.now();
     const publishedTime = Date.parse(publishedAt);
     
@@ -216,7 +206,7 @@ export function viewVelocityPerDay(video) {
 }
 
 function getVelocityValue(item, metric = currentVelocityMetric) {
-    // vpd가 없으면 계산
+    // Calculate vpd if not available
     let base = Number(item?.vpd || 0);
     if (base === 0 && item?.raw) {
         base = viewVelocityPerDay(item.raw);
@@ -261,22 +251,25 @@ export function getChannelSizeEmoji(cband) {
 }
 
 // ============================================
-// 검색 함수
+// Search function
 // ============================================
 
-// 검색 중 상태 추적 (중복 검색 방지)
+// Track search state (prevent duplicate searches)
 let isSearching = false;
-let searchTimeoutTimer = null; // 프리징 방지용 타이머
-let isQuotaExceeded = false; // 할당량 초과 플래그
+// Timer to prevent freezing
+let searchTimeoutTimer = null;
+// Quota exceeded flag
+let isQuotaExceeded = false;
 
 export async function search(shouldReload = false) {
-    // 중복 검색 방지 (자동 검색 제외)
+    // Prevent duplicate searches (except auto search)
     if (isSearching && !shouldReload) {
         debugLog('ℹ️ 검색이 이미 진행 중입니다. 대기 중...');
         return;
     }
     
-    isQuotaExceeded = false; // 할당량 초과 플래그 초기화
+    // Reset quota exceeded flag
+    isQuotaExceeded = false;
     
     const searchBtn = document.getElementById('searchBtn');
     const searchInput = document.getElementById('searchInput');
@@ -284,7 +277,7 @@ export async function search(shouldReload = false) {
     try {
         isSearching = true;
         
-        // 검색 버튼 비활성화
+        // Disable search button
         if (searchBtn) {
             searchBtn.disabled = true;
             searchBtn.textContent = t('search.searching') || '검색 중...';
@@ -295,20 +288,20 @@ export async function search(shouldReload = false) {
         
         const query = document.getElementById('searchInput')?.value?.trim();
         
-        // 프리징 방지: 3초 후 자동 새로고침 및 자동 검색
+        // Prevent freezing: auto-refresh and auto-search after 3 seconds
         if (searchTimeoutTimer) {
             clearTimeout(searchTimeoutTimer);
         }
         searchTimeoutTimer = setTimeout(() => {
-            // 3초 후에도 검색이 완료되지 않았으면 자동 새로고침
+            // Auto-refresh if search not completed after 3 seconds
             if (isSearching && query) {
-                // 검색어 저장
+                // Save search query
                 localStorage.setItem('autoRefreshLastQuery', query);
                 localStorage.setItem('autoSearchOnLoad', 'true');
-                // 새로고침
+                // Reload page
                 location.reload();
             }
-        }, 3000); // 3초
+        }, 3000);
         
         // Reset isDefaultSearch flag
         const wasDefaultSearch = window.isDefaultSearch;
@@ -380,377 +373,178 @@ export async function search(shouldReload = false) {
         saveUserLastSearchKeyword(window.currentUser.uid, query);
     }
     
-    // Reset pagination
-    currentPage = 1;
     allVideos = [];
     allItems = [];
     allChannelMap = {};
 
     // ============================================
-    // 캐시 로직: 스마트 캐시 전략 (API 요청 최소화)
-    // 1순위: 로컬 캐시 (localStorage)
-    // 2순위: Supabase 캐시
+    // 캐시 로직: 서버 우선 전략
+    // 1순위: 서버(Supabase) 데이터 (API 호출 여부 결정 기준)
+    // 2순위: 로컬 캐시 (백업용, 서버 연결 실패 시만 사용)
     // ============================================
     
-    // 1️⃣ 로컬 캐시 먼저 확인 (브라우저 localStorage)
-    debugLog(`💾 로컬 캐시 확인 중: "${query}"`);
-    let cacheData = loadFromLocalCache(query);
-    
-    if (cacheData) {
-        const localCount = cacheData.videos?.length || 0;
-        const localAge = Date.now() - (cacheData.timestamp || 0);
-        if (localCount > 0 && localAge < CACHE_TTL_MS) {
-        debugLog(`✅ 로컬 캐시 사용 (${localCount}개, ${(localAge / (1000 * 60 * 60)).toFixed(1)}시간 전)`);
-            // 타이머 클리어 (검색 완료)
-            if (searchTimeoutTimer) {
-                clearTimeout(searchTimeoutTimer);
-                searchTimeoutTimer = null;
-            }
-            
-            // 선택한 최대 결과 수 확인
-            const maxResults = getMaxResults();
-            const targetCount = maxResults === 'max' ? Infinity : maxResults;
-            
-            // total_count 확인: 실제 비디오 개수와 meta.total 중 더 큰 값 사용
-            const meta = cacheData.meta || {};
-            const actualCount = (cacheData.videos || cacheData.items || []).length;
-            const metaTotal = meta.total || 0;
-            currentTotalCount = Math.max(actualCount, metaTotal, localCount);
-            
-            // 캐시에 이미 충분한 데이터가 있으면 API 호출 안 함 (maxResults 변경해도)
-            const totalCount = Math.max(actualCount, metaTotal, localCount);
-            if (totalCount >= targetCount) {
-                debugLog(`✅ 로컬 캐시에 충분한 데이터 있음 (${totalCount}개 >= ${targetCount}개) → API 호출 생략`);
-                restoreFromCache(cacheData);
-                renderPage(1);
-                lastUIUpdateTime = Date.now();
-                const nextToken = cacheData.meta?.nextPageToken || null;
-                // Save to Supabase (중복 체크 후 저장)
-                saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'local-cache', nextToken)
-                    .catch(err => console.warn('⚠️ 로컬 캐시 기반 Supabase 저장 실패:', err));
-                
-                // 로컬 캐시 timestamp 업데이트
-                const updatedCacheData = {
-                    ...cacheData,
-                    timestamp: Date.now()
-                };
-                saveToLocalCache(query, updatedCacheData);
-                
-                // 백그라운드에서 NULL 데이터 자동 업데이트
-                if (apiKeyValue) {
-                    updateMissingDataInBackground(apiKeyValue, 50, query).catch(err => {
-                        console.warn('⚠️ NULL 데이터 자동 업데이트 실패:', err);
-                    });
-                }
-                return;
-            }
-            
-            // 로컬 캐시가 선택한 수보다 부족하면 Supabase에서 먼저 확인
-            if (localCount < targetCount) {
-                debugLog(`📈 로컬 캐시 ${localCount}개 < 요청 ${targetCount}개 → Supabase 확인`);
-                
-                // Supabase에서 모든 데이터 가져오기 시도 (만료 여부 무시)
-                const supabaseData = await loadFromSupabase(query, true); // ignoreExpiry = true
-                if (supabaseData && supabaseData.videos && supabaseData.videos.length >= targetCount) {
-                    restoreFromCache(supabaseData);
-                    
-                    // total_count 업데이트: 실제 비디오 개수와 meta.total 중 더 큰 값 사용
-                    const actualCount = supabaseData.videos.length;
-                    const metaTotal = supabaseData.meta?.total || 0;
-                    currentTotalCount = Math.max(actualCount, metaTotal);
-                    
-                    renderPage(1);
-                    lastUIUpdateTime = Date.now();
-                    return;
-                }
-                
-                // Supabase에도 부족하면 기존 ID 제외하고 필요한 수만 추가로 가져오기
-                const neededCount = targetCount === Infinity ? MAX_RESULTS_LIMIT - localCount : targetCount - localCount;
-                debugLog(`📈 Supabase에도 부족 → 기존 ID 제외하고 ${neededCount}개 추가 필요`);
-                
-                // 기존 캐시의 비디오 ID 추출
-                const existingVideoIds = (cacheData.videos || cacheData.items || []).map(item => 
-                    item.id || item.raw?.id || item.video_id
-                ).filter(Boolean);
-                
-                // 기존 캐시 복원
-                restoreFromCache(cacheData);
-                
-                // 기존 ID 제외하고 필요한 수만 추가로 가져오기
-                await fetchAdditionalVideos(query, apiKeyValue, neededCount, existingVideoIds);
-                return;
-            }
-            
-            restoreFromCache(cacheData);
-            
-            // 선택한 최대 결과 수로 제한 (maxResults가 숫자일 때만, "max"일 때는 제한 안 함)
-            if (targetCount !== Infinity && allVideos.length > targetCount) {
-                debugLog(`✂️ 로컬 캐시 ${allVideos.length}개 → ${targetCount}개로 제한`);
-                allVideos = allVideos.slice(0, targetCount);
-                allItems = allItems.slice(0, targetCount);
-            }
-            
-            // 로컬 캐시 사용 시에도 Supabase에서 구독자 수만 가져와서 병합
-            try {
-                const supabaseData = await loadFromSupabase(query);
-                if (supabaseData && supabaseData.items) {
-                    // Supabase의 구독자 수로 업데이트
-                    const subscriberMap = new Map();
-                    supabaseData.items.forEach(item => {
-                        if (item.subs !== undefined && item.subs !== null && item.subs > 0) {
-                            subscriberMap.set(item.id, item.subs);
-                        }
-                    });
-                    
-                    // allItems의 구독자 수 업데이트
-                    allItems = allItems.map(item => {
-                        const videoId = item.raw?.id || item.id;
-                        if (subscriberMap.has(videoId)) {
-                            return {
-                                ...item,
-                                subs: subscriberMap.get(videoId)
-                            };
-                        }
-                        return item;
-                    });
-                    
-                }
-            } catch (err) {
-                console.warn('⚠️ Supabase 구독자 수 병합 실패:', err);
-            }
-            
-            renderPage(1);
-            lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
-        const nextToken = cacheData.meta?.nextPageToken || null;
-        // Save to Supabase (중복 체크 후 저장)
-        saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'local-cache', nextToken)
-            .catch(err => console.warn('⚠️ 로컬 캐시 기반 Supabase 저장 실패:', err));
-        
-        // 로컬 캐시 timestamp 업데이트 (Supabase 저장 후)
-        const updatedCacheData = {
-            ...cacheData,
-            timestamp: Date.now() // timestamp 갱신
-        };
-        saveToLocalCache(query, updatedCacheData);
-        debugLog(`💾 로컬 캐시 timestamp 업데이트 완료`);
-        
-        // 백그라운드에서 NULL 데이터 자동 업데이트 (로컬 캐시 사용 시에도, 현재 검색어 우선)
-        if (apiKeyValue) {
-            updateMissingDataInBackground(apiKeyValue, 50, query).catch(err => {
-                console.warn('⚠️ NULL 데이터 자동 업데이트 실패:', err);
-            });
+    // 로컬 캐시 확인 (백업용, 서버 연결 실패 시 사용)
+    debugLog(`💾 로컬 캐시 확인 중 (백업용): "${query}"`);
+    let localCacheData = loadFromLocalCache(query);
+    let localCount = 0;
+    if (localCacheData) {
+        localCount = localCacheData.videos?.length || 0;
+        if (localCount > 0) {
+            debugLog(`✅ 로컬 캐시 발견 (${localCount}개) - 백업용`);
         }
-        
-            return; // 로컬 캐시 사용, 즉시 반환
-        }
-        debugLog('⚠️ 로컬 캐시가 비어있거나 만료됨 → Supabase 확인');
     }
     
-    // 2️⃣ 로컬 캐시 없음 → Supabase 캐시 확인
-    debugLog(`🔍 Supabase 캐시 확인 중: "${query}"`);
-    cacheData = await loadFromSupabase(query);
+    // 선택한 최대 결과 수 확인
+    const maxResults = getMaxResults();
+    const targetCount = maxResults === 'max' ? Infinity : maxResults;
     
-    if (cacheData) {
-        debugLog(`✅ Supabase 캐시 발견! API 호출 생략`);
-        
-        // Supabase 캐시를 로컬 캐시에도 저장 (다음번 빠른 접근)
-        saveToLocalCache(query, cacheData);
-        const age = Date.now() - cacheData.timestamp;
-        const isExpired = age >= CACHE_TTL_MS;
-        const count = cacheData.videos?.length || 0;
-        const meta = cacheData.meta || {};
-        const cacheSource = cacheData.dataSource || meta.source || 'unknown';
-        const savedAt = new Date(cacheData.timestamp);
-        const savedAtLabel = formatDateTorontoSimple(savedAt);
-        
-        debugLog(`📂 로컬 검색어 캐시 확인: "${query}" (총 ${count}개, 소스=${cacheSource})`);
-        debugLog(`⏳ 72시간 경과 여부: ${isExpired ? '만료' : '유효'} (저장 시각: ${savedAtLabel})`);
-        
-        // Google 데이터가 아닌 캐시는 최신 Google 데이터로 갱신
-        if (cacheSource !== 'google') {
-            debugLog('🔄 Google 외 캐시 감지 → 전체 갱신');
-            await performFullGoogleSearch(query, apiKeyValue);
+    // 1️⃣ 서버(Supabase) 데이터 확인 (API 호출 여부 결정 기준)
+    console.log(`📊 서버 데이터 확인 중 (API 호출 여부 결정 기준)...`);
+    debugLog(`🔍 Supabase 캐시 확인 중: "${query}" (API 호출 여부 결정)`);
+    
+    let supabaseData = null;
+    try {
+        supabaseData = await loadFromSupabase(query, true); // ignoreExpiry = true
+    } catch (serverError) {
+        // 서버 연결 실패 시 로컬 캐시 사용 (백업)
+        console.warn(`⚠️ 서버 연결 실패: ${serverError.message} → 로컬 캐시 사용 (백업)`);
+        if (localCacheData && localCount > 0) {
+            console.log(`📦 로컬 캐시 사용 (백업, ${localCount}개)`);
+            restoreFromCache(localCacheData);
+            renderPage();
+            lastUIUpdateTime = Date.now();
+            return;
+        } else {
+            // 로컬 캐시도 없으면 에러 표시
+            const resultsDiv = document.getElementById('results');
+            if (resultsDiv) {
+                resultsDiv.innerHTML = `<div class="error">⚠️ 서버 연결 실패<br>로컬 캐시도 없습니다.<br>인터넷 연결을 확인해주세요.</div>`;
+            }
             return;
         }
+    }
+    
+    if (supabaseData && supabaseData.videos && supabaseData.videos.length > 0) {
+        const supabaseCount = supabaseData.videos.length;
+        const supabaseTotal = supabaseData.meta?.total || supabaseCount;
         
-        // 신선한 Google 캐시 사용 (데이터가 있을 때만)
-        if (!isExpired && count > 0) {
-            debugLog(`✅ 로컬 캐시 사용 (기준 시각: ${savedAtLabel}) - ${count}개 항목`);
-            // 타이머 클리어 (검색 완료)
+        console.log(`📊 서버 데이터 확인: ${supabaseCount}개 비디오 (total_count: ${supabaseTotal})`);
+        
+        // total_count와 실제 비디오 개수 불일치 확인 및 수정
+        if (supabaseTotal > supabaseCount) {
+            console.warn(`⚠️ total_count 불일치 감지: total_count=${supabaseTotal}, 실제 비디오=${supabaseCount}개`);
+            console.log(`📊 total_count를 실제 비디오 개수(${supabaseCount}개)로 조정`);
+            
+            // total_count를 실제 비디오 개수로 업데이트
+            try {
+                const { error: updateError } = await supabase
+                    .from('search_cache')
+                    .update({ total_count: supabaseCount })
+                    .eq('keyword', query.trim().toLowerCase());
+                
+                if (updateError) {
+                    console.warn('⚠️ total_count 업데이트 실패:', updateError);
+                } else {
+                    console.log(`✅ total_count 업데이트 완료: ${supabaseTotal} → ${supabaseCount}`);
+                    supabaseTotal = supabaseCount;
+                    supabaseData.meta.total = supabaseCount;
+                }
+            } catch (err) {
+                console.warn('⚠️ total_count 업데이트 중 오류:', err);
+            }
+        }
+        
+        // 서버 데이터가 충분하면 서버 데이터 사용, API 호출 안 함
+        if (supabaseCount >= targetCount || supabaseTotal >= targetCount) {
+            console.log(`✅ 서버에 충분한 데이터 있음 (${supabaseCount}개 >= ${targetCount}개) → API 호출 생략`);
+            debugLog(`✅ Supabase 캐시 충분 (${supabaseCount}개 >= ${targetCount}개) → API 호출 생략`);
+            
+            restoreFromCache(supabaseData);
+            
+            // total_count 업데이트
+            currentTotalCount = Math.max(supabaseCount, supabaseTotal);
+            
+            // 로컬 캐시 업데이트 (서버 데이터로 동기화)
+            saveToLocalCache(query, supabaseData);
+            console.log(`💾 로컬 캐시 업데이트 완료 (서버 데이터로 동기화: ${supabaseCount}개)`);
+            
+            // 타이머 클리어
             if (searchTimeoutTimer) {
                 clearTimeout(searchTimeoutTimer);
                 searchTimeoutTimer = null;
             }
             
-            // 선택한 최대 결과 수 확인
-            const maxResults = getMaxResults();
-            const targetCount = maxResults === 'max' ? Infinity : maxResults;
+            renderPage();
+            lastUIUpdateTime = Date.now();
             
-            // 캐시가 선택한 수보다 많으면 최신 것만 반환
-            if (targetCount !== Infinity && count > targetCount) {
-                debugLog(`📊 캐시 ${count}개 > 요청 ${targetCount}개 → 최신 ${targetCount}개만 사용`);
-                restoreFromCache(cacheData);
-                // 최신 것만 선택 (created_at 기준 내림차순)
-                allVideos = allVideos.slice(0, targetCount);
-                allItems = allItems.slice(0, targetCount);
-                renderPage(1);
-                lastUIUpdateTime = Date.now();
-                return;
-            }
-            
-            // total_count 확인 (Supabase의 total_count 우선 사용)
-            const totalCount = meta.total_count || count;
-            // currentTotalCount 업데이트: 실제 로드한 개수와 meta.total 중 더 큰 값 사용
-            const actualCount = cacheData.videos?.length || cacheData.items?.length || 0;
-            currentTotalCount = Math.max(actualCount, totalCount, count);
-            
-            // 캐시에 이미 충분한 데이터가 있으면 API 호출 안 함 (maxResults 변경해도)
-            if (targetCount !== Infinity && totalCount >= targetCount) {
-                debugLog(`✅ 캐시에 충분한 데이터 있음 (${totalCount}개 >= ${targetCount}개) → API 호출 생략`);
-                restoreFromCache(cacheData);
-                // maxResults가 숫자일 때만 제한 ("max"일 때는 모든 데이터 표시)
-                if (targetCount !== Infinity && allVideos.length > targetCount) {
-                    allVideos = allVideos.slice(0, targetCount);
-                    allItems = allItems.slice(0, targetCount);
-                }
-                renderPage(1);
-                lastUIUpdateTime = Date.now();
-                const nextToken = meta.nextPageToken || null;
-                // Save to Supabase (중복 체크 후 저장)
-                saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'supa-cache', nextToken)
-                    .catch(err => console.warn('⚠️ Supabase 캐시 기반 저장 실패:', err));
-                
-                // 백그라운드에서 NULL 데이터 자동 업데이트
+            // 백그라운드에서 NULL 데이터 자동 업데이트
+            if (apiKeyValue) {
                 updateMissingDataInBackground(apiKeyValue, 50, query).catch(err => {
                     console.warn('⚠️ NULL 데이터 자동 업데이트 실패:', err);
                 });
-                return;
             }
-            
-            // 캐시가 선택한 수보다 부족하면 기존 ID 제외하고 필요한 수만 추가로 가져오기
-            if (count < targetCount) {
-                const neededCount = targetCount === Infinity ? MAX_RESULTS_LIMIT - count : targetCount - count;
-                debugLog(`📈 캐시 ${count}개 < 요청 ${targetCount}개 → 기존 ID 제외하고 ${neededCount}개 추가 필요`);
-                
-                // 기존 캐시의 비디오 ID 추출
-                const existingVideoIds = (cacheData.items || cacheData.videos || []).map(item => 
-                    item.id || item.raw?.id || item.video_id
-                ).filter(Boolean);
-                
-                // 기존 캐시 복원
-                restoreFromCache(cacheData);
-                
-                // 기존 ID 제외하고 필요한 수만 추가로 가져오기
-                await fetchAdditionalVideos(query, apiKeyValue, neededCount, existingVideoIds);
-                return;
-            }
-            
-            restoreFromCache(cacheData);
-            
-            // maxResults가 숫자일 때만 제한 ("max"일 때는 모든 데이터 표시)
-            if (targetCount !== Infinity && count >= targetCount) {
-                allVideos = allVideos.slice(0, targetCount);
-                allItems = allItems.slice(0, targetCount);
-            }
-            
-            renderPage(1);
-            lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
-            const nextToken = meta.nextPageToken || null;
-            // Save to Supabase (중복 체크 후 저장)
-            saveToSupabase(query, allVideos, allChannelMap, allItems, cacheData.dataSource || 'supa-cache', nextToken)
-                .catch(err => console.warn('⚠️ Supabase 캐시 기반 저장 실패:', err));
-            
-            // 백그라운드에서 NULL 데이터 자동 업데이트 (캐시 사용 시에도, 현재 검색어 우선)
-            updateMissingDataInBackground(apiKeyValue, 50, query).catch(err => {
-                console.warn('⚠️ NULL 데이터 자동 업데이트 실패:', err);
-            });
-            
             return;
         }
         
-        if (count === 0) {
-            debugLog('⚠️ Supabase 캐시에 데이터가 0개 → API 재호출');
-        }
+        // 서버 데이터가 부족하면 서버 데이터를 기반으로 추가 검색
+        console.log(`📊 서버 데이터 부족 (${supabaseCount}개 < ${targetCount}개) → 추가 검색 필요`);
         
-        // 만료된 캐시 처리: total_count 확인 (한번 불러온 데이터는 재사용)
-        const maxResults = getMaxResults();
-        const targetCount = maxResults === 'max' ? Infinity : maxResults;
-        const totalCount = meta.total_count || count; // Supabase의 total_count 우선 사용
-        
-        // 캐시에 이미 충분한 데이터가 있으면 API 호출 안 함 (maxResults 변경해도)
-        if (targetCount !== Infinity && totalCount >= targetCount) {
-            debugLog(`✅ 만료된 캐시지만 충분한 데이터 있음 (${totalCount}개 >= ${targetCount}개) → API 호출 생략, 캐시만 사용`);
-            restoreFromCache(cacheData);
-            // 선택한 개수로 제한
-            if (targetCount !== Infinity && allVideos.length > targetCount) {
-                allVideos = allVideos.slice(0, targetCount);
-                allItems = allItems.slice(0, targetCount);
-            }
-            renderPage(1);
+        // 이미 MAX_RESULTS_LIMIT에 도달했으면 추가 검색 중단
+        if (supabaseCount >= MAX_RESULTS_LIMIT) {
+            console.log(`⏹️ 추가 검색 중단: 이미 ${supabaseCount}개 저장됨 (최대 제한: ${MAX_RESULTS_LIMIT}개)`);
+            debugLog(`⏹️ 추가 검색 중단: supabaseCount ${supabaseCount} >= ${MAX_RESULTS_LIMIT}`);
+            restoreFromCache(supabaseData);
+            // 로컬 캐시 업데이트 (서버 데이터로 동기화)
+            saveToLocalCache(query, supabaseData);
+            console.log(`💾 로컬 캐시 업데이트 완료 (서버 데이터로 동기화: ${supabaseCount}개)`);
+            renderPage();
             lastUIUpdateTime = Date.now();
             return;
         }
         
-        // 캐시가 선택한 수보다 부족한 경우만 API 호출
-        if (count > 0 && count < targetCount) {
-            const neededCount = targetCount === Infinity ? MAX_RESULTS_LIMIT - count : targetCount - count;
-            debugLog(`📈 만료된 캐시 ${count}개 < 요청 ${targetCount}개 → 기존 ID 제외하고 ${neededCount}개 추가 필요`);
-            
-            // 기존 캐시의 비디오 ID 추출
-            const existingVideoIds = (cacheData.items || cacheData.videos || []).map(item => 
-                item.id || item.raw?.id || item.video_id
-            ).filter(Boolean);
-            
-            // 기존 캐시 복원
-            restoreFromCache(cacheData);
-            
-            // 기존 ID 제외하고 필요한 수만 추가로 가져오기
-            await fetchAdditionalVideos(query, apiKeyValue, neededCount, existingVideoIds);
-            return;
-        }
+        // 서버 데이터 복원
+        restoreFromCache(supabaseData);
         
-        // 72시간 경과 + pagination 토큰 존재 → 토핑
-        if (count === 50 && meta.nextPageToken) {
-            debugLog('🔝 토핑 모드: 추가 50개만 fetch');
-            await performTopUpUpdate(query, apiKeyValue, cacheData);
-            return;
-        }
+        // 로컬 캐시 업데이트 (서버 데이터로 동기화)
+        saveToLocalCache(query, supabaseData);
+        console.log(`💾 로컬 캐시 업데이트 완료 (서버 데이터로 동기화: ${supabaseCount}개)`);
         
-        debugLog('⏰ 로컬 캐시 만료 → Supabase 서버 재호출');
-        try {
-            await performFullGoogleSearch(query, apiKeyValue);
-        } catch (error) {
-            // API 할당량 초과 시 만료된 캐시라도 사용
-            if (error.message === 'quotaExceeded' || error.message?.includes('quota') || 
-                (error.message && error.message.includes('할당량'))) {
-                console.warn('⚠️ API 할당량 초과 → 만료된 캐시 사용');
-                isQuotaExceeded = true;
-                const expiredCache = await loadFromSupabase(query, true); // ignoreExpiry = true
-                if (expiredCache && expiredCache.videos && expiredCache.videos.length > 0) {
-                    restoreFromCache(expiredCache);
-                    const resultsDiv = document.getElementById('results');
-                    if (resultsDiv) {
-                        resultsDiv.innerHTML = `<div class="info">⚠️ API 할당량 초과로 캐시 데이터를 사용합니다 (${allVideos.length}개)</div>`;
-                    }
-                    renderPage(1);
-                    lastUIUpdateTime = Date.now();
-                    return;
-                }
-            }
-            throw error; // 다른 에러는 다시 throw
-        }
+        // 기존 ID 제외하고 필요한 수만 추가로 가져오기
+        const existingVideoIds = supabaseData.videos.map(v => v.id).filter(Boolean);
+        const neededCount = targetCount === Infinity ? MAX_RESULTS_LIMIT - supabaseCount : targetCount - supabaseCount;
+        
+        console.log(`🔍 추가 검색 필요: ${neededCount}개 (서버: ${supabaseCount}개, 목표: ${targetCount}개)`);
+        debugLog(`📈 서버 데이터 부족 → 기존 ID 제외하고 ${neededCount}개 추가 필요`);
+        
+        await fetchAdditionalVideos(query, apiKeyValue, neededCount, existingVideoIds);
         return;
     }
-
-    // 캐시 없음 → 전체 검색 (API 호출 필요)
-    debugLog(`❌ Supabase 캐시 없음 → YouTube API 호출 필요`);
+    
+    // 서버에 데이터가 없으면 로컬 캐시 백업용으로 사용 후 API 호출
+    console.log(`⚠️ 서버에 데이터 없음 → 로컬 캐시 확인 후 API 호출`);
+    
+    // 로컬 캐시가 있으면 백업용으로 표시 (빠른 로딩, API 호출은 서버 데이터 기준)
+    // TTL 체크 제거: 캐시는 만료되지 않고 계속 유지됨
+    if (localCacheData && localCount > 0) {
+        console.log(`📦 로컬 캐시 사용 (백업, ${localCount}개) - API 호출은 서버 데이터 기준`);
+        restoreFromCache(localCacheData);
+        renderPage();
+        lastUIUpdateTime = Date.now();
+    }
+    
+    // 서버에 데이터가 없으므로 API 호출 필요 (로컬 캐시와 무관하게)
+    console.log(`🔍 서버에 데이터 없음 → YouTube API 호출 (로컬 캐시 무관)`);
     await performFullGoogleSearch(query, apiKeyValue);
+    return;
     } catch (error) {
         console.error('❌ 검색 중 오류 발생:', error);
         
         // API 할당량 초과 시 만료된 캐시라도 사용 시도
-        if (error.message === 'quotaExceeded' || error.message?.includes('quota') || 
-            (error.message && error.message.includes('할당량'))) {
+        const errorMsg = (error && typeof error === 'object' && error.message) 
+            ? error.message 
+            : (typeof error === 'string' ? error : '');
+        if (errorMsg === 'quotaExceeded' || errorMsg?.includes('quota') || 
+            (errorMsg && errorMsg.includes('할당량'))) {
             console.warn('⚠️ API 할당량 초과 → 만료된 캐시라도 사용 시도');
             isQuotaExceeded = true;
             
@@ -766,7 +560,7 @@ export async function search(shouldReload = false) {
                     if (resultsDiv) {
                         resultsDiv.innerHTML = `<div class="info">⚠️ API 할당량 초과로 캐시 데이터를 사용합니다 (${allVideos.length}개)</div>`;
                     }
-                    renderPage(1);
+                    renderPage();
                     lastUIUpdateTime = Date.now();
                     return; // 캐시 데이터 사용, 정상 종료
                 } else {
@@ -791,7 +585,9 @@ export async function search(shouldReload = false) {
         }
         
         // 사용자에게 알림 (에러 메시지가 너무 길면 간단하게)
-        const errorMessage = error.message || '알 수 없는 오류';
+        const errorMessage = (error && typeof error === 'object' && error.message) 
+            ? error.message 
+            : (typeof error === 'string' ? error : '알 수 없는 오류');
         const shortMessage = errorMessage.length > 50 ? '검색 중 오류가 발생했습니다. 다시 시도해주세요.' : errorMessage;
         alert(shortMessage);
         
@@ -821,17 +617,36 @@ export async function search(shouldReload = false) {
 
 // 기존 비디오 ID를 제외하고 필요한 수만 추가로 가져오기
 async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVideoIds) {
+    // 현재 저장된 비디오 개수 확인
+    const currentVideoCount = excludeVideoIds.length;
+    
+    // 이미 MAX_RESULTS_LIMIT(200개)에 도달했으면 추가 검색 중단
+    if (currentVideoCount >= MAX_RESULTS_LIMIT) {
+        console.log(`⏹️ 추가 검색 중단: 이미 ${currentVideoCount}개 저장됨 (최대 제한: ${MAX_RESULTS_LIMIT}개)`);
+        debugLog(`⏹️ 추가 검색 중단: 이미 ${currentVideoCount}개 >= ${MAX_RESULTS_LIMIT}개`);
+        return;
+    }
+    
     const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('추가 검색 타임아웃: 60초 내에 응답이 없습니다.')), 60000);
     });
     
     try {
         // Infinity나 잘못된 값 방지
+        // 남은 개수만큼만 요청 (MAX_RESULTS_LIMIT를 초과하지 않도록)
+        const remainingCount = MAX_RESULTS_LIMIT - currentVideoCount;
         const safeNeededCount = neededCount === Infinity || neededCount <= 0 || !isFinite(neededCount) 
-            ? MAX_RESULTS_LIMIT 
-            : Math.min(neededCount, MAX_RESULTS_LIMIT);
+            ? remainingCount 
+            : Math.min(neededCount, remainingCount);
         
-        console.log(`🔍 추가 비디오 검색 시도: ${safeNeededCount}개 요청 (제외: ${excludeVideoIds.length}개, 원래 요청: ${neededCount})`);
+        // 남은 개수가 0 이하면 중단
+        if (safeNeededCount <= 0) {
+            console.log(`⏹️ 추가 검색 중단: 남은 개수 없음 (현재: ${currentVideoCount}개, 최대: ${MAX_RESULTS_LIMIT}개)`);
+            debugLog(`⏹️ 추가 검색 중단: safeNeededCount = ${safeNeededCount}`);
+            return;
+        }
+        
+        console.log(`🔍 추가 비디오 검색 시도: ${safeNeededCount}개 요청 (현재: ${currentVideoCount}개, 최대: ${MAX_RESULTS_LIMIT}개, 원래 요청: ${neededCount})`);
         debugLog(`🔍 기존 ${excludeVideoIds.length}개 ID 제외하고 ${safeNeededCount}개 추가 검색`);
         
         // 기존 ID 제외하고 필요한 수만 검색
@@ -858,7 +673,7 @@ async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVid
                 restoreFromCache(cacheData);
                 
                 // 할당량 초과 시에는 제한 없이 모든 데이터 사용
-                renderPage(1);
+                renderPage();
                 lastUIUpdateTime = Date.now();
                 return;
             }
@@ -870,14 +685,40 @@ async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVid
         
         if (!result || result.videos.length === 0) {
             debugLog(`⚠️ 추가 비디오 없음, 기존 캐시만 사용`);
+            
+            // 추가 검색 결과가 0개이면 total_count를 실제 비디오 개수로 조정
+            const currentVideoCount = allVideos.length;
+            try {
+                const supabaseData = await loadFromSupabase(query, true);
+                if (supabaseData?.meta?.total && supabaseData.meta.total > currentVideoCount) {
+                    console.warn(`⚠️ 추가 검색 결과 0개: total_count(${supabaseData.meta.total})를 실제 비디오 개수(${currentVideoCount})로 조정`);
+                    
+                    const { error: updateError } = await supabase
+                        .from('search_cache')
+                        .update({ total_count: currentVideoCount })
+                        .eq('keyword', query.trim().toLowerCase());
+                    
+                    if (updateError) {
+                        console.warn('⚠️ total_count 업데이트 실패:', updateError);
+                    } else {
+                        console.log(`✅ total_count 업데이트 완료: ${supabaseData.meta.total} → ${currentVideoCount}`);
+                        currentTotalCount = currentVideoCount;
+                    }
+                }
+            } catch (err) {
+                console.warn('⚠️ total_count 업데이트 중 오류:', err);
+            }
+            
             return;
         }
         
         debugLog(`✅ 추가 비디오 ${result.videos.length}개 가져옴`);
+        console.log(`✅ 추가 비디오 ${result.videos.length}개 가져옴 (기존: ${allVideos.length}개)`);
         
         // 기존 비디오와 병합
         allVideos = [...allVideos, ...result.videos];
         Object.assign(allChannelMap, result.channels);
+        console.log(`📊 병합 후 총 ${allVideos.length}개 비디오 (기존 ${allVideos.length - result.videos.length}개 + 추가 ${result.videos.length}개)`);
         
         // Enrich with velocity data
         const newItems = result.videos.map(video => {
@@ -897,49 +738,79 @@ async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVid
         });
         
         allItems = [...allItems, ...newItems];
+        console.log(`📊 병합 후 총 ${allItems.length}개 items (기존 ${allItems.length - newItems.length}개 + 추가 ${newItems.length}개)`);
         
-        // total_count가 있으면 그만큼만 표시, 없으면 최대 100개로 제한
-        if (currentTotalCount > 0) {
-            // total_count까지 표시
-            if (allVideos.length > currentTotalCount) {
-                debugLog(`✂️ 병합 후 ${allVideos.length}개 → ${currentTotalCount}개로 제한 (total_count)`);
-                allVideos = allVideos.slice(0, currentTotalCount);
-                allItems = allItems.slice(0, currentTotalCount);
-            }
-        } else {
-            // total_count를 알 수 없으면 최대 100개로 제한
-            if (allVideos.length > MAX_RESULTS_LIMIT) {
-                debugLog(`✂️ 병합 후 ${allVideos.length}개 → ${MAX_RESULTS_LIMIT}개로 제한`);
-                allVideos = allVideos.slice(0, MAX_RESULTS_LIMIT);
-                allItems = allItems.slice(0, MAX_RESULTS_LIMIT);
-            }
-        }
+        // 제한하기 전의 전체 개수 저장 (나중에 total_count 업데이트에 사용)
+        const savedVideoCount = allVideos.length; // 제한 전 전체 개수
         
-        // Save to Supabase (중복 체크 후 저장)
+        // Save to Supabase (제한하기 전에 전체 데이터 저장)
+        console.log(`💾 Supabase 저장 시작: ${savedVideoCount}개 비디오 (제한 전 전체 데이터)`);
         await saveToSupabase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken)
             .catch(err => console.warn('⚠️ Supabase 저장 실패:', err));
         
-        // total_count 업데이트
-        if (result.videos.length > 0) {
+        // total_count 업데이트: 저장된 전체 비디오 개수로 먼저 업데이트
+        // (제한하기 전에 업데이트하여 제한 로직이 올바른 값을 사용하도록)
+        if (savedVideoCount > 0) {
             // Supabase에서 최신 total_count 확인
             try {
                 const supabaseData = await loadFromSupabase(query, true);
                 if (supabaseData?.meta?.total) {
-                    currentTotalCount = supabaseData.meta.total;
+                    // 저장된 개수와 Supabase의 total_count 중 더 큰 값 사용
+                    currentTotalCount = Math.max(savedVideoCount, supabaseData.meta.total);
+                    console.log(`📊 total_count 업데이트: ${currentTotalCount}개 (저장된: ${savedVideoCount}개, Supabase: ${supabaseData.meta.total}개)`);
                 } else {
-                    currentTotalCount = allVideos.length;
+                    currentTotalCount = savedVideoCount;
+                    console.log(`📊 total_count 업데이트: ${currentTotalCount}개 (저장된 개수)`);
                 }
-            } catch (err) {
-                currentTotalCount = allVideos.length;
+                
+                // 서버 데이터 저장 후 로컬 캐시 동기화 (서버 데이터로 업데이트)
+                if (supabaseData) {
+                    saveToLocalCache(query, supabaseData);
+                    console.log(`💾 로컬 캐시 동기화 완료 (서버 데이터로 업데이트: ${supabaseData.videos?.length || 0}개)`);
+                }
+            } catch (_err) {
+                currentTotalCount = savedVideoCount;
+                console.log(`📊 total_count 업데이트: ${currentTotalCount}개 (에러 발생, 저장된 개수 사용)`);
             }
         }
         
+        // 제한 로직: 
+        // - currentTotalCount가 MAX_RESULTS_LIMIT 미만이면 실제 DB 값 사용
+        // - MAX_RESULTS_LIMIT 이상이면 MAX_RESULTS_LIMIT으로 제한
+        let effectiveLimit;
+        if (currentTotalCount > 0) {
+            if (currentTotalCount < MAX_RESULTS_LIMIT) {
+                // DB에 저장된 실제 값이 MAX_RESULTS_LIMIT 미만이면 그 값을 사용
+                effectiveLimit = currentTotalCount;
+                console.log(`📊 제한 값: ${effectiveLimit}개 (DB 실제 값, MAX_RESULTS_LIMIT(${MAX_RESULTS_LIMIT}개) 미만)`);
+            } else {
+                // DB 값이 MAX_RESULTS_LIMIT 이상이면 MAX_RESULTS_LIMIT로 제한
+                effectiveLimit = MAX_RESULTS_LIMIT;
+                console.log(`📊 제한 값: ${effectiveLimit}개 (MAX_RESULTS_LIMIT, DB 값: ${currentTotalCount}개)`);
+            }
+        } else {
+            // currentTotalCount가 없으면 MAX_RESULTS_LIMIT 사용
+            effectiveLimit = MAX_RESULTS_LIMIT;
+            console.log(`📊 제한 값: ${effectiveLimit}개 (MAX_RESULTS_LIMIT, currentTotalCount 없음)`);
+        }
         
-        renderPage(1);
+        if (allVideos.length > effectiveLimit) {
+            const beforeCount = allVideos.length;
+            debugLog(`✂️ 병합 후 ${allVideos.length}개 → ${effectiveLimit}개로 제한`);
+            console.log(`✂️ ${beforeCount}개 → ${effectiveLimit}개로 제한`);
+            allVideos = allVideos.slice(0, effectiveLimit);
+            allItems = allItems.slice(0, effectiveLimit);
+        } else {
+            console.log(`✅ 제한 없음: ${allVideos.length}개 (effectiveLimit: ${effectiveLimit})`);
+        }
+        
+        
+        console.log(`🎬 렌더링 시작: 총 ${allVideos.length}개 비디오, ${allItems.length}개 items`);
+        renderPage();
     } catch (error) {
         console.error('❌ 추가 비디오 검색 오류:', error);
         // 에러 발생 시 기존 캐시만 사용
-        renderPage(1);
+        renderPage();
     }
 }
 
@@ -963,7 +834,7 @@ async function loadMore() {
     const remainingDailyLimit = getRemainingDailyLoadMoreCount(keyword);
     if (remainingDailyLimit <= 0) {
         console.warn(`⚠️ 하루 추가 로드 제한 도달 (키워드당 ${DAILY_LOAD_MORE_LIMIT}개)`);
-        alert(`하루 데이터 확보 제한에 도달했습니다. (키워드당 최대 ${DAILY_LOAD_MORE_LIMIT}개/일)\n\nVPH 업데이트(4,800 units/일) 할당량을 제외한 신규 영상 데이터 확보 제한입니다.`);
+        alert(`Daily data limit reached. (Maximum ${DAILY_LOAD_MORE_LIMIT} per keyword per day)\n\nThis is the limit for new video data acquisition excluding other API usage.`);
         updateLoadMoreButton();
         return;
     }
@@ -1109,7 +980,7 @@ async function performFullGoogleSearch(query, apiKeyValue) {
     
     try {
         // 최대 200개로 제한
-        const targetCount = 200;
+        const targetCount = MAX_RESULTS_LIMIT;
         console.log(`🔍 YouTube API 검색 시작: ${targetCount}개 요청`);
         debugLog(`🌐 Google API 전체 검색 (최대 ${targetCount}개)`);
         
@@ -1137,7 +1008,7 @@ async function performFullGoogleSearch(query, apiKeyValue) {
                         resultsDiv.innerHTML = `<div class="info">⚠️ API 할당량 초과로 캐시 데이터를 사용합니다 (${allVideos.length}개)</div>`;
                     }
                     
-                    renderPage(1);
+                    renderPage();
                     lastUIUpdateTime = Date.now();
                     return; // 캐시 데이터 사용, 정상 종료
                 }
@@ -1209,43 +1080,24 @@ async function performFullGoogleSearch(query, apiKeyValue) {
         await saveToSupabase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken)
             .catch(err => console.warn('⚠️ Supabase 저장 실패:', err));
         
+        // 서버 데이터 저장 후 로컬 캐시 동기화 (서버 데이터로 업데이트)
+        try {
+            const updatedSupabaseData = await loadFromSupabase(query, true);
+            if (updatedSupabaseData) {
+                saveToLocalCache(query, updatedSupabaseData);
+                console.log(`💾 로컬 캐시 동기화 완료 (서버 데이터로 업데이트: ${updatedSupabaseData.videos?.length || 0}개)`);
+            }
+        } catch (syncError) {
+            console.warn('⚠️ 로컬 캐시 동기화 실패:', syncError);
+        }
         
         // 백그라운드에서 NULL 데이터 자동 업데이트 (검색 성능에 영향 없음, 현재 검색어 우선)
         updateMissingDataInBackground(apiKeyValue, 50, query).catch(err => {
             console.warn('⚠️ NULL 데이터 자동 업데이트 실패:', err);
         });
         
-        // 로컬 캐시에도 저장
-        const cacheData = {
-            videos: allVideos.map(v => ({
-                id: v.id,
-                title: v.snippet?.title,
-                channelId: v.snippet?.channelId,
-                channelTitle: v.snippet?.channelTitle,
-                publishedAt: v.snippet?.publishedAt,
-                viewCount: v.statistics?.viewCount || '0',
-                likeCount: v.statistics?.likeCount || '0',
-                duration: v.contentDetails?.duration || 'PT0S'
-            })),
-            channels: allChannelMap,
-            items: allItems.map(item => ({
-                id: item.raw?.id || item.id,
-                vpd: item.vpd,
-                vclass: item.vclass,
-                cband: item.cband,
-                subs: item.subs
-            })),
-            dataSource: 'google',
-            meta: {
-                total: allVideos.length,
-                nextPageToken: result.nextPageToken,
-                source: 'google'
-            }
-        };
-        saveToLocalCache(query, cacheData);
-        
         // 이미 정렬했으므로 skipSort=true로 전달
-        renderPage(1, true);
+        renderPage(true);
         lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
 
     } catch (googleError) {
@@ -1336,7 +1188,7 @@ async function performIncrementalFetch(query, apiKeyValue, firebaseData, neededC
         if (newVideos.length === 0) {
             debugLog(`⚠️ 추가 비디오 없음, 기존 캐시 사용`);
             restoreFromCache(firebaseData);
-            renderPage(1);
+            renderPage();
             return;
         }
         
@@ -1391,7 +1243,7 @@ async function performIncrementalFetch(query, apiKeyValue, firebaseData, neededC
         // Supabase 저장
         // DISABLED: Only cron updates videos to Supabase
         // await saveToSupabase(query, restoredVideos, allChannelMap, allItems, 'google', nextPageToken);
-        renderPage(1);
+        renderPage();
         
         debugLog(`✅ 증분 검색 완료: 총 ${allVideos.length}개 (추가 ${newVideos.length}개)`);
         
@@ -1400,7 +1252,7 @@ async function performIncrementalFetch(query, apiKeyValue, firebaseData, neededC
         
         // 에러 발생 시 기존 캐시 사용
         restoreFromCache(firebaseData);
-        renderPage(1);
+        renderPage();
         
         if (error.message && error.message.includes('타임아웃')) {
             console.warn('⏰ 증분 검색 타임아웃 발생');
@@ -1477,7 +1329,7 @@ async function performTopUpUpdate(query, apiKeyValue, firebaseData) {
 
         // 6) Supabase 저장 (meta 업데이트)
         await saveToSupabase(query, restoredVideos, allChannelMap, allItems, 'google', more.nextPageToken);
-        renderPage(1);
+        renderPage();
         
     } catch (error) {
         console.error('❌ 토핑 업데이트 오류:', error);
@@ -1521,8 +1373,7 @@ function getFilteredDedupedItems() {
     return dedupeItemsByVideo(filteredItems);
 }
 
-export function renderPage(page, skipSort = false) {
-    currentPage = 1;
+export function renderPage(skipSort = false) {
     
     // 할당량 초과 시에는 제한을 적용하지 않음
     if (!isQuotaExceeded) {
@@ -1834,7 +1685,6 @@ async function updateMissingDataInBackground(apiKeyValue, limit = 50, keyword = 
                 const result = await updateMissingData(apiKeyValue, limit, 2, keyword);
                 if (result.updated > 0 || result.deleted > 0 || result.skipped > 0) {
                     // 업데이트된 경우 페이지 새로고침 없이 데이터만 갱신 (선택사항)
-                    // renderPage(currentPage); // 필요시 주석 해제
                 }
             } catch (error) {
                 // 백그라운드 작업이므로 에러는 조용히 처리
@@ -1994,11 +1844,12 @@ function loadFromLocalCache(query) {
         }
         
         // 만료 시간 확인
-        const age = Date.now() - parsed.timestamp;
-        if (age >= CACHE_TTL_MS) {
-            localStorage.removeItem(cacheKey);
-            return null;
-        }
+        // TTL 체크 제거: 로컬 캐시도 만료되지 않고 계속 유지됨
+        // const age = Date.now() - parsed.timestamp;
+        // if (age >= CACHE_TTL_MS) {
+        //     localStorage.removeItem(cacheKey);
+        //     return null;
+        // }
         
         return parsed;
     } catch (error) {
@@ -2094,22 +1945,9 @@ function saveToLocalCache(query, cacheData) {
 // 오래된 로컬 캐시 정리
 function clearOldLocalCache() {
     try {
-        const keys = Object.keys(localStorage);
-        const cacheKeys = keys.filter(k => k.startsWith(LOCAL_CACHE_PREFIX));
-        const now = Date.now();
-        
-        // 만료된 캐시 삭제
-        cacheKeys.forEach(key => {
-            try {
-                const data = JSON.parse(localStorage.getItem(key));
-                if (now - data.timestamp >= CACHE_TTL_MS) {
-                    localStorage.removeItem(key);
-                }
-            } catch (e) {
-                // 파싱 실패 시 삭제
-                localStorage.removeItem(key);
-            }
-        });
+        // TTL 체크 제거: 캐시는 만료되지 않고 계속 유지됨
+        // 만료된 캐시 삭제 로직 제거됨
+        // 캐시는 수동으로 삭제하거나 localStorage 용량 초과 시에만 정리됨
         
         // 여전히 용량 초과면 가장 오래된 것부터 삭제
         if (cacheKeys.length > 10) {
@@ -2318,7 +2156,7 @@ export function setupEventListeners() {
                 setCustomRangeVisibility('durationCustom', input.value === 'custom');
             }
 
-            renderPage(1);
+            renderPage();
         });
     });
 
@@ -2345,7 +2183,7 @@ export function setupEventListeners() {
             input.addEventListener('input', () => {
                 const viewFilter = document.querySelector('input[name="viewCountFilter"]:checked')?.value;
                 if (viewFilter === 'custom') {
-                    renderPage(1);
+                    renderPage();
                 }
             });
         }
@@ -2358,7 +2196,7 @@ export function setupEventListeners() {
             input.addEventListener('input', () => {
                 const subFilter = document.querySelector('input[name="subCountFilter"]:checked')?.value;
                 if (subFilter === 'custom') {
-                    renderPage(1);
+                    renderPage();
                 }
             });
         }
@@ -2371,7 +2209,7 @@ export function setupEventListeners() {
             input.addEventListener('input', () => {
                 const durationFilter = document.querySelector('input[name="durationFilter"]:checked')?.value;
                 if (durationFilter === 'custom') {
-                    renderPage(1);
+                    renderPage();
                 }
             });
         }
@@ -2379,10 +2217,10 @@ export function setupEventListeners() {
     
     // Sort controls
     document.getElementById('sortVpdSelect')?.addEventListener('change', () => {
-        renderPage(1);
+        renderPage();
     });
     document.getElementById('velocityMetricSelect')?.addEventListener('change', () => {
-        renderPage(1);
+        renderPage();
     });
     
     // 최대 결과 수 선택 드롭다운 이벤트 리스너

@@ -53,7 +53,7 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
         const age = Date.now() - new Date(cacheMeta.updated_at).getTime();
         const ageHours = age / (1000 * 60 * 60);
 
-        // Check cache version (할당량 초과 시에는 버전 체크 스킵)
+        // Check cache version only (TTL 체크 제거 - 캐시는 계속 유지)
         if (!ignoreExpiry) {
             const CURRENT_VERSION = '1.32';
             if (cacheMeta.cache_version < CURRENT_VERSION) {
@@ -61,9 +61,10 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
                 return null;
             }
 
-            if (age >= CACHE_TTL_MS) {
-                return null;
-            }
+            // TTL 체크 제거: 캐시는 만료되지 않고 계속 유지됨
+            // if (age >= CACHE_TTL_MS) {
+            //     return null;
+            // }
         }
         
 
@@ -151,6 +152,45 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
         }
         
         const videos = allVideos;
+        
+        // 실제 서버에 저장된 비디오 개수 확인 (total_count와 비교)
+        if (cacheMeta?.total_count) {
+            console.log(`📊 서버 저장 상태: 로드된 비디오=${videos.length}개, search_cache.total_count=${cacheMeta.total_count}개`);
+            
+            // 실제 videos 테이블에 저장된 비디오 개수 확인 (keyword 필터링 없이)
+            try {
+                const { count: actualCount, error: countError } = await supabase
+                    .from('videos')
+                    .select('video_id', { count: 'exact', head: true })
+                    .contains('keyword', [keyword]);
+                
+                if (!countError && actualCount !== null) {
+                    console.log(`📊 실제 서버 저장 개수 확인: ${actualCount}개 (keyword="${keyword}")`);
+                    if (actualCount !== videos.length) {
+                        console.warn(`⚠️ 불일치: 실제 저장=${actualCount}개, 로드된 비디오=${videos.length}개`);
+                    }
+                    if (actualCount !== cacheMeta.total_count) {
+                        console.warn(`⚠️ total_count 불일치: 실제 저장=${actualCount}개, total_count=${cacheMeta.total_count}개`);
+                    }
+                } else if (countError) {
+                    console.warn(`⚠️ 실제 저장 개수 확인 실패:`, countError);
+                }
+            } catch (err) {
+                console.warn(`⚠️ 실제 저장 개수 확인 중 오류:`, err);
+            }
+            
+            if (videos.length < cacheMeta.total_count) {
+                console.warn(`⚠️ 불일치 감지: 로드된 비디오(${videos.length}개) < total_count(${cacheMeta.total_count}개)`);
+                console.warn(`   가능한 원인:`);
+                console.warn(`   1. keyword 필터링 문제 (일부 비디오의 keyword 배열에 해당 키워드가 없음)`);
+                console.warn(`   2. RLS 정책으로 인한 접근 제한`);
+                console.warn(`   3. 실제로는 ${videos.length}개만 저장되어 있음`);
+            } else if (videos.length === cacheMeta.total_count) {
+                console.log(`✅ 일치: 로드된 비디오(${videos.length}개) = total_count(${cacheMeta.total_count}개)`);
+            } else {
+                console.warn(`⚠️ 예상치 못한 상황: 로드된 비디오(${videos.length}개) > total_count(${cacheMeta.total_count}개)`);
+            }
+        }
 
         if (videosError) {
             console.error('❌ Supabase 비디오 로드 오류:', videosError);
@@ -345,6 +385,8 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
         // 기존 total_count와 비교해서 더 큰 값 사용 (total_count가 줄어들지 않도록)
         const totalCount = Math.max(currentCount, existingTotalCount);
         
+        console.log(`💾 Supabase 저장 시작: ${currentCount}개 비디오 (기존 total_count: ${existingTotalCount}, 새 total_count: ${totalCount})`);
+        
         
         const { error: cacheError } = await supabase
             .from('search_cache')
@@ -428,6 +470,12 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
             const existingKeywords = existingKeywordMap.get(v.id) || [];
             const mergedKeywords = Array.from(new Set([...existingKeywords, ...newKeywordArray]));
             
+            // 중복 키워드가 추가된 경우 로그 (디버깅용)
+            if (existingKeywords.length > 0 && mergedKeywords.length > existingKeywords.length) {
+                // 조용히 처리 (필요시 주석 해제)
+                // console.log(`📝 비디오 ${v.id}: 키워드 추가 (${existingKeywords.length}개 → ${mergedKeywords.length}개)`);
+            }
+            
             videoRecordsMap.set(v.id, {
                 video_id: v.id,
                 keyword: mergedKeywords, // 기존 키워드와 새로운 키워드 병합 (중복 제거)
@@ -447,6 +495,15 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
         
         // Map에서 배열로 변환 (중복 제거됨)
         const videoRecords = Array.from(videoRecordsMap.values());
+        
+        // 중복 제거 확인 로그
+        const inputCount = videos.length;
+        const uniqueCount = videoRecords.length;
+        if (inputCount !== uniqueCount) {
+            console.log(`🔄 중복 제거: ${inputCount}개 입력 → ${uniqueCount}개 고유 비디오 (${inputCount - uniqueCount}개 중복 제거됨)`);
+        } else {
+            console.log(`✅ 중복 없음: ${uniqueCount}개 고유 비디오`);
+        }
 
         // Upsert in batches of 1000 (handle duplicate video_id gracefully)
         for (let i = 0; i < videoRecords.length; i += 1000) {
@@ -491,8 +548,28 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
                     console.error(`❌ 비디오 저장 실패 (batch ${i / 1000 + 1}):`, upsertError);
                 }
             } else {
+                // Upsert 성공: 기존 레코드는 업데이트, 새 레코드는 삽입
+                console.log(`✅ 비디오 저장 완료 (batch ${i / 1000 + 1}): ${batch.length}개 (upsert: 기존 레코드 업데이트 또는 새 레코드 삽입)`);
             }
         }
+        
+        // 저장 후 실제 저장된 비디오 개수 확인
+        const { count: actualSavedCount } = await supabase
+            .from('videos')
+            .select('video_id', { count: 'exact', head: true })
+            .in('video_id', existingVideoIds);
+        
+        // 키워드별 저장된 비디오 개수 확인
+        const { count: keywordVideoCount } = await supabase
+            .from('videos')
+            .select('video_id', { count: 'exact', head: true })
+            .contains('keyword', [keyword]);
+        
+        console.log(`📊 Supabase 저장 완료:`);
+        console.log(`   - 저장 시도: ${currentCount}개`);
+        console.log(`   - 전체 videos 테이블: ${actualSavedCount || 0}개`);
+        console.log(`   - 키워드 "${keyword}" 관련: ${keywordVideoCount || 0}개`);
+        console.log(`   - search_cache total_count: ${totalCount}개`);
 
     } catch (error) {
         console.error('❌ Supabase 캐시 저장 실패:', error);
@@ -745,26 +822,14 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
             }
         }
         
-        // 6. 2회 시도 후에도 NULL인 비디오 삭제
+        // 6. 비디오 삭제 로직 제거: 비디오는 계속 유지됨
+        // 2회 시도 후에도 NULL인 비디오는 삭제하지 않고 유지
         let deletedCount = 0;
         if (skippedVideoIds.size > 0) {
-            const skippedArray = Array.from(skippedVideoIds);
-            
-            // 배치로 삭제 (한 번에 너무 많이 삭제하지 않도록)
-            const deleteChunks = chunk(skippedArray, 50);
-            for (let i = 0; i < deleteChunks.length; i++) {
-                const chunk = deleteChunks[i];
-                const { error: deleteError } = await supabase
-                    .from('videos')
-                    .delete()
-                    .in('video_id', chunk);
-                
-                if (deleteError) {
-                    console.error(`❌ 비디오 삭제 실패 (chunk ${i + 1}):`, deleteError);
-                } else {
-                    deletedCount += chunk.length;
-                }
-            }
+            console.log(`ℹ️ NULL 데이터 업데이트 실패한 비디오 ${skippedVideoIds.size}개 유지 (삭제하지 않음)`);
+            // 비디오 삭제 로직 제거됨 - 비디오는 계속 유지
+            // const skippedArray = Array.from(skippedVideoIds);
+            // 배치로 삭제 로직 제거
         }
         
         return { updated: updatedCount, deleted: deletedCount, skipped: skippedVideoIds.size };
