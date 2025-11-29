@@ -234,24 +234,6 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
                 throw new Error("quotaExceeded");
             }
             
-            // Bloom filter check: 첫 페이지의 모든 videoId가 excludeSet(서버 저장된 비디오)에 있는지 확인
-            // recentVideoIds는 참고용이므로 excludeSet에만 의존
-            if (attempts === 1 && searchData.items && searchData.items.length > 0) {
-                const firstPageVideoIds = searchData.items
-                    .map(item => item.id?.videoId)
-                    .filter(Boolean);
-                
-                // 모든 videoId가 excludeSet(서버에 저장된 비디오)에 있으면 두 번째 페이지 요청 안 함
-                const allInExcludeSet = firstPageVideoIds.length > 0 && 
-                    firstPageVideoIds.every(id => excludeSet.has(id));
-                
-                if (allInExcludeSet) {
-                    console.log(`✅ Bloom filter 효과: 첫 페이지 50개 videoId 모두 서버에 저장됨 → 두 번째 페이지 요청 생략`);
-                    // 첫 페이지는 모두 중복이므로 추가할 새 비디오 없음
-                    break; // 두 번째 페이지 요청 안 함
-                }
-            }
-            
             // Early-stop: 현재 페이지 전체를 확인한 후, 중복이 발견되면 다음 페이지 요청 중단
             // YouTube search results are sorted by recency, so once we hit a duplicate in current page,
             // everything in next pages is guaranteed to be older (unnecessary)
