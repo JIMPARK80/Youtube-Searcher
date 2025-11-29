@@ -206,16 +206,29 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
         const excludeSet = new Set(excludeVideoIds);
         
         // 초기 수집 모드 판단: 서버에 저장된 비디오가 적을 때 (100개 미만)는 초기 캐시 구축 모드
-        // 초기 수집 모드에서는 중복 여부와 상관없이 200개까지 모두 수집
+        // 초기 수집 모드: 중복 제외하고 100개까지 수집
+        // API 절감 모드 (100개 이상): 첫 번째 비디오가 중복이면 즉시 중단
         const INITIAL_FETCH_THRESHOLD = 100; // 100개 미만이면 초기 수집 모드
         const isInitialFetch = excludeVideoIds.length < INITIAL_FETCH_THRESHOLD;
+        
+        // 초기 수집 모드일 때는 100개까지만 수집, 그 외에는 요청한 maxResults 사용
+        const INITIAL_FETCH_TARGET = 100;
+        const effectiveMaxResults = isInitialFetch 
+            ? Math.min(maxResults, INITIAL_FETCH_TARGET - excludeVideoIds.length)
+            : maxResults;
         
         // ① Step 1: Search for videos (동적 최대 개수, 기존 ID 제외)
         let searchItems = [];
         let nextPageToken = null;
-        const MAX_RESULTS = maxResults; // 동적으로 설정된 최대 결과 수
+        const MAX_RESULTS = Math.max(0, effectiveMaxResults); // 동적으로 설정된 최대 결과 수 (0 이상)
         let attempts = 0;
         const MAX_ATTEMPTS = 10; // 최대 10페이지까지 시도
+        
+        // 이미 목표 개수에 도달했으면 조기 종료
+        if (MAX_RESULTS <= 0) {
+            console.log(`⏹️ 추가 수집 불필요: 이미 목표 개수 도달 (현재: ${excludeVideoIds.length}개, 목표: ${isInitialFetch ? INITIAL_FETCH_TARGET : maxResults}개)`);
+            return { items: [], nextPageToken: null };
+        }
         
         // Load recent video IDs cache (Bloom filter-like)
         const recentVideoIds = loadRecentVideoIds();
@@ -240,8 +253,8 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
             }
             
             // Early-stop: 초기 수집 모드가 아닐 때만 첫 번째 비디오 기준으로 판단
-            // 초기 수집 모드: 중복 여부와 상관없이 200개까지 모두 수집 (초기 캐시 구축)
-            // 이후 검색: 첫 번째 비디오가 중복이면 즉시 중단 (API 호출 최소화)
+            // 초기 수집 모드 (100개 미만): 중복 제외하고 100개까지 수집
+            // API 절감 모드 (100개 이상): 첫 번째 비디오가 중복이면 즉시 중단 (API 호출 최소화)
             if (!isInitialFetch) {
                 const firstItem = searchData.items?.[0];
                 const firstVideoId = firstItem?.id?.videoId;
@@ -252,9 +265,9 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
                     break;
                 }
             } else {
-                // 초기 수집 모드: 중복 여부와 상관없이 계속 수집
+                // 초기 수집 모드: 중복 제외하고 100개까지 수집
                 if (attempts === 1) {
-                    console.log(`🔵 초기 수집 모드: 서버에 ${excludeVideoIds.length}개 저장됨 → 중복 여부와 상관없이 ${MAX_RESULTS}개까지 모두 수집`);
+                    console.log(`🔵 초기 수집 모드: 서버에 ${excludeVideoIds.length}개 저장됨 → 중복 제외하고 ${INITIAL_FETCH_TARGET}개까지 수집 (목표: ${MAX_RESULTS}개 추가)`);
                 }
             }
             
