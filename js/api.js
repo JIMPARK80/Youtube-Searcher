@@ -256,22 +256,25 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
                 }
             }
             
-            // Early-stop: 이미 본 videoId가 나타나면 즉시 중단
-            // YouTube search results are sorted by recency, so once we hit a duplicate,
-            // everything after it is guaranteed to be older (unnecessary)
+            // Early-stop: 현재 페이지 전체를 확인한 후, 중복이 발견되면 다음 페이지 요청 중단
+            // YouTube search results are sorted by recency, so once we hit a duplicate in current page,
+            // everything in next pages is guaranteed to be older (unnecessary)
             let foundDuplicate = false;
             const newItems = [];
             
+            // 현재 페이지 전체를 확인하여 모든 새 비디오 수집
             for (const item of (searchData.items || [])) {
                 const videoId = item.id?.videoId;
                 if (!videoId) continue;
                 
-                // If we encounter a duplicate, stop immediately
-                // This prevents unnecessary page 2+ fetches
+                // 중복 발견 시 플래그만 설정 (현재 페이지는 계속 처리)
                 if (excludeSet.has(videoId)) {
-                    foundDuplicate = true;
-                    console.log(`⏹️ Early-stop: 중복 videoId 발견 (${videoId}) → 다음 페이지 요청 중단`);
-                    break;
+                    if (!foundDuplicate) {
+                        foundDuplicate = true;
+                        console.log(`⏹️ Early-stop: 중복 videoId 발견 (${videoId}) → 현재 페이지는 계속 처리, 다음 페이지 요청 중단`);
+                    }
+                    // 중복이어도 현재 페이지는 계속 처리 (첫 페이지의 나머지 새 비디오 수집)
+                    continue;
                 }
                 
                 newItems.push(item);
@@ -280,9 +283,9 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
             searchItems.push(...newItems);
             nextPageToken = searchData.nextPageToken;
             
-            // Early-stop: 중복 발견 시 즉시 종료
+            // Early-stop: 중복 발견 시 다음 페이지 요청 중단 (현재 페이지는 이미 처리됨)
             if (foundDuplicate) {
-                console.log(`✅ Early-stop 적용: ${newItems.length}개 새 비디오 추가 후 중단 (불필요한 페이지 요청 방지)`);
+                console.log(`✅ Early-stop 적용: ${newItems.length}개 새 비디오 추가 후 다음 페이지 요청 중단 (불필요한 페이지 요청 방지)`);
                 break;
             }
             
