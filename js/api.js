@@ -190,11 +190,13 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
         
         // 필요한 수만큼만 제한
         searchItems = searchItems.slice(0, MAX_RESULTS);
+        console.log(`🔍 YouTube API 검색: ${searchItems.length}개 비디오 ID 발견 (요청: ${MAX_RESULTS}개, 시도: ${attempts}페이지)`);
         
         // ② Step 2: Get detailed video information (50개씩 배치, throttle 적용)
         const videoIds = searchItems.map(item => item.id.videoId).filter(Boolean);
         let videoDetails = [];
         const videoIdChunks = chunk(videoIds, 50);
+        console.log(`📥 상세 정보 조회: ${videoIds.length}개 비디오 (${videoIdChunks.length}개 배치)`);
         for (let i = 0; i < videoIdChunks.length; i++) {
             // Throttle: 배치 사이 딜레이
             if (i > 0) {
@@ -207,6 +209,7 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
             const d = await r.json();
             videoDetails.push(...(d.items || []));
         }
+        console.log(`✅ 상세 정보 조회 완료: ${videoDetails.length}개 비디오`);
         // ③ Step 3: Get channel information (50개씩 배치, throttle 적용)
         const channelIds = [...new Set(videoDetails.map(v => v.snippet.channelId))];
         let channelsMap = {};

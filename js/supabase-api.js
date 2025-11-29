@@ -108,10 +108,7 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
             }
             
             console.log(`📊 쿼리 결과: ${videos?.length || 0}개 비디오 발견 (offset: ${from})`);
-            if (videos && videos.length > 0) {
-                console.log(`   ✅ 첫 번째 비디오: ${videos[0].title || 'N/A'}`);
-                console.log(`   ✅ 첫 번째 비디오 keyword:`, JSON.stringify(videos[0].keyword) || 'N/A');
-            } else if (from === 0) {
+            if (videos && videos.length === 0 && from === 0) {
                 // 0개 결과일 때 디버깅: 키워드 없이 전체 조회 시도
                 console.warn(`⚠️ 키워드 "${keyword}"로 조회 결과 0개`);
                 console.warn(`   테스트: 키워드 없이 전체 비디오 개수 확인 중...`);
@@ -126,11 +123,6 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
                     console.error(`   RLS 정책 문제일 수 있습니다.`);
                 } else if (testVideos && testVideos.length > 0) {
                     console.log(`   ✅ 테스트 결과: 전체 ${testVideos.length}개 비디오 발견`);
-                    console.log(`   첫 번째 비디오:`, {
-                        video_id: testVideos[0].video_id,
-                        title: testVideos[0].title,
-                        keyword: JSON.stringify(testVideos[0].keyword)
-                    });
                     console.warn(`   ⚠️ 키워드 매칭 문제일 수 있습니다.`);
                     console.warn(`   검색 키워드: "${keyword}"`);
                     console.warn(`   저장된 키워드 예시: ${JSON.stringify(testVideos[0].keyword)}`);

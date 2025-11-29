@@ -465,7 +465,7 @@ export async function search(shouldReload = false) {
                 }
                 
                 // Supabase에도 부족하면 기존 ID 제외하고 필요한 수만 추가로 가져오기
-                const neededCount = targetCount - localCount;
+                const neededCount = targetCount === Infinity ? MAX_RESULTS_LIMIT - localCount : targetCount - localCount;
                 debugLog(`📈 Supabase에도 부족 → 기존 ID 제외하고 ${neededCount}개 추가 필요`);
                 
                 // 기존 캐시의 비디오 ID 추출
@@ -629,7 +629,7 @@ export async function search(shouldReload = false) {
             
             // 캐시가 선택한 수보다 부족하면 기존 ID 제외하고 필요한 수만 추가로 가져오기
             if (count < targetCount) {
-                const neededCount = targetCount - count;
+                const neededCount = targetCount === Infinity ? MAX_RESULTS_LIMIT - count : targetCount - count;
                 debugLog(`📈 캐시 ${count}개 < 요청 ${targetCount}개 → 기존 ID 제외하고 ${neededCount}개 추가 필요`);
                 
                 // 기존 캐시의 비디오 ID 추출
@@ -693,7 +693,7 @@ export async function search(shouldReload = false) {
         
         // 캐시가 선택한 수보다 부족한 경우만 API 호출
         if (count > 0 && count < targetCount) {
-            const neededCount = targetCount - count;
+            const neededCount = targetCount === Infinity ? MAX_RESULTS_LIMIT - count : targetCount - count;
             debugLog(`📈 만료된 캐시 ${count}개 < 요청 ${targetCount}개 → 기존 ID 제외하고 ${neededCount}개 추가 필요`);
             
             // 기존 캐시의 비디오 ID 추출
@@ -826,11 +826,17 @@ async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVid
     });
     
     try {
-        debugLog(`🔍 기존 ${excludeVideoIds.length}개 ID 제외하고 ${neededCount}개 추가 검색`);
+        // Infinity나 잘못된 값 방지
+        const safeNeededCount = neededCount === Infinity || neededCount <= 0 || !isFinite(neededCount) 
+            ? MAX_RESULTS_LIMIT 
+            : Math.min(neededCount, MAX_RESULTS_LIMIT);
+        
+        console.log(`🔍 추가 비디오 검색 시도: ${safeNeededCount}개 요청 (제외: ${excludeVideoIds.length}개, 원래 요청: ${neededCount})`);
+        debugLog(`🔍 기존 ${excludeVideoIds.length}개 ID 제외하고 ${safeNeededCount}개 추가 검색`);
         
         // 기존 ID 제외하고 필요한 수만 검색
         const result = await Promise.race([
-            searchYouTubeAPI(query, apiKeyValue, neededCount, excludeVideoIds),
+            searchYouTubeAPI(query, apiKeyValue, safeNeededCount, excludeVideoIds),
             timeoutPromise
         ]).catch(error => {
             // API 할당량 초과 시 기존 캐시만 사용
@@ -1104,6 +1110,7 @@ async function performFullGoogleSearch(query, apiKeyValue) {
     try {
         // 최대 200개로 제한
         const targetCount = 200;
+        console.log(`🔍 YouTube API 검색 시작: ${targetCount}개 요청`);
         debugLog(`🌐 Google API 전체 검색 (최대 ${targetCount}개)`);
         
         // 타임아웃과 함께 실행
@@ -1119,7 +1126,9 @@ async function performFullGoogleSearch(query, apiKeyValue) {
                 // 캐시에서 최대 데이터 가져오기 시도 (만료 여부 무시)
                 const cacheData = await loadFromSupabase(query, true); // ignoreExpiry = true
                 if (cacheData && cacheData.videos && cacheData.videos.length > 0) {
+                    console.log(`📦 캐시에서 복원: ${cacheData.videos.length}개 비디오 (API 할당량 초과로 캐시 사용)`);
                     restoreFromCache(cacheData);
+                    console.log(`📊 최종 표시: ${allVideos.length}개 비디오`);
                     
                     // 할당량 초과 시에는 제한 없이 모든 데이터 사용
                     // targetCount 제한을 적용하지 않음
@@ -1143,15 +1152,16 @@ async function performFullGoogleSearch(query, apiKeyValue) {
             }
             throw error;
         });
-        debugLog(`🎯 fetch 완료: ${result.videos.length}개`);
+        console.log(`📥 API 호출 결과: ${result.videos.length}개 비디오 가져옴 (요청: ${targetCount}개)`);
         allVideos = result.videos;
         allChannelMap = result.channels;
         
         // 최대 200개로 제한 (API가 더 많이 반환할 수 있으므로)
         if (allVideos.length > targetCount) {
-            debugLog(`✂️ 결과 ${allVideos.length}개 → ${targetCount}개로 제한`);
+            console.log(`✂️ 결과 ${allVideos.length}개 → ${targetCount}개로 제한`);
             allVideos = allVideos.slice(0, targetCount);
         }
+        console.log(`📊 최종 저장/표시: ${allVideos.length}개 비디오`);
         
         // Enrich with velocity data
         allItems = allVideos.map(video => {
@@ -1180,7 +1190,6 @@ async function performFullGoogleSearch(query, apiKeyValue) {
         currentVelocityMetric = velocityMetricSelect?.value || 'day';
         
         // allItems 정렬 (일일 조회수 기준)
-        console.log(`🔀 정렬 시작: ${allItems.length}개 항목, 정렬 옵션: ${sortValue}, 표시 단위: ${currentVelocityMetric}`);
         if (sortValue === 'asc') {
             allItems.sort((a, b) => {
                 const valA = getVelocityValue(a, currentVelocityMetric);
@@ -1192,17 +1201,7 @@ async function performFullGoogleSearch(query, apiKeyValue) {
             allItems.sort((a, b) => {
                 const valA = getVelocityValue(a, currentVelocityMetric);
                 const valB = getVelocityValue(b, currentVelocityMetric);
-                const result = valB - valA; // 높은 순
-                return result;
-            });
-        }
-        
-        // 정렬 결과 확인 (첫 5개만 로그)
-        if (allItems.length > 0) {
-            console.log('🔀 정렬 결과 (상위 5개):');
-            allItems.slice(0, 5).forEach((item, idx) => {
-                const vpd = getVelocityValue(item, currentVelocityMetric);
-                console.log(`  ${idx + 1}. VPD: ${vpd.toFixed(1)}/day - ${item.raw?.snippet?.title?.substring(0, 30)}...`);
+                return valB - valA; // 높은 순
             });
         }
 
@@ -1550,7 +1549,6 @@ export function renderPage(page, skipSort = false) {
     
     // skipSort가 true이면 정렬 건너뛰기 (이미 정렬된 경우)
     if (!skipSort && allItems.length > 0) {
-        console.log(`🔀 renderPage에서 정렬: ${allItems.length}개 항목, 정렬 옵션: ${sortValue}`);
         // 전체 allItems를 먼저 정렬 (모든 페이지의 데이터가 올바르게 정렬되도록)
         if (sortValue === 'asc') {
             allItems.sort((a, b) => {
@@ -2142,6 +2140,8 @@ function restoreFromCache(firebaseData) {
     // loadFromSupabase가 반환하는 items 구조를 직접 사용 (raw와 subs 포함)
     if (firebaseData.items && firebaseData.items.length > 0 && firebaseData.items[0].raw) {
         // Supabase에서 로드한 데이터 (items에 raw 필드 포함)
+        const cacheVideoCount = firebaseData.items.length;
+        console.log(`📦 캐시 복원: ${cacheVideoCount}개 비디오 (Supabase에서 로드)`);
         allVideos = firebaseData.items.map(item => item.raw).filter(Boolean);
         allChannelMap = firebaseData.channels || {};
         allItems = firebaseData.items.map(item => {
@@ -2152,10 +2152,6 @@ function restoreFromCache(firebaseData) {
             
             // 구독자 수: item.subs가 있으면 우선 사용 (Supabase에서 로드한 값)
             const subs = item.subs !== undefined && item.subs !== null ? Number(item.subs) : Number(channel?.statistics?.subscriberCount ?? 0);
-            
-            // 디버그: 첫 번째 항목만 로그
-            if (item.id === firebaseData.items[0]?.id) {
-            }
             
             return {
                 raw: video,
@@ -2248,6 +2244,7 @@ function restoreFromCache(firebaseData) {
                 };
             });
         }
+        console.log(`📦 로컬 캐시 복원: ${allVideos.length}개 비디오, ${allItems.length}개 items`);
         
         // 캐시 복원 후 정렬 적용 (기본값: 높은 순)
         const sortSelect = document.getElementById('sortVpdSelect');
