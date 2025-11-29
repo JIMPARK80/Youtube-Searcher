@@ -494,9 +494,6 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
             }
         }
 
-        // Auto-track video IDs
-        await trackVideoIdsForViewHistory(videos);
-
     } catch (error) {
         console.error('❌ Supabase 캐시 저장 실패:', error);
     }
@@ -775,67 +772,6 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
     } catch (error) {
         console.error('❌ NULL 데이터 업데이트 실패:', error);
         return { updated: 0, deleted: 0, skipped: 0, error };
-    }
-}
-
-// ============================================
-// Video ID 자동 추적
-// ============================================
-
-export async function trackVideoIdsForViewHistory(videos) {
-    try {
-        // video.id는 이미 문자열 (videos.list 응답)
-        // video.id.videoId는 search.list 응답에서만 사용
-        const ids = Array.from(new Set(
-            (videos || [])
-                .map(video => {
-                    // videos.list 응답: video.id는 직접 문자열
-                    // search.list 응답: video.id.videoId
-                    const id = video?.id?.videoId || video?.id;
-                    if (!id) {
-                        console.warn('⚠️ videoId 추출 실패:', video);
-                        return null;
-                    }
-                    return id;
-                })
-                .filter(Boolean)
-        ));
-        
-        if (!ids.length) {
-            console.warn('⚠️ trackVideoIdsForViewHistory: 추출된 videoId가 없습니다');
-            return;
-        }
-        
-
-        // Get current config
-        const { data: config } = await supabase
-            .from('view_tracking_config')
-            .select('id, video_ids')
-            .limit(1)
-            .single();
-
-        const existing = config?.video_ids || [];
-        const newIds = ids.filter(id => !existing.includes(id));
-
-        if (!newIds.length) return;
-
-        // Update config
-        const merged = Array.from(new Set([...existing, ...newIds]));
-        const payload = {
-            video_ids: merged,
-            updated_at: new Date().toISOString()
-        };
-        if (config?.id) {
-            payload.id = config.id;
-        }
-        await supabase
-            .from('view_tracking_config')
-            .upsert(payload, {
-                onConflict: 'id'
-            });
-
-    } catch (error) {
-        console.warn('⚠️ viewTracking videoId 업데이트 실패:', error);
     }
 }
 

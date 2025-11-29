@@ -7,7 +7,6 @@ import { initializeUI } from './ui.js';
 import { initializeAuth } from './auth.js';
 import { initializeI18n } from './i18n.js';
 import { supabase } from './supabase-config.js';
-import { initializeViewTrackingFallback } from './view-history.js';
 
 // ============================================
 // 전역 변수 초기화
@@ -92,15 +91,6 @@ async function initializeApp() {
             console.warn('⚠️ API 키 초기화 실패:', error.message);
         }
         
-        // Initialize view tracking fallback - 독립적으로 실행 (실패해도 계속 진행)
-        try {
-            await Promise.race([
-                initializeViewTrackingFallback(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('View tracking 초기화 타임아웃')), 10000))
-            ]);
-        } catch (error) {
-            console.warn('⚠️ View tracking 초기화 실패:', error.message);
-        }
         
         // Initialize authentication system - 독립적으로 실행 (실패해도 계속 진행)
         try {
