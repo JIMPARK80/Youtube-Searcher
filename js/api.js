@@ -143,6 +143,64 @@ export function mergeCacheWithMore(cache, newVideos, newChannelsMap) {
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const API_THROTTLE_MS = 200; // 요청 사이 200ms 딜레이
 
+// Recent videoId cache (Bloom filter-like functionality using Set)
+// 최근 본 videoId를 저장하여 초고속 중복 감지
+const RECENT_VIDEO_IDS_KEY = 'youtube_searcher_recent_video_ids';
+const MAX_RECENT_VIDEO_IDS = 10000; // 최대 10,000개 저장
+
+/**
+ * Load recent video IDs from localStorage
+ * @returns {Set<string>} Set of recent video IDs
+ */
+function loadRecentVideoIds() {
+    try {
+        const stored = localStorage.getItem(RECENT_VIDEO_IDS_KEY);
+        if (stored) {
+            const ids = JSON.parse(stored);
+            return new Set(ids);
+        }
+    } catch (error) {
+        console.warn('⚠️ 최근 videoId 로드 실패:', error);
+    }
+    return new Set();
+}
+
+/**
+ * Save recent video IDs to localStorage
+ * @param {Set<string>} videoIds - Set of video IDs to save
+ */
+function saveRecentVideoIds(videoIds) {
+    try {
+        // Convert Set to Array and limit size
+        const idsArray = Array.from(videoIds).slice(-MAX_RECENT_VIDEO_IDS);
+        localStorage.setItem(RECENT_VIDEO_IDS_KEY, JSON.stringify(idsArray));
+    } catch (error) {
+        // localStorage 용량 초과 시 오래된 항목 제거
+        if (error.name === 'QuotaExceededError') {
+            try {
+                const idsArray = Array.from(videoIds).slice(-MAX_RECENT_VIDEO_IDS / 2);
+                localStorage.setItem(RECENT_VIDEO_IDS_KEY, JSON.stringify(idsArray));
+            } catch (retryError) {
+                console.warn('⚠️ 최근 videoId 저장 실패:', retryError);
+            }
+        } else {
+            console.warn('⚠️ 최근 videoId 저장 실패:', error);
+        }
+    }
+}
+
+/**
+ * Add video IDs to recent cache
+ * @param {string[]} videoIds - Array of video IDs to add
+ */
+function addToRecentVideoIds(videoIds) {
+    const recentSet = loadRecentVideoIds();
+    videoIds.forEach(id => {
+        if (id) recentSet.add(id);
+    });
+    saveRecentVideoIds(recentSet);
+}
+
 export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excludeVideoIds = []) {
     try {
         const excludeSet = new Set(excludeVideoIds);
@@ -153,6 +211,9 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
         const MAX_RESULTS = maxResults; // 동적으로 설정된 최대 결과 수
         let attempts = 0;
         const MAX_ATTEMPTS = 10; // 최대 10페이지까지 시도
+        
+        // Load recent video IDs cache (Bloom filter-like)
+        const recentVideoIds = loadRecentVideoIds();
         
         // 기존 ID를 제외하고 필요한 수만큼 가져올 때까지 반복
         while (searchItems.length < MAX_RESULTS && attempts < MAX_ATTEMPTS) {
@@ -171,6 +232,28 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
             if (searchData.error && searchData.error.code === 403) {
                 console.warn("⚠️ Google API 한도 초과");
                 throw new Error("quotaExceeded");
+            }
+            
+            // Bloom filter check: 첫 페이지의 모든 videoId가 최근 캐시에 있는지 확인
+            if (attempts === 1 && searchData.items && searchData.items.length > 0) {
+                const firstPageVideoIds = searchData.items
+                    .map(item => item.id?.videoId)
+                    .filter(Boolean);
+                
+                // 모든 videoId가 최근 캐시에 있으면 두 번째 페이지 요청 안 함
+                const allInCache = firstPageVideoIds.length > 0 && 
+                    firstPageVideoIds.every(id => recentVideoIds.has(id) || excludeSet.has(id));
+                
+                if (allInCache) {
+                    console.log(`✅ Bloom filter 효과: 첫 페이지 50개 videoId 모두 최근 캐시에 있음 → 두 번째 페이지 요청 생략`);
+                    // 첫 페이지에서 새로운 비디오만 추가
+                    const newItems = firstPageVideoIds
+                        .filter(id => !excludeSet.has(id))
+                        .map(id => searchData.items.find(item => item.id?.videoId === id))
+                        .filter(Boolean);
+                    searchItems.push(...newItems);
+                    break; // 두 번째 페이지 요청 안 함
+                }
             }
             
             // Early-stop: 이미 본 videoId가 나타나면 즉시 중단
@@ -247,6 +330,12 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
             const d = await r.json();
             (d.items || []).forEach(ch => { channelsMap[ch.id] = ch; });
         }
+        // Add fetched video IDs to recent cache (Bloom filter update)
+        const fetchedVideoIds = videoDetails.map(v => v.id).filter(Boolean);
+        if (fetchedVideoIds.length > 0) {
+            addToRecentVideoIds(fetchedVideoIds);
+        }
+        
         return {
             videos: videoDetails,
             channels: channelsMap,
