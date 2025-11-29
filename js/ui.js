@@ -106,6 +106,47 @@ export function parseDurationToSeconds(duration) {
     return hours * 3600 + minutes * 60 + seconds;
 }
 
+// Thumbnail cache to avoid repeated fetches
+const thumbnailCache = new Map();
+
+/**
+ * Auto-check YouTube thumbnail availability
+ * Tests each thumbnail size and returns the first working one
+ * @param {string} id - YouTube video ID
+ * @returns {Promise<string|null>} - First available thumbnail URL or null
+ */
+async function fetchThumbnail(id) {
+    if (!id) return null;
+    
+    // Check cache first
+    if (thumbnailCache.has(id)) {
+        return thumbnailCache.get(id);
+    }
+    
+    const urls = [
+        `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`,
+        `https://i.ytimg.com/vi/${id}/sddefault.jpg`,
+        `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+    ];
+    
+    for (const url of urls) {
+        try {
+            const res = await fetch(url);
+            if (res.ok) {
+                thumbnailCache.set(id, url);
+                return url;
+            }
+        } catch (error) {
+            // Continue to next URL
+            continue;
+        }
+    }
+    
+    // If all fail, cache null to avoid repeated attempts
+    thumbnailCache.set(id, null);
+    return null;
+}
+
 export function getPublishedAfterDate(period) {
     if (!period) return '';
     
@@ -396,7 +437,8 @@ export async function search(shouldReload = false) {
     
     // 선택한 최대 결과 수 확인
     const maxResults = getMaxResults();
-    const targetCount = maxResults === 'max' ? Infinity : maxResults;
+    // 'max'인 경우 MAX_RESULTS_LIMIT 사용 (Infinity 대신)
+    const targetCount = maxResults === 'max' ? MAX_RESULTS_LIMIT : maxResults;
     
     // 1️⃣ 서버(Supabase) 데이터 확인 (API 호출 여부 결정 기준)
     console.log(`📊 서버 데이터 확인 중 (API 호출 여부 결정 기준)...`);
@@ -454,6 +496,38 @@ export async function search(shouldReload = false) {
             }
         }
         
+        // 이미 MAX_RESULTS_LIMIT에 도달했으면 추가 검색 중단 (가장 먼저 확인)
+        if (supabaseCount >= MAX_RESULTS_LIMIT) {
+            console.log(`✅ 서버에 충분한 데이터 있음 (${supabaseCount}개 >= ${MAX_RESULTS_LIMIT}개) → API 호출 생략`);
+            debugLog(`✅ Supabase 캐시 충분 (${supabaseCount}개 >= ${MAX_RESULTS_LIMIT}개) → API 호출 생략`);
+            
+            restoreFromCache(supabaseData);
+            
+            // total_count 업데이트
+            currentTotalCount = Math.max(supabaseCount, supabaseTotal);
+            
+            // 로컬 캐시 업데이트 (서버 데이터로 동기화)
+            saveToLocalCache(query, supabaseData);
+            console.log(`💾 로컬 캐시 업데이트 완료 (서버 데이터로 동기화: ${supabaseCount}개)`);
+            
+            // 타이머 클리어
+            if (searchTimeoutTimer) {
+                clearTimeout(searchTimeoutTimer);
+                searchTimeoutTimer = null;
+            }
+            
+            renderPage();
+            lastUIUpdateTime = Date.now();
+            
+            // 백그라운드에서 NULL 데이터 자동 업데이트
+            if (apiKeyValue) {
+                updateMissingDataInBackground(apiKeyValue, 50, query).catch(err => {
+                    console.warn('⚠️ NULL 데이터 자동 업데이트 실패:', err);
+                });
+            }
+            return;
+        }
+        
         // 서버 데이터가 충분하면 서버 데이터 사용, API 호출 안 함
         if (supabaseCount >= targetCount || supabaseTotal >= targetCount) {
             console.log(`✅ 서버에 충분한 데이터 있음 (${supabaseCount}개 >= ${targetCount}개) → API 호출 생략`);
@@ -489,19 +563,6 @@ export async function search(shouldReload = false) {
         // 서버 데이터가 부족하면 서버 데이터를 기반으로 추가 검색
         console.log(`📊 서버 데이터 부족 (${supabaseCount}개 < ${targetCount}개) → 추가 검색 필요`);
         
-        // 이미 MAX_RESULTS_LIMIT에 도달했으면 추가 검색 중단
-        if (supabaseCount >= MAX_RESULTS_LIMIT) {
-            console.log(`⏹️ 추가 검색 중단: 이미 ${supabaseCount}개 저장됨 (최대 제한: ${MAX_RESULTS_LIMIT}개)`);
-            debugLog(`⏹️ 추가 검색 중단: supabaseCount ${supabaseCount} >= ${MAX_RESULTS_LIMIT}`);
-            restoreFromCache(supabaseData);
-            // 로컬 캐시 업데이트 (서버 데이터로 동기화)
-            saveToLocalCache(query, supabaseData);
-            console.log(`💾 로컬 캐시 업데이트 완료 (서버 데이터로 동기화: ${supabaseCount}개)`);
-            renderPage();
-            lastUIUpdateTime = Date.now();
-            return;
-        }
-        
         // 서버 데이터 복원
         restoreFromCache(supabaseData);
         
@@ -511,7 +572,8 @@ export async function search(shouldReload = false) {
         
         // 기존 ID 제외하고 필요한 수만 추가로 가져오기
         const existingVideoIds = supabaseData.videos.map(v => v.id).filter(Boolean);
-        const neededCount = targetCount === Infinity ? MAX_RESULTS_LIMIT - supabaseCount : targetCount - supabaseCount;
+        // targetCount는 이미 MAX_RESULTS_LIMIT로 제한되어 있으므로 단순 계산
+        const neededCount = Math.min(targetCount - supabaseCount, MAX_RESULTS_LIMIT - supabaseCount);
         
         console.log(`🔍 추가 검색 필요: ${neededCount}개 (서버: ${supabaseCount}개, 목표: ${targetCount}개)`);
         debugLog(`📈 서버 데이터 부족 → 기존 ID 제외하고 ${neededCount}개 추가 필요`);
@@ -1490,21 +1552,25 @@ function createVideoCard(video, item, rank = null) {
     card.className = 'video-card';
     card.onclick = () => window.open(`https://www.youtube.com/watch?v=${video.id}`, '_blank');
     
-    // 썸네일 우선순위: maxres -> high -> default
+    // Thumbnail priority: maxres -> high -> default
+    const videoIdForThumbnail = video.id || video?.raw?.id || item?.raw?.id;
     const thumbnail = video.snippet.thumbnails?.maxres?.url || 
                      video.snippet.thumbnails?.high?.url || 
                      video.snippet.thumbnails?.default?.url;
     
-    // Fallback 썸네일 URL 목록 (로드 실패 시 순차적으로 시도)
-    const videoIdForThumbnail = video.id || video?.raw?.id || item?.raw?.id;
+    // Fallback thumbnail URLs (sequential fallback on load failure)
+    // If maxresdefault.jpg fails, try: hqdefault.jpg -> mqdefault.jpg -> sddefault.jpg
     const fallbackThumbnails = [
-        thumbnail, // 첫 번째는 원본 썸네일
+        thumbnail, // First: original thumbnail
         video.snippet.thumbnails?.high?.url,
         video.snippet.thumbnails?.default?.url,
-        `https://img.youtube.com/vi/${videoIdForThumbnail}/hqdefault.jpg`,
+        `https://i.ytimg.com/vi/${videoIdForThumbnail}/hqdefault.jpg`, // High quality fallback
+        `https://i.ytimg.com/vi/${videoIdForThumbnail}/mqdefault.jpg`, // Medium quality fallback
+        `https://i.ytimg.com/vi/${videoIdForThumbnail}/sddefault.jpg`, // Standard definition fallback
+        `https://img.youtube.com/vi/${videoIdForThumbnail}/hqdefault.jpg`, // Alternative domain
         `https://img.youtube.com/vi/${videoIdForThumbnail}/mqdefault.jpg`,
         `https://img.youtube.com/vi/${videoIdForThumbnail}/default.jpg`
-    ].filter(Boolean); // null/undefined 제거
+    ].filter((url, index, self) => url && self.indexOf(url) === index); // Remove null/undefined and duplicates
     
     // 업로드 경과일수 계산
     const uploadedDays = ageDays(video.snippet.publishedAt);
@@ -1553,25 +1619,33 @@ function createVideoCard(video, item, rank = null) {
     `;
 
     
-    // 이미지 로드 실패 시 fallback 처리
+    // Image load failure fallback handling with auto-check
     const imgEl = card.querySelector('img');
     if (imgEl && fallbackThumbnails.length > 1) {
-        imgEl.addEventListener('error', function() {
+        imgEl.addEventListener('error', async function() {
             const currentIndex = parseInt(this.dataset.fallbackIndex || '0');
             const fallbacks = JSON.parse(this.dataset.fallbacks || '[]');
             
             if (currentIndex < fallbacks.length - 1) {
-                // 다음 fallback 시도
+                // Try next fallback URL
                 const nextIndex = currentIndex + 1;
                 this.dataset.fallbackIndex = nextIndex.toString();
                 this.src = fallbacks[nextIndex];
             } else {
-                // 모든 fallback 실패 시 기본 이미지 또는 투명 이미지
+                // All fallback URLs failed, try auto-check fetchThumbnail
+                const videoId = video.id || video?.raw?.id || item?.raw?.id;
+                if (videoId) {
+                    const workingThumbnail = await fetchThumbnail(videoId);
+                    if (workingThumbnail) {
+                        this.src = workingThumbnail;
+                        return; // Success, exit handler
+                    }
+                }
+                
+                // All attempts failed, hide image
                 this.style.display = 'none';
-                // 또는 기본 placeholder 사용
-                // this.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="320" height="180"%3E%3Crect fill="%23ddd" width="100%25" height="100%25"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E';
             }
-        }, { once: false }); // 여러 번 시도할 수 있도록 once: false
+        }, { once: false }); // Allow multiple attempts
     }
     
     return card;

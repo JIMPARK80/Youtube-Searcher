@@ -559,7 +559,7 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
             .select('video_id', { count: 'exact', head: true })
             .in('video_id', existingVideoIds);
         
-        // 키워드별 저장된 비디오 개수 확인
+        // 키워드별 저장된 비디오 개수 확인 (실제 저장된 개수)
         const { count: keywordVideoCount } = await supabase
             .from('videos')
             .select('video_id', { count: 'exact', head: true })
@@ -570,6 +570,22 @@ export async function saveToSupabase(query, videos, channels, items, dataSource 
         console.log(`   - 전체 videos 테이블: ${actualSavedCount || 0}개`);
         console.log(`   - 키워드 "${keyword}" 관련: ${keywordVideoCount || 0}개`);
         console.log(`   - search_cache total_count: ${totalCount}개`);
+        
+        // 실제 저장된 개수로 total_count 업데이트 (중복 제거 후 실제 개수 반영)
+        if (keywordVideoCount !== null && keywordVideoCount !== totalCount) {
+            console.log(`📊 total_count 조정: ${totalCount}개 → ${keywordVideoCount}개 (실제 저장된 개수)`);
+            const { error: updateError } = await supabase
+                .from('search_cache')
+                .update({ total_count: keywordVideoCount })
+                .eq('keyword', keyword);
+            
+            if (updateError) {
+                console.warn('⚠️ total_count 업데이트 실패:', updateError);
+            } else {
+                console.log(`✅ total_count 업데이트 완료: ${totalCount} → ${keywordVideoCount}`);
+                totalCount = keywordVideoCount;
+            }
+        }
 
     } catch (error) {
         console.error('❌ Supabase 캐시 저장 실패:', error);
@@ -825,6 +841,7 @@ export async function updateMissingData(apiKeyValue, limit = 100, maxAttempts = 
         // 6. 비디오 삭제 로직 제거: 비디오는 계속 유지됨
         // 2회 시도 후에도 NULL인 비디오는 삭제하지 않고 유지
         let deletedCount = 0;
+        
         if (skippedVideoIds.size > 0) {
             console.log(`ℹ️ NULL 데이터 업데이트 실패한 비디오 ${skippedVideoIds.size}개 유지 (삭제하지 않음)`);
             // 비디오 삭제 로직 제거됨 - 비디오는 계속 유지
