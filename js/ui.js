@@ -769,11 +769,16 @@ async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVid
                         console.log(`✅ total_count 업데이트 완료: ${supabaseData.meta.total} → ${currentVideoCount}`);
                         currentTotalCount = currentVideoCount;
                     }
+                } else if (supabaseData?.meta?.total) {
+                    currentTotalCount = supabaseData.meta.total;
                 }
             } catch (err) {
                 console.warn('⚠️ total_count 업데이트 중 오류:', err);
             }
             
+            // 기존 캐시 데이터로 UI 업데이트
+            console.log(`🎬 렌더링 시작: 기존 캐시 데이터 ${allVideos.length}개 비디오`);
+            renderPage();
             return;
         }
         

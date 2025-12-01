@@ -929,14 +929,14 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
     try {
         const excludeSet = new Set(excludeVideoIds);
         
-        // 초기 수집 모드 판단: 서버에 저장된 비디오가 적을 때 (100개 미만)는 초기 캐시 구축 모드
-        // 초기 수집 모드: 중복 제외하고 100개까지 수집
-        // API 절감 모드 (100개 이상): 첫 번째 비디오가 중복이면 즉시 중단
-        const INITIAL_FETCH_THRESHOLD = 100; // 100개 미만이면 초기 수집 모드
+        // 초기 수집 모드 판단: 서버에 저장된 비디오가 목표 개수(200개) 미만일 때는 초기 캐시 구축 모드
+        // 초기 수집 모드: 중복 제외하고 200개까지 수집
+        // API 절감 모드 (200개 이상): 첫 번째 비디오가 중복이면 즉시 중단
+        const INITIAL_FETCH_THRESHOLD = 200; // 200개 미만이면 초기 수집 모드
         const isInitialFetch = excludeVideoIds.length < INITIAL_FETCH_THRESHOLD;
         
-        // 초기 수집 모드일 때는 100개까지만 수집, 그 외에는 요청한 maxResults 사용
-        const INITIAL_FETCH_TARGET = 100;
+        // 초기 수집 모드일 때는 200개까지만 수집, 그 외에는 요청한 maxResults 사용
+        const INITIAL_FETCH_TARGET = 200;
         const effectiveMaxResults = isInitialFetch 
             ? Math.min(maxResults, INITIAL_FETCH_TARGET - excludeVideoIds.length)
             : maxResults;
