@@ -1717,6 +1717,10 @@ function createVideoCard(video, item, rank = null) {
         ? `<div class="rank-badge rank-${rank <= 3 ? rank : 'default'}">TOP ${rank}</div>`
         : '';
 
+    // 조회수와 좋아요 수를 숫자로 변환 (문자열일 수 있음)
+    const viewCount = Number(video.statistics?.viewCount || video.raw?.statistics?.viewCount || 0);
+    const likeCount = Number(video.statistics?.likeCount || video.raw?.statistics?.likeCount || 0);
+
     card.innerHTML = `
         <div class="thumbnail-container">
             ${rankBadge}
@@ -1730,8 +1734,8 @@ function createVideoCard(video, item, rank = null) {
                 <span class="channel-name">${video.snippet.channelTitle}</span>
             </div>
             <div class="stats">
-                <span class="stat-item">👁 ${formatNumber(video.statistics?.viewCount || 0)}</span>
-                <span class="stat-item">👍 ${formatNumber(video.statistics?.likeCount || 0)}</span>
+                <span class="stat-item">👁 ${formatNumber(viewCount)}</span>
+                <span class="stat-item">👍 ${formatNumber(likeCount)}</span>
                 <span class="stat-item">👥 ${formatNumber(subscriberCount || 0)}</span>
                 <span class="stat-item">📅 ${daysText}</span>
             </div>
