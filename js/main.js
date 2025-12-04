@@ -49,6 +49,17 @@ async function initializeApp() {
 
             window.addEventListener('unhandledrejection', (event) => {
                 const message = event.reason?.message || '';
+                const errorName = event.reason?.name || '';
+                
+                // Silently handle Supabase refresh token errors (non-critical)
+                if (message.includes('Invalid Refresh Token') || 
+                    message.includes('Refresh Token Not Found') ||
+                    errorName === 'AuthApiError' && message.includes('refresh')) {
+                    // Silently ignore - user can log in again if needed
+                    event.preventDefault();
+                    return;
+                }
+                
                 if (message.includes('MetaMask')) {
                     console.warn('⚠️ 외부 확장 프로그램(MetaMask) 오류 무시:', message);
                     event.preventDefault();

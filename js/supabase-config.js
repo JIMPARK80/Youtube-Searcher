@@ -11,7 +11,13 @@ const supabaseAnonKey = 'sb_publishable_Wbc0s5ih6StHz0dXBkgTQg_FZic39Wi';
 // Initialize Supabase client with error handling
 let supabase;
 try {
-    supabase = createClient(supabaseUrl, supabaseAnonKey);
+    supabase = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+            autoRefreshToken: true,
+            persistSession: true,
+            detectSessionInUrl: false
+        }
+    });
     
     // Make available globally
     window.supabase = supabase;

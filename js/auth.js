@@ -391,6 +391,17 @@ export function setupProfileEditModal() {
 
 export function setupAuthStateObserver() {
     supabase.auth.onAuthStateChange(async (event, session) => {
+        // Silently handle invalid refresh token errors
+        if (event === 'TOKEN_REFRESHED' && !session) {
+            // Invalid refresh token - silently sign out
+            try {
+                await supabase.auth.signOut();
+            } catch (e) {
+                // Ignore sign out errors
+            }
+            return;
+        }
+        
         const authSection = document.getElementById('authSection');
         const loginBtn = document.getElementById('loginBtn');
         const signupBtn = document.getElementById('signupBtn');

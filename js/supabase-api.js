@@ -50,11 +50,16 @@ export async function loadFromSupabase(query, ignoreExpiry = false) {
         // ignoreExpiry = true이고 cacheMeta가 없을 때도 videos 테이블에서 직접 조회
         // cacheMeta가 없으면 기본값 설정
 
-        const age = Date.now() - new Date(cacheMeta.updated_at).getTime();
-        const ageHours = age / (1000 * 60 * 60);
+        // cacheMeta가 있을 때만 age 계산
+        let age = 0;
+        let ageHours = 0;
+        if (cacheMeta?.updated_at) {
+            age = Date.now() - new Date(cacheMeta.updated_at).getTime();
+            ageHours = age / (1000 * 60 * 60);
+        }
 
         // Check cache version only (TTL 체크 제거 - 캐시는 계속 유지)
-        if (!ignoreExpiry) {
+        if (!ignoreExpiry && cacheMeta) {
             const CURRENT_VERSION = '1.32';
             if (cacheMeta.cache_version < CURRENT_VERSION) {
                 console.warn(`🔄 구버전 캐시 (v${cacheMeta.cache_version} → v${CURRENT_VERSION})`);

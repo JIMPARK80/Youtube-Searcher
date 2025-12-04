@@ -201,7 +201,7 @@ function addToRecentVideoIds(videoIds) {
     saveRecentVideoIds(recentSet);
 }
 
-export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excludeVideoIds = []) {
+export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excludeVideoIds = [], firstPageOnly = false) {
     try {
         const excludeSet = new Set(excludeVideoIds);
         
@@ -289,6 +289,12 @@ export async function searchYouTubeAPI(query, apiKeyValue, maxResults = 30, excl
             
             searchItems.push(...newItems);
             nextPageToken = searchData.nextPageToken;
+            
+            // 첫 페이지만 수집하는 경우 (50개만 먼저 저장)
+            if (firstPageOnly && attempts === 1) {
+                console.log(`📄 첫 페이지만 수집: ${searchItems.length}개 비디오 ID 발견 (즉시 저장 후 나머지는 백그라운드에서 수집)`);
+                break;
+            }
             
             // 첫 번째 비디오가 새 비디오면 중간에 중복이 있어도 다음 페이지 계속 검색
             // 필요한 수만큼 모았거나 더 이상 결과가 없으면 종료

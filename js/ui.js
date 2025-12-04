@@ -1051,12 +1051,12 @@ async function performFullGoogleSearch(query, apiKeyValue) {
     try {
         // 최대 200개로 제한
         const targetCount = MAX_RESULTS_LIMIT;
-        console.log(`🔍 YouTube API 검색 시작: ${targetCount}개 요청`);
-        debugLog(`🌐 Google API 전체 검색 (최대 ${targetCount}개)`);
+        console.log(`🔍 YouTube API 검색 시작: 첫 페이지(50개) 먼저 수집 후 저장`);
+        debugLog(`🌐 Google API 전체 검색 (첫 페이지 우선)`);
         
-        // 타임아웃과 함께 실행
-        const result = await Promise.race([
-            searchYouTubeAPI(query, apiKeyValue, targetCount),
+        // 첫 페이지(50개)만 먼저 수집
+        const firstPageResult = await Promise.race([
+            searchYouTubeAPI(query, apiKeyValue, 50, [], true), // firstPageOnly = true
             timeoutPromise
         ]).catch(async error => {
             // API 할당량 초과 시 캐시에서 최대 데이터 가져오기
@@ -1093,9 +1093,9 @@ async function performFullGoogleSearch(query, apiKeyValue) {
             }
             throw error;
         });
-        console.log(`📥 API 호출 결과: ${result.videos.length}개 비디오 가져옴 (요청: ${targetCount}개)`);
-        allVideos = result.videos;
-        allChannelMap = result.channels;
+        console.log(`📥 첫 페이지 API 호출 결과: ${firstPageResult.videos.length}개 비디오 가져옴`);
+        allVideos = firstPageResult.videos;
+        allChannelMap = firstPageResult.channels;
         
         // 최대 200개로 제한 (API가 더 많이 반환할 수 있으므로)
         if (allVideos.length > targetCount) {
@@ -1146,8 +1146,9 @@ async function performFullGoogleSearch(query, apiKeyValue) {
             });
         }
 
-        // Save to Supabase with nextPageToken (중복 체크 후 저장)
-        await saveToSupabase(query, allVideos, allChannelMap, allItems, 'google', result.nextPageToken)
+        // 첫 페이지(50개) 즉시 저장
+        console.log(`💾 첫 페이지(50개) 즉시 저장 시작`);
+        await saveToSupabase(query, allVideos, allChannelMap, allItems, 'google', firstPageResult.nextPageToken)
             .catch(err => console.warn('⚠️ Supabase 저장 실패:', err));
         
         // 서버 데이터 저장 후 로컬 캐시 동기화 (서버 데이터로 업데이트)
@@ -1161,14 +1162,21 @@ async function performFullGoogleSearch(query, apiKeyValue) {
             console.warn('⚠️ 로컬 캐시 동기화 실패:', syncError);
         }
         
+        // 이미 정렬했으므로 skipSort=true로 전달
+        renderPage(true);
+        lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
+        
+        // 백그라운드에서 나머지 페이지들을 점진적으로 수집 및 저장 (50개씩)
+        if (firstPageResult.nextPageToken && allVideos.length < targetCount) {
+            console.log(`🔄 백그라운드에서 나머지 페이지 수집 시작 (현재: ${allVideos.length}개, 목표: ${targetCount}개)`);
+            collectRemainingPagesInBackground(query, apiKeyValue, firstPageResult.nextPageToken, allVideos.length, targetCount)
+                .catch(err => console.warn('⚠️ 백그라운드 수집 실패:', err));
+        }
+        
         // 백그라운드에서 NULL 데이터 자동 업데이트 (검색 성능에 영향 없음, 현재 검색어 우선)
         updateMissingDataInBackground(apiKeyValue, 50, query).catch(err => {
             console.warn('⚠️ NULL 데이터 자동 업데이트 실패:', err);
         });
-        
-        // 이미 정렬했으므로 skipSort=true로 전달
-        renderPage(true);
-        lastUIUpdateTime = Date.now(); // UI 업데이트 시간 갱신
 
     } catch (googleError) {
         console.error('❌ YouTube API 오류:', googleError);
@@ -1186,6 +1194,89 @@ async function performFullGoogleSearch(query, apiKeyValue) {
         
         // 에러를 다시 throw하여 상위에서 처리
         throw googleError;
+    }
+}
+
+// 백그라운드에서 나머지 페이지들을 점진적으로 수집 및 저장 (50개씩)
+async function collectRemainingPagesInBackground(query, apiKeyValue, startPageToken, currentCount, targetCount) {
+    try {
+        // 기존 데이터에서 video ID 목록 가져오기
+        const existingData = await loadFromSupabase(query, true);
+        const excludeVideoIds = existingData?.videos?.map(v => v.id).filter(Boolean) || [];
+        let nextPageToken = startPageToken;
+        let totalCollected = currentCount;
+        
+        // 50개씩 추가 수집 (100, 150, 200까지)
+        while (totalCollected < targetCount && nextPageToken) {
+            // 다음 50개 수집
+            const result = await searchYouTubeAPI(query, apiKeyValue, 50, excludeVideoIds, true);
+            
+            if (!result || !result.videos || result.videos.length === 0) {
+                console.log(`⏹️ 백그라운드 수집 완료: 더 이상 새 비디오 없음 (현재: ${totalCollected}개)`);
+                break;
+            }
+            
+            // 기존 비디오와 병합
+            const existingVideoIds = new Set(excludeVideoIds);
+            const newVideos = result.videos.filter(v => !existingVideoIds.has(v.id));
+            
+            if (newVideos.length === 0) {
+                console.log(`⏹️ 백그라운드 수집 중단: 중복만 발견 (현재: ${totalCollected}개)`);
+                break;
+            }
+            
+            // 기존 데이터 로드
+            const existingData = await loadFromSupabase(query, true);
+            const existingVideos = existingData?.videos || [];
+            const existingChannels = existingData?.channels || {};
+            const existingItems = existingData?.items || [];
+            
+            // 새 비디오 추가
+            const mergedVideos = [...existingVideos, ...newVideos];
+            const mergedChannels = { ...existingChannels, ...result.channels };
+            
+            // items 생성
+            const newItems = newVideos.map(video => {
+                const channel = result.channels[video.snippet.channelId];
+                const vpd = viewVelocityPerDay(video);
+                const vclass = classifyVelocity(vpd);
+                const cband = channelSizeBand(channel);
+                const subs = Number(channel?.statistics?.subscriberCount ?? 0);
+                
+                return {
+                    id: video.id,
+                    vpd: vpd,
+                    vclass: vclass,
+                    cband: cband,
+                    subs: subs,
+                    raw: video
+                };
+            });
+            
+            const mergedItems = [...existingItems, ...newItems];
+            
+            // 점진적 저장 (50개씩)
+            totalCollected = mergedVideos.length;
+            console.log(`💾 백그라운드 저장: ${totalCollected}개 비디오 (추가: ${newVideos.length}개)`);
+            
+            await saveToSupabase(query, mergedVideos, mergedChannels, mergedItems, 'google', result.nextPageToken)
+                .catch(err => console.warn('⚠️ 백그라운드 저장 실패:', err));
+            
+            // excludeVideoIds 업데이트
+            excludeVideoIds.push(...newVideos.map(v => v.id));
+            nextPageToken = result.nextPageToken;
+            
+            // 목표 개수 도달 또는 더 이상 페이지 없음
+            if (totalCollected >= targetCount || !nextPageToken) {
+                console.log(`✅ 백그라운드 수집 완료: ${totalCollected}개 비디오 저장됨`);
+                break;
+            }
+            
+            // 다음 배치 전 딜레이 (API 호출 제한)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+    } catch (error) {
+        console.error('❌ 백그라운드 수집 오류:', error);
     }
 }
 
