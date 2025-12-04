@@ -1717,9 +1717,36 @@ function createVideoCard(video, item, rank = null) {
         ? `<div class="rank-badge rank-${rank <= 3 ? rank : 'default'}">TOP ${rank}</div>`
         : '';
 
-    // 조회수와 좋아요 수를 숫자로 변환 (문자열일 수 있음)
-    const viewCount = Number(video.statistics?.viewCount || video.raw?.statistics?.viewCount || 0);
-    const likeCount = Number(video.statistics?.likeCount || video.raw?.statistics?.likeCount || 0);
+    // 조회수와 좋아요 수를 숫자로 변환 (여러 경로 확인)
+    // 1. video.statistics (직접 접근)
+    // 2. video.raw.statistics (Supabase 로드 데이터)
+    // 3. item에서 직접 접근 (정규화된 데이터)
+    const viewCount = Number(
+        video.statistics?.viewCount || 
+        video.raw?.statistics?.viewCount || 
+        item?.raw?.statistics?.viewCount ||
+        item?.viewCount ||
+        0
+    );
+    const likeCount = Number(
+        video.statistics?.likeCount || 
+        video.raw?.statistics?.likeCount || 
+        item?.raw?.statistics?.likeCount ||
+        item?.likeCount ||
+        0
+    );
+    
+    // 디버깅: "daily english" 키워드일 때만 로그 출력
+    if (currentSearchQuery?.toLowerCase().includes('daily english') && viewCount === 0) {
+        console.log('🔍 조회수 0 디버깅:', {
+            videoId: video.id,
+            'video.statistics': video.statistics,
+            'video.raw?.statistics': video.raw?.statistics,
+            'item?.raw?.statistics': item?.raw?.statistics,
+            'item?.viewCount': item?.viewCount,
+            finalViewCount: viewCount
+        });
+    }
 
     card.innerHTML = `
         <div class="thumbnail-container">
