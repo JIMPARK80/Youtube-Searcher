@@ -26,6 +26,8 @@ export let allChannelMap = {};
 export let currentSearchQuery = '';
 // Track server's total_count
 export let currentTotalCount = 0;
+// Track background collection status to prevent duplicate API calls
+const backgroundCollectionStatus = new Map(); // query -> { isCollecting: boolean }
 
 // Maximum number of videos per keyword
 const MAX_RESULTS_LIMIT = 200;
@@ -711,12 +713,12 @@ async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVid
             return;
         }
         
-        console.log(`🔍 추가 비디오 검색 시도: ${safeNeededCount}개 요청 (현재: ${currentVideoCount}개, 최대: ${MAX_RESULTS_LIMIT}개, 원래 요청: ${neededCount})`);
-        debugLog(`🔍 기존 ${excludeVideoIds.length}개 ID 제외하고 ${safeNeededCount}개 추가 검색`);
+        console.log(`🔍 추가 비디오 검색 시도: 첫 페이지(50개) 먼저 수집 (현재: ${currentVideoCount}개, 최대: ${MAX_RESULTS_LIMIT}개)`);
+        debugLog(`🔍 기존 ${excludeVideoIds.length}개 ID 제외하고 첫 페이지 추가 검색`);
         
-        // 기존 ID 제외하고 필요한 수만 검색
+        // 첫 페이지(50개)만 먼저 수집 (나머지는 백그라운드에서)
         const result = await Promise.race([
-            searchYouTubeAPI(query, apiKeyValue, safeNeededCount, excludeVideoIds),
+            searchYouTubeAPI(query, apiKeyValue, 50, excludeVideoIds, true), // firstPageOnly = true
             timeoutPromise
         ]).catch(error => {
             // API 할당량 초과 시 기존 캐시만 사용
@@ -877,6 +879,24 @@ async function fetchAdditionalVideos(query, apiKeyValue, neededCount, excludeVid
         
         console.log(`🎬 렌더링 시작: 총 ${allVideos.length}개 비디오, ${allItems.length}개 items`);
         renderPage();
+        
+        // 백그라운드에서 나머지 페이지들을 점진적으로 수집 및 저장 (50개씩)
+        if (result.nextPageToken && allVideos.length < MAX_RESULTS_LIMIT) {
+            const keyword = query.trim().toLowerCase();
+            // 중복 실행 방지: 이미 백그라운드 수집이 진행 중이면 스킵
+            if (!backgroundCollectionStatus.get(keyword)?.isCollecting) {
+                backgroundCollectionStatus.set(keyword, { isCollecting: true });
+                console.log(`🔄 백그라운드에서 나머지 페이지 수집 시작 (현재: ${allVideos.length}개, 목표: ${MAX_RESULTS_LIMIT}개)`);
+                collectRemainingPagesInBackground(query, apiKeyValue, result.nextPageToken, allVideos.length, MAX_RESULTS_LIMIT)
+                    .finally(() => {
+                        // 수집 완료 후 플래그 해제
+                        backgroundCollectionStatus.set(keyword, { isCollecting: false });
+                    })
+                    .catch(err => console.warn('⚠️ 백그라운드 수집 실패:', err));
+            } else {
+                console.log(`⏸️ 백그라운드 수집이 이미 진행 중입니다. 중복 실행 방지.`);
+            }
+        }
     } catch (error) {
         console.error('❌ 추가 비디오 검색 오류:', error);
         // 에러 발생 시 기존 캐시만 사용
